@@ -1,0 +1,15 @@
+[package]
+name = "lowifi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.18", features = ["derive", "cargo"] }
+reqwest = { version = "0.12.7", features = ["blocking"] }
+tokio = { version = "1.40.0", features = ["full"] }
+scraper = "0.20.0"
+rodio = { version = "0.19.0", features = ["minimp3"], default-features = false }
+eyre = "0.6.12"
+futures = "0.3.30"
+bytes = "1.7.2"
+rand = "0.8.5"

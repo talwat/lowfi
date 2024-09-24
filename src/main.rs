@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 
 mod scrape;
 mod tracks;
+mod player;
 
 /// An extremely simple lofi player.
 #[derive(Parser)]
@@ -15,7 +16,7 @@ struct Args {
 enum Commands {
     /// Scrapes the lofi girl website file server for mp3 files.
     Scrape,
-    /// Plays a single, random, track.
+    /// Starts the player.
     Play
 }
 
@@ -25,6 +26,6 @@ async fn main() -> eyre::Result<()> {
 
     match cli.command {
         Commands::Scrape => scrape::scrape().await,
-        Commands::Play => tracks::random().await
+        Commands::Play => player::play().await
     }
 }

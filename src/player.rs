@@ -1,35 +1,28 @@
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 
-use rodio::{Decoder, OutputStream, Sink, Source};
+use reqwest::Client;
+use rodio::{source::SineWave, Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use tokio::{
-    sync::{mpsc, RwLock},
-    task,
-    time::sleep,
+    sync::RwLock,
+    task, time::sleep,
 };
 
 /// The amount of songs to buffer up.
 const BUFFER_SIZE: usize = 5;
 
-use crate::tracks::{self};
+use crate::tracks::Track;
 
-#[derive(Debug, PartialEq)]
-pub struct Track {
-    pub name: &'static str,
-    pub data: tracks::Data,
-}
-
-impl Track {
-    pub async fn random() -> eyre::Result<Self> {
-        let name = tracks::random().await?;
-        let data = tracks::download(&name).await?;
-
-        Ok(Self { name, data })
-    }
-}
-
+/// Main struct responsible for queuing up tracks.
+///
+/// Internally tracks are stored in an [Arc],
+/// so it's fine to clone this struct.
+#[derive(Debug, Clone)]
 pub struct Queue {
     tracks: Arc<RwLock<VecDeque<Track>>>,
 }
+
+unsafe impl Send for Queue {}
+unsafe impl Sync for Queue {}
 
 impl Queue {
     pub async fn new() -> Self {
@@ -38,13 +31,18 @@ impl Queue {
         }
     }
 
-    pub async fn get(&self) -> eyre::Result<Track> {
+    /// This will play the next track, as well as refilling the buffer in the background.
+    pub async fn next(&self, client: &Client) -> eyre::Result<Track> {
         // This refills the queue in the background.
-        let tracks = self.tracks.clone();
-        task::spawn(async move {
-            while tracks.read().await.len() < BUFFER_SIZE {
-                let track = Track::random().await.unwrap();
-                tracks.write().await.push_back(track);
+        task::spawn({
+            let client = client.clone();
+            let tracks = self.tracks.clone();
+
+            async move {
+                while tracks.read().await.len() < BUFFER_SIZE {
+                    let track = Track::random(&client).await.unwrap();
+                    tracks.write().await.push_back(track);
+                }
             }
         });
 
@@ -53,51 +51,52 @@ impl Queue {
             Some(x) => x,
             // If the queue is completely empty, then fallback to simply getting a new track.
             // This is relevant particularly at the first song.
-            None => Track::random().await?,
+            None => Track::random(client).await?,
         };
-        
+
         Ok(track)
+    }
+
+    pub async fn play(self, sink: Sink) -> eyre::Result<()> {
+        let client = Client::builder().build()?;
+        let sink = Arc::new(sink);
+
+        loop {
+            sink.stop();
+
+            let track = self.next(&client).await?;
+            sink.append(Decoder::new(track.data)?);
+
+            let sink = sink.clone();
+            task::spawn_blocking(move || sink.sleep_until_end()).await?;
+        }
     }
 }
 
 pub async fn play() -> eyre::Result<()> {
     let queue = Queue::new().await;
+    let (stream, handle) = OutputStream::try_default()?;
+    let sink = Sink::try_new(&handle)?;
 
-    let (stream, handle) = OutputStream::try_default().unwrap();
-    let sink = Sink::try_new(&handle).unwrap();
+    let audio = task::spawn(queue.clone().play(sink));
 
     crossterm::terminal::enable_raw_mode()?;
 
-    // TODO: Reintroduce the Player struct and seperate
-    // input/display from song playing so that quits & skips
-    // are instant.
-    loop {
-        sink.stop();
-
-        let track = queue.get().await?;
-        sink.append(Decoder::new(track.data)?);
-
+    'a: loop {
         match crossterm::event::read()? {
-            crossterm::event::Event::Key(event) => {
-                match event.code {
-                    crossterm::event::KeyCode::Char(x) => {
-                        if x == 's' {
-                            continue;
-                        } else if x == 'q' {
-                            break;
-                        }
+            crossterm::event::Event::Key(event) => match event.code {
+                crossterm::event::KeyCode::Char(x) => {
+                    if x == 'q' {
+                        break 'a;
                     }
-                    _ => ()
                 }
+                _ => (),
             },
-            _ => ()
+            _ => (),
         }
-        
-        sleep(Duration::from_secs(2)).await;
     }
 
+    audio.abort();
     crossterm::terminal::disable_raw_mode()?;
-    sink.stop();
-    drop(stream);
     Ok(())
 }

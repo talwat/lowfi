@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+mod play;
 mod player;
 mod scrape;
 mod tracks;
@@ -26,6 +27,6 @@ async fn main() -> eyre::Result<()> {
 
     match cli.command {
         Commands::Scrape => scrape::scrape().await,
-        Commands::Play => player::play().await,
+        Commands::Play => play::play().await,
     }
 }

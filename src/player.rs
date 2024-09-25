@@ -1,11 +1,8 @@
-use std::{collections::VecDeque, io::stderr, sync::Arc};
+use std::{collections::VecDeque, sync::Arc};
 
-use crossterm::{
-    cursor::{MoveDown, MoveToColumn, MoveToNextLine},
-    style::Print,
-};
+use arc_swap::ArcSwapOption;
 use reqwest::Client;
-use rodio::{Decoder, OutputStream, Sink};
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
 use tokio::{
     select,
     sync::{
@@ -15,55 +12,68 @@ use tokio::{
     task,
 };
 
-/// The amount of songs to buffer up.
-const BUFFER_SIZE: usize = 5;
+use crate::tracks::{Track, TrackInfo};
 
-use crate::tracks::Track;
+pub mod ui;
 
 /// Handles communication between the frontend & audio player.
 pub enum Messages {
-    Skip,
-    Die,
+    Next,
+    Init,
+    Pause,
 }
 
-/// Main struct responsible for queuing up tracks.
-///
-/// Internally tracks are stored in an [Arc],
-/// so it's fine to clone this struct.
-#[derive(Debug, Clone)]
-pub struct Queue {
-    tracks: Arc<RwLock<VecDeque<Track>>>,
+/// The amount of songs to buffer up.
+const BUFFER_SIZE: usize = 5;
+
+/// Main struct responsible for queuing up & playing tracks.
+pub struct Player {
+    pub sink: Sink,
+    pub current: ArcSwapOption<TrackInfo>,
+    tracks: RwLock<VecDeque<Track>>,
+    client: Client,
+    _handle: OutputStreamHandle,
+    _stream: OutputStream,
 }
 
-impl Queue {
-    pub async fn new() -> Self {
-        Self {
-            tracks: Arc::new(RwLock::new(VecDeque::with_capacity(5))),
-        }
+unsafe impl Send for Player {}
+unsafe impl Sync for Player {}
+
+impl Player {
+    /// Initializes the entire player, including audio devices & sink.
+    pub async fn new() -> eyre::Result<Self> {
+        let (_stream, handle) = OutputStream::try_default()?;
+        let sink = Sink::try_new(&handle)?;
+
+        Ok(Self {
+            tracks: RwLock::new(VecDeque::with_capacity(5)),
+            current: ArcSwapOption::new(None),
+            client: Client::builder().build()?,
+            sink,
+            _handle: handle,
+            _stream,
+        })
+    }
+
+    async fn set_current(&self, info: TrackInfo) -> eyre::Result<()> {
+        self.current.store(Some(Arc::new(info)));
+
+        Ok(())
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.
-    pub async fn next(&self, client: &Client) -> eyre::Result<Track> {
-        // This refills the queue in the background.
-        task::spawn({
-            let client = client.clone();
-            let tracks = self.tracks.clone();
+    pub async fn next(queue: Arc<Player>) -> eyre::Result<Track> {
+        queue.current.store(None);
 
-            async move {
-                while tracks.read().await.len() < BUFFER_SIZE {
-                    let track = Track::random(&client).await.unwrap();
-                    tracks.write().await.push_back(track);
-                }
-            }
-        });
-
-        let track = self.tracks.write().await.pop_front();
+        let track = queue.tracks.write().await.pop_front();
         let track = match track {
             Some(x) => x,
             // If the queue is completely empty, then fallback to simply getting a new track.
             // This is relevant particularly at the first song.
-            None => Track::random(client).await?,
+            None => Track::random(&queue.client).await?,
         };
+
+        queue.set_current(track.info).await?;
 
         Ok(track)
     }
@@ -72,78 +82,54 @@ impl Queue {
     ///
     /// `rx` is used to communicate with it, for example when to
     /// skip tracks or pause.
-    pub async fn play(
-        self,
-        sink: Sink,
-        client: Client,
-        mut rx: Receiver<Messages>,
-    ) -> eyre::Result<()> {
-        let sink = Arc::new(sink);
+    pub async fn play(queue: Arc<Player>, mut rx: Receiver<Messages>) -> eyre::Result<()> {
+        // This is an internal channel which serves pretty much only one purpose,
+        // which is to notify the buffer refiller to get back to work.
+        // This channel is useful to prevent needing to check with some infinite loop.
+        let (itx, mut irx) = mpsc::channel(8);
+
+        // This refills the queue in the background.
+        task::spawn({
+            let queue = queue.clone();
+
+            async move {
+                while let Some(()) = irx.recv().await {
+                    while queue.tracks.read().await.len() < BUFFER_SIZE {
+                        let track = Track::random(&queue.client).await.unwrap();
+                        queue.tracks.write().await.push_back(track);
+                    }
+                }
+            }
+        });
+
+        itx.send(()).await?;
 
         loop {
-            let clone = sink.clone();
+            let clone = Arc::clone(&queue);
             let msg = select! {
                 Some(x) = rx.recv() => x,
 
                 // This future will finish only at the end of the current track.
-                Ok(()) = task::spawn_blocking(move || clone.sleep_until_end()) => Messages::Skip,
+                Ok(()) = task::spawn_blocking(move || clone.sink.sleep_until_end()) => Messages::Next,
             };
 
             match msg {
-                Messages::Skip => {
-                    sink.stop();
+                Messages::Next | Messages::Init => {
+                    itx.send(()).await?;
 
-                    let track = self.next(&client).await?;
-                    sink.append(Decoder::new(track.data)?);
+                    queue.sink.stop();
+
+                    let track = Player::next(queue.clone()).await?;
+                    queue.sink.append(track.data);
                 }
-                Messages::Die => break,
-            }
-        }
-
-        Ok(())
-    }
-}
-
-pub async fn gui() -> eyre::Result<()> {
-    crossterm::execute!(stderr(), MoveToColumn(0), Print("hello!\r\n"))?;
-    crossterm::execute!(stderr(), Print("next line!\r\n"))?;
-
-    Ok(())
-}
-
-pub async fn play() -> eyre::Result<()> {
-    let queue = Queue::new().await;
-    let (tx, rx) = mpsc::channel(8);
-    let (_stream, handle) = OutputStream::try_default()?;
-    let sink = Sink::try_new(&handle)?;
-    let client = Client::builder().build()?;
-
-    let audio = task::spawn(queue.clone().play(sink, client.clone(), rx));
-    tx.send(Messages::Skip).await?; // This is responsible for the initial track being played.
-
-    crossterm::terminal::enable_raw_mode()?;
-
-    gui().await?;
-
-    'a: loop {
-        match crossterm::event::read()? {
-            crossterm::event::Event::Key(event) => match event.code {
-                crossterm::event::KeyCode::Char(x) => {
-                    if x == 'q' {
-                        tx.send(Messages::Die).await?;
-
-                        break 'a;
-                    } else if x == 's' {
-                        tx.send(Messages::Skip).await?;
+                Messages::Pause => {
+                    if queue.sink.is_paused() {
+                        queue.sink.play();
+                    } else {
+                        queue.sink.pause();
                     }
                 }
-                _ => (),
-            },
-            _ => (),
+            }
         }
     }
-
-    audio.abort();
-    crossterm::terminal::disable_raw_mode()?;
-    Ok(())
 }

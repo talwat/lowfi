@@ -10,7 +10,7 @@ async fn download(track: &str, client: &Client) -> eyre::Result<Data> {
     let url = format!("https://lofigirl.com/wp-content/uploads/{}", track);
     let response = client.get(url).send().await?;
     let file = Cursor::new(response.bytes().await?);
-    
+
     Ok(file)
 }
 

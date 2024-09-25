@@ -1,12 +1,18 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::VecDeque, io::stderr, sync::Arc};
 
+use crossterm::{
+    cursor::{MoveDown, MoveToColumn, MoveToNextLine},
+    style::Print,
+};
 use reqwest::Client;
 use rodio::{Decoder, OutputStream, Sink};
 use tokio::{
-    select, sync::{
+    select,
+    sync::{
         mpsc::{self, Receiver},
         RwLock,
-    }, task
+    },
+    task,
 };
 
 /// The amount of songs to buffer up.
@@ -17,6 +23,7 @@ use crate::tracks::Track;
 /// Handles communication between the frontend & audio player.
 pub enum Messages {
     Skip,
+    Die,
 }
 
 /// Main struct responsible for queuing up tracks.
@@ -62,14 +69,14 @@ impl Queue {
     }
 
     /// This is the main "audio server".
-    /// 
+    ///
     /// `rx` is used to communicate with it, for example when to
     /// skip tracks or pause.
     pub async fn play(
         self,
         sink: Sink,
         client: Client,
-        mut rx: Receiver<Messages>
+        mut rx: Receiver<Messages>,
     ) -> eyre::Result<()> {
         let sink = Arc::new(sink);
 
@@ -89,9 +96,19 @@ impl Queue {
                     let track = self.next(&client).await?;
                     sink.append(Decoder::new(track.data)?);
                 }
+                Messages::Die => break,
             }
         }
+
+        Ok(())
     }
+}
+
+pub async fn gui() -> eyre::Result<()> {
+    crossterm::execute!(stderr(), MoveToColumn(0), Print("hello!\r\n"))?;
+    crossterm::execute!(stderr(), Print("next line!\r\n"))?;
+
+    Ok(())
 }
 
 pub async fn play() -> eyre::Result<()> {
@@ -106,11 +123,15 @@ pub async fn play() -> eyre::Result<()> {
 
     crossterm::terminal::enable_raw_mode()?;
 
+    gui().await?;
+
     'a: loop {
         match crossterm::event::read()? {
             crossterm::event::Event::Key(event) => match event.code {
                 crossterm::event::KeyCode::Char(x) => {
                     if x == 'q' {
+                        tx.send(Messages::Die).await?;
+
                         break 'a;
                     } else if x == 's' {
                         tx.send(Messages::Skip).await?;

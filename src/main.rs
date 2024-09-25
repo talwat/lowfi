@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 
+mod player;
 mod scrape;
 mod tracks;
-mod player;
 
 /// An extremely simple lofi player.
 #[derive(Parser)]
@@ -17,7 +17,7 @@ enum Commands {
     /// Scrapes the lofi girl website file server for mp3 files.
     Scrape,
     /// Starts the player.
-    Play
+    Play,
 }
 
 #[tokio::main]
@@ -26,6 +26,6 @@ async fn main() -> eyre::Result<()> {
 
     match cli.command {
         Commands::Scrape => scrape::scrape().await,
-        Commands::Play => player::play().await
+        Commands::Play => player::play().await,
     }
 }

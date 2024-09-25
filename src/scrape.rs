@@ -3,12 +3,13 @@ use std::sync::LazyLock;
 use futures::{stream::FuturesUnordered, StreamExt};
 use scraper::{Html, Selector};
 
+const BASE_URL: &'static str = "https://lofigirl.com/wp-content/uploads/";
+
 static SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("html > body > pre > a").unwrap());
 
 async fn parse(path: &str) -> eyre::Result<Vec<String>> {
-    let response =
-        reqwest::get(format!("https://lofigirl.com/wp-content/uploads/{}", path)).await?;
+    let response = reqwest::get(format!("{}{}", BASE_URL, path)).await?;
     let document = response.text().await?;
 
     let html = Html::parse_document(&document);
@@ -23,7 +24,9 @@ async fn parse(path: &str) -> eyre::Result<Vec<String>> {
 ///
 /// It's a bit hacky, and basically works by checking all of the years, then months, and then all of the files.
 /// This is done as a way to avoid recursion, since async rust really hates recursive functions.
-async fn scan() -> eyre::Result<Vec<String>> {
+async fn scan(extention: &str, include_full: bool) -> eyre::Result<Vec<String>> {
+    let extention = &format!(".{}", extention);
+
     let items = parse("").await?;
 
     let years: Vec<u32> = items
@@ -48,8 +51,12 @@ async fn scan() -> eyre::Result<Vec<String>> {
                 let items = items
                     .into_iter()
                     .filter_map(|x| {
-                        if x.ends_with(".mp3") {
-                            Some(format!("{path}{x}"))
+                        if x.ends_with(extention) {
+                            if include_full {
+                                Some(format!("{BASE_URL}{path}{x}"))
+                            } else {
+                                Some(format!("{path}{x}"))
+                            }
                         } else {
                             None
                         }
@@ -69,8 +76,8 @@ async fn scan() -> eyre::Result<Vec<String>> {
     eyre::Result::Ok(files)
 }
 
-pub async fn scrape() -> eyre::Result<()> {
-    let files = scan().await?;
+pub async fn scrape(extention: String, include_full: bool) -> eyre::Result<()> {
+    let files = scan(&extention, include_full).await?;
     for file in files {
         println!("{}", file);
     }

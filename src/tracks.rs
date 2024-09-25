@@ -38,12 +38,15 @@ impl TrackInfo {
     }
 }
 
+/// The main track struct, which includes the actual decoded file
+/// as well as some basic information about it.
 pub struct Track {
     pub info: TrackInfo,
     pub data: Data,
 }
 
 impl Track {
+    /// Fetches, downloads, and decodes a random track from the tracklist.
     pub async fn random(client: &Client) -> eyre::Result<Self> {
         let name = random().await?;
         let data = download(&name, client).await?;

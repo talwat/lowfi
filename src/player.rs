@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use arc_swap::ArcSwapOption;
 use reqwest::Client;
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
+use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
     select,
     sync::{

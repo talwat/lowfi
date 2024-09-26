@@ -34,7 +34,12 @@ pub struct TrackInfo {
 
 impl TrackInfo {
     pub fn format_name(&self) -> &'static str {
-        self.name.split("/").nth(2).unwrap()
+        self.name
+            .split("/")
+            .nth(2)
+            .unwrap()
+            .strip_suffix(".mp3")
+            .unwrap()
     }
 }
 

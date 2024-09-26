@@ -12,7 +12,7 @@ use tokio::{
     task,
 };
 
-use crate::tracks::{Track, TrackInfo};
+use crate::tracks::{DecodedTrack, Track, TrackInfo};
 
 pub mod ui;
 
@@ -62,9 +62,7 @@ impl Player {
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.
-    pub async fn next(queue: Arc<Player>) -> eyre::Result<Track> {
-        queue.current.store(None);
-
+    pub async fn next(queue: Arc<Player>) -> eyre::Result<DecodedTrack> {
         let track = queue.tracks.write().await.pop_front();
         let track = match track {
             Some(x) => x,
@@ -73,9 +71,10 @@ impl Player {
             None => Track::random(&queue.client).await?,
         };
 
-        queue.set_current(track.info).await?;
+        let decoded = track.decode()?;
+        queue.set_current(decoded.info.clone()).await?;
 
-        Ok(track)
+        Ok(decoded)
     }
 
     /// This is the main "audio server".
@@ -115,10 +114,15 @@ impl Player {
 
             match msg {
                 Messages::Next | Messages::Init => {
+                    // Serves as an indicator that the queue is "loading".
+                    // This is also set by Player::next.
+                    queue.current.store(None);
+
+                    // Notify the background downloader that there's an empty spot
+                    // in the buffer.
                     itx.send(()).await?;
 
                     queue.sink.stop();
-
                     let track = Player::next(queue.clone()).await?;
                     queue.sink.append(track.data);
                 }

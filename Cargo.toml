@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-
 # Basics
 clap = { version = "4.5.18", features = ["derive", "cargo"] }
 eyre = "0.6.12"
@@ -23,3 +22,4 @@ bytes = "1.7.2"
 scraper = "0.20.0"
 rodio = { version = "0.19.0", features = ["mp3"], default-features = false }
 crossterm = "0.28.1"
+Inflector = "0.11.4"

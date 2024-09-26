@@ -32,14 +32,14 @@ enum Action {
 impl Action {
     fn format(&self) -> (String, usize) {
         let (word, subject) = match self {
-            Action::Playing(x) => ("playing", Some(x.format_name())),
-            Action::Paused(x) => ("paused", Some(x.format_name())),
+            Action::Playing(x) => ("playing", Some(x.name.clone())),
+            Action::Paused(x) => ("paused", Some(x.name.clone())),
             Action::Loading => ("loading", None),
         };
 
         if let Some(subject) = subject {
             (
-                format!("{} {}", word, subject.bold()),
+                format!("{} {}", word, subject.clone().bold()),
                 word.len() + 1 + subject.len(),
             )
         } else {
@@ -55,10 +55,12 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
     loop {
         let (mut main, len) = match queue.current.load().as_ref() {
             Some(x) => {
+                let name = (*x.clone()).clone();
+
                 if queue.sink.is_paused() {
-                    Action::Paused(*x.clone())
+                    Action::Paused(name)
                 } else {
-                    Action::Playing(*x.clone())
+                    Action::Playing(name)
                 }
             }
             None => Action::Loading,
@@ -87,7 +89,7 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
         let progress = format!(
             " [{}{}] {}/{} ",
             "/".repeat(filled as usize),
-            " ".repeat(PROGRESS_WIDTH - filled),
+            " ".repeat(PROGRESS_WIDTH.saturating_sub(filled)),
             format_duration(&elapsed),
             format_duration(&duration),
         );
@@ -112,7 +114,7 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
             MoveUp(4)
         )?;
 
-        sleep(Duration::from_secs_f32(0.25)).await;
+        sleep(Duration::from_secs_f32(1.0 / 60.0)).await;
     }
 }
 

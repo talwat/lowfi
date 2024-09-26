@@ -24,7 +24,7 @@ enum Commands {
         /// Whether to include the full HTTP URL or just the distinguishing part.
         #[clap(long, short)]
         include_full: bool,
-    }
+    },
 }
 
 #[tokio::main]
@@ -36,7 +36,7 @@ async fn main() -> eyre::Result<()> {
             Commands::Scrape {
                 extention,
                 include_full,
-            } => scrape::scrape(extention, include_full).await
+            } => scrape::scrape(extention, include_full).await,
         }
     } else {
         play::play().await

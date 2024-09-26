@@ -981,6 +981,7 @@ dependencies = [
  "crossterm",
  "eyre",
  "futures",
+ "itertools",
  "rand",
  "reqwest",
  "rodio",

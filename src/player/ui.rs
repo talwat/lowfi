@@ -2,9 +2,9 @@ use std::{io::stderr, sync::Arc, time::Duration};
 
 use super::Player;
 use crossterm::{
-    cursor::{MoveTo, MoveToColumn, MoveUp},
+    cursor::{MoveToColumn, MoveUp, Show},
     style::Print,
-    terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{Clear, ClearType},
 };
 use tokio::{
     sync::mpsc::Sender,
@@ -16,35 +16,52 @@ use super::Messages;
 
 async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
     const WIDTH: usize = 25;
+    const PROGRESS_WIDTH: usize = WIDTH - 4;
 
     loop {
         // We can get away with only redrawing every 0.25 seconds
         // since it's just an audio player.
-        sleep(Duration::from_secs_f32(1.0 / 60.0)).await;
+        sleep(Duration::from_secs_f32(0.25)).await;
         crossterm::execute!(stderr(), Clear(ClearType::FromCursorDown))?;
 
-        let main = match queue.current.load().as_ref() {
+        let mut main = match queue.current.load().as_ref() {
             Some(x) => {
                 if queue.sink.is_paused() {
-                    format!("paused {}\r\n", x.format_name())
+                    format!("paused {}", x.format_name())
                 } else {
-                    format!("playing {}\r\n", x.format_name())
+                    format!("playing {}", x.format_name())
                 }
             }
-            None => "loading...\r\n".to_owned(),
+            None => "loading...".to_owned(),
         };
 
+        main.push_str("\r\n");
+
+        let mut filled = 0;
+        if let Some(current) = queue.current.load().as_ref() {
+            if let Some(duration) = current.duration {
+                let elapsed = queue.sink.get_pos().as_secs() as f32 / duration.as_secs() as f32;
+                filled = (elapsed * PROGRESS_WIDTH as f32).round() as usize;
+            }
+        };
+
+        let progress = format!(
+            " [{}{}] ",
+            "/".repeat(filled as usize),
+            " ".repeat(PROGRESS_WIDTH - filled)
+        );
         let bar = ["[s]kip", "[p]ause", "[q]uit"];
 
         crossterm::execute!(stderr(), MoveToColumn(0), Print(main))?;
-        crossterm::execute!(stderr(), Print(bar.join("   ")))?;
-        crossterm::execute!(stderr(), MoveToColumn(0), MoveUp(1))?;
+        crossterm::execute!(stderr(), Print(progress), Print("\r\n"))?;
+        crossterm::execute!(stderr(), Print(bar.join("   ")), Print("\r\n"))?;
+        crossterm::execute!(stderr(), MoveToColumn(0), MoveUp(3))?;
     }
 }
 
 pub async fn start(queue: Arc<Player>, sender: Sender<Messages>) -> eyre::Result<()> {
     crossterm::terminal::enable_raw_mode()?;
-    crossterm::execute!(stderr(), EnterAlternateScreen, MoveTo(0, 0))?;
+    //crossterm::execute!(stderr(), EnterAlternateScreen, MoveTo(0, 0))?;
 
     task::spawn(interface(queue.clone()));
 
@@ -73,11 +90,7 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>) -> eyre::Result
         }
     }
 
-    crossterm::execute!(
-        stderr(),
-        Clear(ClearType::FromCursorDown),
-        LeaveAlternateScreen
-    )?;
+    crossterm::execute!(stderr(), Clear(ClearType::FromCursorDown), Show)?;
     crossterm::terminal::disable_raw_mode()?;
 
     Ok(())

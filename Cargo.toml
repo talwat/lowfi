@@ -23,3 +23,4 @@ bytes = "1.7.2"
 scraper = "0.20.0"
 rodio = { version = "0.19.0", features = ["mp3"], default-features = false }
 crossterm = "0.28.1"
+itertools = "0.13.0"

@@ -42,6 +42,8 @@ impl TrackInfo {
 /// as well as some basic information about it.
 pub struct Track {
     pub info: TrackInfo,
+
+    /// TODO: Make decoding lazy, since decoded files take up more memory than raw ones.
     pub data: Data,
 }
 

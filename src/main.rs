@@ -10,7 +10,7 @@ mod tracks;
 #[command(about)]
 struct Args {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -24,20 +24,21 @@ enum Commands {
         /// Whether to include the full HTTP URL or just the distinguishing part.
         #[clap(long, short)]
         include_full: bool,
-    },
-    /// Starts the player.
-    Play,
+    }
 }
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let cli = Args::parse();
 
-    match cli.command {
-        Commands::Scrape {
-            extention,
-            include_full,
-        } => scrape::scrape(extention, include_full).await,
-        Commands::Play => play::play().await,
+    if let Some(command) = cli.command {
+        match command {
+            Commands::Scrape {
+                extention,
+                include_full,
+            } => scrape::scrape(extention, include_full).await
+        }
+    } else {
+        play::play().await
     }
 }

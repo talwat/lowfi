@@ -2,7 +2,7 @@
 //! This also has the code for the underlying
 //! audio server which adds new tracks.
 
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use reqwest::Client;
@@ -10,7 +10,7 @@ use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
     select,
     sync::{
-        mpsc::{self, Receiver},
+        mpsc::{self, Receiver, Sender},
         RwLock,
     },
     task,
@@ -25,12 +25,18 @@ pub enum Messages {
     /// Notifies the audio server that it should update the track.
     Next,
 
+    /// This signal is only sent if a track timed out. In that case,
+    /// lowfi will try again and again to retrieve the track.
+    TryAgain,
+
     /// Similar to Next, but specific to the first track.
     Init,
 
     /// Pauses the [Sink]. This will also unpause it if it is paused.
     Pause,
 }
+
+const TIMEOUT: Duration = Duration::from_secs(3);
 
 /// The amount of songs to buffer up.
 const BUFFER_SIZE: usize = 5;
@@ -78,7 +84,14 @@ impl Player {
         Ok(Self {
             tracks: RwLock::new(VecDeque::with_capacity(5)),
             current: ArcSwapOption::new(None),
-            client: Client::builder().build()?,
+            client: Client::builder()
+                .user_agent(concat!(
+                    env!("CARGO_PKG_NAME"),
+                    "/",
+                    env!("CARGO_PKG_VERSION")
+                ))
+                .timeout(TIMEOUT)
+                .build()?,
             sink,
             _handle: handle,
             _stream,
@@ -111,7 +124,11 @@ impl Player {
     ///
     /// `rx` is used to communicate with it, for example when to
     /// skip tracks or pause.
-    pub async fn play(queue: Arc<Self>, mut rx: Receiver<Messages>) -> eyre::Result<()> {
+    pub async fn play(
+        queue: Arc<Self>,
+        tx: Sender<Messages>,
+        mut rx: Receiver<Messages>,
+    ) -> eyre::Result<()> {
         // This is an internal channel which serves pretty much only one purpose,
         // which is to notify the buffer refiller to get back to work.
         // This channel is useful to prevent needing to check with some infinite loop.
@@ -146,7 +163,7 @@ impl Player {
             };
 
             match msg {
-                Messages::Next | Messages::Init => {
+                Messages::Next | Messages::Init | Messages::TryAgain => {
                     // Skip as early as possible so that music doesn't play
                     // while lowfi is "loading".
                     queue.sink.stop();
@@ -155,12 +172,24 @@ impl Player {
                     // This is also set by Player::next.
                     queue.current.store(None);
 
-                    // Notify the background downloader that there's an empty spot
-                    // in the buffer.
-                    itx.send(()).await?;
+                    let track = Self::next(Arc::clone(&queue)).await;
 
-                    let track = Self::next(Arc::clone(&queue)).await?;
-                    queue.sink.append(track.data);
+                    match track {
+                        Ok(track) => {
+                            queue.sink.append(track.data);
+
+                            // Notify the background downloader that there's an empty spot
+                            // in the buffer.
+                            itx.send(()).await?;
+                        }
+                        Err(error) => {
+                            if !error.downcast::<reqwest::Error>()?.is_timeout() {
+                                tokio::time::sleep(TIMEOUT).await;
+                            }
+
+                            tx.send(Messages::TryAgain).await?
+                        }
+                    };
                 }
                 Messages::Pause => {
                     if queue.sink.is_paused() {

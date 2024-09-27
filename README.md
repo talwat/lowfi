@@ -24,6 +24,26 @@ Although, lowfi is yet to be properly tested in difficult conditions,
 so don't rely on it too much until I do that. See [Scraping](#scraping) if
 you're interested in downloading the tracks. Beware, there's a lot of them.
 
+## Installing
+
+### Cargo
+
+The recommended installation method is to use cargo:
+
+```sh
+cargo install lowfi
+```
+
+and making sure $HOME/.cargo/bin is added to $PATH.
+
+### AUR
+
+If you're on Arch, you can also use the AUR:
+
+```sh
+yay -S lowfi
+```
+
 ## Usage
 
 `lowfi`

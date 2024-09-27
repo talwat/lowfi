@@ -93,9 +93,8 @@ impl Player {
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.
-    pub async fn next(queue: Arc<Player>) -> eyre::Result<DecodedTrack> {
-        let track = queue.tracks.write().await.pop_front();
-        let track = match track {
+    pub async fn next(queue: Arc<Self>) -> eyre::Result<DecodedTrack> {
+        let track = match queue.tracks.write().await.pop_front() {
             Some(x) => x,
             // If the queue is completely empty, then fallback to simply getting a new track.
             // This is relevant particularly at the first song.
@@ -112,7 +111,7 @@ impl Player {
     ///
     /// `rx` is used to communicate with it, for example when to
     /// skip tracks or pause.
-    pub async fn play(queue: Arc<Player>, mut rx: Receiver<Messages>) -> eyre::Result<()> {
+    pub async fn play(queue: Arc<Self>, mut rx: Receiver<Messages>) -> eyre::Result<()> {
         // This is an internal channel which serves pretty much only one purpose,
         // which is to notify the buffer refiller to get back to work.
         // This channel is useful to prevent needing to check with some infinite loop.
@@ -120,12 +119,14 @@ impl Player {
 
         // This refills the queue in the background.
         task::spawn({
-            let queue = queue.clone();
+            let queue = Arc::clone(&queue);
 
             async move {
-                while let Some(()) = irx.recv().await {
+                while irx.recv().await == Some(()) {
                     while queue.tracks.read().await.len() < BUFFER_SIZE {
-                        let track = Track::random(&queue.client).await.unwrap();
+                        let Ok(track) = Track::random(&queue.client).await else {
+                            continue;
+                        };
                         queue.tracks.write().await.push_back(track);
                     }
                 }
@@ -141,7 +142,7 @@ impl Player {
                 Some(x) = rx.recv() => x,
 
                 // This future will finish only at the end of the current track.
-                Ok(()) = task::spawn_blocking(move || clone.sink.sleep_until_end()) => Messages::Next,
+                Ok(_) = task::spawn_blocking(move || clone.sink.sleep_until_end()) => Messages::Next,
             };
 
             match msg {
@@ -155,7 +156,7 @@ impl Player {
                     itx.send(()).await?;
 
                     queue.sink.stop();
-                    let track = Player::next(queue.clone()).await?;
+                    let track = Self::next(Arc::clone(&queue)).await?;
                     queue.sink.append(track.data);
                 }
                 Messages::Pause => {

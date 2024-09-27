@@ -10,6 +10,7 @@ use rand::Rng;
 use reqwest::Client;
 use rodio::{Decoder, Source};
 
+/// Downloads a raw track, but doesn't decode it.
 async fn download(track: &str, client: &Client) -> eyre::Result<Bytes> {
     let url = format!("https://lofigirl.com/wp-content/uploads/{}", track);
     let response = client.get(url).send().await?;
@@ -18,16 +19,19 @@ async fn download(track: &str, client: &Client) -> eyre::Result<Bytes> {
     Ok(data)
 }
 
-async fn random() -> eyre::Result<&'static str> {
-    let tracks = include_str!("../data/tracks.txt");
-    let tracks: Vec<&str> = tracks.split_ascii_whitespace().collect();
+/// Gets a random track from `tracks.txt` and returns it.
+fn random() -> &'static str {
+    let tracks: Vec<&str> = include_str!("../data/tracks.txt")
+        .split_ascii_whitespace()
+        .collect();
 
     let random = rand::thread_rng().gen_range(0..tracks.len());
     let track = tracks[random];
 
-    Ok(track)
+    track
 }
 
+/// Just a shorthand for a decoded [Bytes].
 pub type DecodedData = Decoder<Cursor<Bytes>>;
 
 /// The TrackInfo struct, which has the name and duration of a track.
@@ -38,10 +42,16 @@ pub type DecodedData = Decoder<Cursor<Bytes>>;
 pub struct TrackInfo {
     /// This is a formatted name, so it doesn't include the full path.
     pub name: String,
+
+    /// The duration of the track, this is an [Option] because there are
+    /// cases where the duration of a track is unknown.
     pub duration: Option<Duration>,
 }
 
 impl TrackInfo {
+    /// Formats a name with [Inflector].
+    /// This will also strip the first few numbers that are
+    /// usually present on most lofi tracks.
     fn format_name(name: &'static str) -> String {
         let mut formatted = name
             .split("/")
@@ -52,6 +62,9 @@ impl TrackInfo {
             .to_title_case();
 
         let mut skip = 0;
+
+        // SAFETY: All of the track names originate with the `'static` lifetime,
+        // SAFETY: so basically this has already been checked.
         for character in unsafe { formatted.as_bytes_mut() } {
             if character.is_ascii_digit() {
                 skip += 1;
@@ -63,6 +76,7 @@ impl TrackInfo {
         String::from(&formatted[skip..])
     }
 
+    /// Creates a new [`TrackInfo`] from a raw name & decoded track data.
     pub fn new(name: &'static str, decoded: &DecodedData) -> Self {
         Self {
             duration: decoded.total_duration(),
@@ -82,6 +96,8 @@ pub struct DecodedTrack {
 }
 
 impl DecodedTrack {
+    /// Creates a new track.
+    /// This is equivalent to [Track::decode].
     pub fn new(track: Track) -> eyre::Result<Self> {
         let data = Decoder::new(Cursor::new(track.data))?;
         let info = TrackInfo::new(track.name, &data);
@@ -103,7 +119,7 @@ pub struct Track {
 impl Track {
     /// Fetches and downloads a random track from the tracklist.
     pub async fn random(client: &Client) -> eyre::Result<Self> {
-        let name = random().await?;
+        let name = random();
         let data = download(name, client).await?;
 
         Ok(Self { data, name })

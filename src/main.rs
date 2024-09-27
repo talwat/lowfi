@@ -1,12 +1,3 @@
-#![warn(
-    clippy::all,
-    clippy::restriction,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo
-)]
-#![allow(clippy::single_call_fn)]
-
 use clap::{Parser, Subcommand};
 
 mod play;
@@ -18,10 +9,13 @@ mod tracks;
 #[derive(Parser)]
 #[command(about)]
 struct Args {
+    /// The command that was ran.
+    /// This is [None] if no command was specified.
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
+/// Defines all of the extra commands lowfi can run.
 #[derive(Subcommand)]
 enum Commands {
     /// Scrapes the lofi girl website file server for files.

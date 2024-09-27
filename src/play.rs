@@ -16,10 +16,10 @@ pub async fn play() -> eyre::Result<()> {
     let (tx, rx) = mpsc::channel(8);
 
     let player = Arc::new(Player::new().await?);
-    let audio = task::spawn(Player::play(player.clone(), rx));
+    let audio = task::spawn(Player::play(Arc::clone(&player), rx));
     tx.send(Messages::Init).await?;
 
-    ui::start(player.clone(), tx.clone()).await?;
+    ui::start(Arc::clone(&player), tx.clone()).await?;
 
     audio.abort();
     player.sink.stop();

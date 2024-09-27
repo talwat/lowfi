@@ -1,3 +1,5 @@
+//! The module which manages all user interface, including inputs.
+
 use std::{io::stderr, sync::Arc, time::Duration};
 
 use crate::tracks::TrackInfo;
@@ -5,8 +7,9 @@ use crate::tracks::TrackInfo;
 use super::Player;
 use crossterm::{
     cursor::{Hide, MoveToColumn, MoveUp, Show},
+    event,
     style::{Print, Stylize},
-    terminal::{Clear, ClearType},
+    terminal::{self, Clear, ClearType},
 };
 use tokio::{
     sync::mpsc::Sender,
@@ -16,6 +19,7 @@ use tokio::{
 
 use super::Messages;
 
+/// Small helper function to format durations.
 fn format_duration(duration: &Duration) -> String {
     let seconds = duration.as_secs() % 60;
     let minutes = duration.as_secs() / 60;
@@ -31,43 +35,49 @@ enum ActionBar {
 }
 
 impl ActionBar {
+    /// Formats the action bar to be displayed.
+    /// The second value is the character length of the result.
     fn format(&self) -> (String, usize) {
         let (word, subject) = match self {
-            ActionBar::Playing(x) => ("playing", Some(x.name.clone())),
-            ActionBar::Paused(x) => ("paused", Some(x.name.clone())),
-            ActionBar::Loading => ("loading", None),
+            Self::Playing(x) => ("playing", Some(x.name.clone())),
+            Self::Paused(x) => ("paused", Some(x.name.clone())),
+            Self::Loading => ("loading", None),
         };
 
-        if let Some(subject) = subject {
-            (
-                format!("{} {}", word, subject.clone().bold()),
-                word.len() + 1 + subject.len(),
-            )
-        } else {
-            (word.to_string(), word.len())
-        }
+        subject.map_or_else(
+            || (word.to_owned(), word.len()),
+            |subject| {
+                (
+                    format!("{} {}", word, subject.clone().bold()),
+                    word.len() + 1 + subject.len(),
+                )
+            },
+        )
     }
 }
 
 /// The code for the interface itself.
 async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
+    /// The total width of the UI.
     const WIDTH: usize = 27;
+
+    /// The width of the progress bar, not including the borders (`[` and `]`) or padding.
     const PROGRESS_WIDTH: usize = WIDTH - 16;
 
     loop {
-        let (mut main, len) = match queue.current.load().as_ref() {
-            Some(x) => {
-                let name = (*x.clone()).clone();
-
+        let (mut main, len) = queue
+            .current
+            .load()
+            .as_ref()
+            .map_or(ActionBar::Loading, |x| {
+                let name = (*Arc::clone(&x)).clone();
                 if queue.sink.is_paused() {
                     ActionBar::Paused(name)
                 } else {
                     ActionBar::Playing(name)
                 }
-            }
-            None => ActionBar::Loading,
-        }
-        .format();
+            })
+            .format();
 
         if len > WIDTH {
             main = format!("{}...", &main[..=WIDTH]);
@@ -122,18 +132,18 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
 
 /// Initializes the UI, this will also start taking input from the user.
 pub async fn start(queue: Arc<Player>, sender: Sender<Messages>) -> eyre::Result<()> {
-    crossterm::terminal::enable_raw_mode()?;
+    terminal::enable_raw_mode()?;
     crossterm::execute!(stderr(), Hide)?;
     //crossterm::execute!(stderr(), EnterAlternateScreen, MoveTo(0, 0))?;
 
-    task::spawn(interface(queue.clone()));
+    task::spawn(interface(Arc::clone(&queue)));
 
     loop {
-        let crossterm::event::Event::Key(event) = crossterm::event::read()? else {
+        let event::Event::Key(event) = event::read()? else {
             continue;
         };
 
-        let crossterm::event::KeyCode::Char(code) = event.code else {
+        let event::KeyCode::Char(code) = event.code else {
             continue;
         };
 
@@ -155,7 +165,7 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>) -> eyre::Result
 
     //crossterm::execute!(stderr(), LeaveAlternateScreen)?;
     crossterm::execute!(stderr(), Clear(ClearType::FromCursorDown), Show)?;
-    crossterm::terminal::disable_raw_mode()?;
+    terminal::disable_raw_mode()?;
 
     Ok(())
 }

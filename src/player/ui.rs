@@ -126,7 +126,7 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
             MoveUp(4)
         )?;
 
-        sleep(Duration::from_secs_f32(1.0 / 60.0)).await;
+        sleep(Duration::from_secs_f32(10.0 / 60.0)).await;
     }
 }
 

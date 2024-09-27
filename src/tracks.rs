@@ -57,7 +57,15 @@ impl TrackInfo {
             .unwrap()
             .strip_suffix(".mp3")
             .unwrap()
-            .to_title_case();
+            .to_title_case()
+            // Inflector doesn't like contractions...
+            // Replaces a few very common ones.
+            // TODO: Properly handle these.
+            .replace(" S ", "'s ")
+            .replace(" T ", "'t ")
+            .replace(" D ", "'d ")
+            .replace(" Ve ", "'ve ")
+            .replace(" M ", "'m ");
 
         let mut skip = 0;
 

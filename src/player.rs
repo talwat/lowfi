@@ -147,6 +147,10 @@ impl Player {
 
             match msg {
                 Messages::Next | Messages::Init => {
+                    // Skip as early as possible so that music doesn't play
+                    // while lowfi is "loading".
+                    queue.sink.stop();
+
                     // Serves as an indicator that the queue is "loading".
                     // This is also set by Player::next.
                     queue.current.store(None);
@@ -155,7 +159,6 @@ impl Player {
                     // in the buffer.
                     itx.send(()).await?;
 
-                    queue.sink.stop();
                     let track = Self::next(Arc::clone(&queue)).await?;
                     queue.sink.append(track.data);
                 }

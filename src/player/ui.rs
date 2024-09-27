@@ -7,7 +7,7 @@ use crate::tracks::TrackInfo;
 use super::Player;
 use crossterm::{
     cursor::{Hide, MoveToColumn, MoveUp, Show},
-    event,
+    event::{self, KeyCode, KeyModifiers},
     style::{Print, Stylize},
     terminal::{self, Clear, ClearType},
 };
@@ -143,11 +143,17 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>) -> eyre::Result
             continue;
         };
 
-        let event::KeyCode::Char(code) = event.code else {
+        let KeyCode::Char(code) = event.code else {
             continue;
         };
 
         match code {
+            'c' => {
+                // Handles Ctrl+C.
+                if event.modifiers == KeyModifiers::CONTROL {
+                    break;
+                }
+            }
             'q' => {
                 break;
             }

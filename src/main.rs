@@ -1,3 +1,5 @@
+#![warn(clippy::cargo)]
+
 use clap::{Parser, Subcommand};
 
 mod play;

@@ -1,7 +1,15 @@
 [package]
 name = "lowfi"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
+description = "An extremely simple lofi player."
+license = "MIT"
+readme = "README.md"
+categories = ["command-line-interface", "command-line-utilities", "multimedia", "multimedia::audio"]
+keywords = ["lowfi", "lofi", "music"]
+documentation = "https://github.com/talwat/lowfi"
+homepage = "https://github.com/talwat/lowfi"
+repository = "https://github.com/talwat/lowfi"
 
 [dependencies]
 # Basics

@@ -26,9 +26,7 @@ fn random() -> &'static str {
         .collect();
 
     let random = rand::thread_rng().gen_range(0..tracks.len());
-    let track = tracks[random];
-
-    track
+    tracks[random]
 }
 
 /// Just a shorthand for a decoded [Bytes].

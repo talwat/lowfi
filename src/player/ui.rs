@@ -70,7 +70,7 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
             .load()
             .as_ref()
             .map_or(ActionBar::Loading, |x| {
-                let name = (*Arc::clone(&x)).clone();
+                let name = (*Arc::clone(x)).clone();
                 if queue.sink.is_paused() {
                     ActionBar::Paused(name)
                 } else {

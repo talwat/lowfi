@@ -1,3 +1,7 @@
+//! Has all of the structs for managing the state
+//! of tracks, as well as downloading them &
+//! finding new ones.
+
 use std::{io::Cursor, time::Duration};
 
 use bytes::Bytes;
@@ -70,7 +74,10 @@ impl TrackInfo {
 /// This struct is seperate from [Track] since it is generated lazily from
 /// a track, and not when the track is first downloaded.
 pub struct DecodedTrack {
+    /// Has both the formatted name and some information from the decoded data.
     pub info: TrackInfo,
+
+    /// The decoded data, which is able to be played by [rodio].
     pub data: DecodedData,
 }
 
@@ -85,7 +92,11 @@ impl DecodedTrack {
 
 /// The main track struct, which only includes data & the track name.
 pub struct Track {
+    /// This name is not formatted, and also includes the month & year of the track.
     pub name: &'static str,
+
+    /// The raw data of the track, which is not decoded and
+    /// therefore much more memory efficient.
     pub data: Bytes,
 }
 
@@ -93,7 +104,7 @@ impl Track {
     /// Fetches and downloads a random track from the tracklist.
     pub async fn random(client: &Client) -> eyre::Result<Self> {
         let name = random().await?;
-        let data = download(&name, client).await?;
+        let data = download(name, client).await?;
 
         Ok(Self { data, name })
     }

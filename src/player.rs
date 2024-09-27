@@ -1,3 +1,7 @@
+//! Responsible for playing & queueing audio.
+//! This also has the code for the underlying
+//! audio server which adds new tracks.
+
 use std::{collections::VecDeque, sync::Arc};
 
 use arc_swap::ArcSwapOption;
@@ -18,8 +22,13 @@ pub mod ui;
 
 /// Handles communication between the frontend & audio player.
 pub enum Messages {
+    /// Notifies the audio server that it should update the track.
     Next,
+
+    /// Similar to Next, but specific to the first track.
     Init,
+
+    /// Pauses the [Sink]. This will also unpause it if it is paused.
     Pause,
 }
 
@@ -28,15 +37,36 @@ const BUFFER_SIZE: usize = 5;
 
 /// Main struct responsible for queuing up & playing tracks.
 pub struct Player {
+    /// [rodio]'s [`Sink`] which can control playback.
     pub sink: Sink,
+
+    /// The [`TrackInfo`] of the current track.
+    /// This is [`None`] when lowfi is buffering.
     pub current: ArcSwapOption<TrackInfo>,
+
+    /// The tracks, which is a [VecDeque] that holds
+    /// *undecoded* [Track]s.
     tracks: RwLock<VecDeque<Track>>,
+
+    /// The web client, which can contain a UserAgent & some
+    /// settings that help lowfi work more effectively.
     client: Client,
+
+    /// The [OutputStreamHandle], which also can control some
+    /// playback, is for now unused and is here just to keep it
+    /// alive so the playback can function properly.
     _handle: OutputStreamHandle,
+
+    /// The [OutputStream], which is just here to keep the playback
+    /// alive and functioning.
     _stream: OutputStream,
 }
 
+/// SAFETY: This is necessary because [OutputStream] does not implement [Send],
+/// SAFETY: even though it is perfectly possible.
 unsafe impl Send for Player {}
+
+/// SAFETY: See implementation for [Send].
 unsafe impl Sync for Player {}
 
 impl Player {
@@ -55,6 +85,7 @@ impl Player {
         })
     }
 
+    /// Just a shorthand for setting `current`.
     async fn set_current(&self, info: TrackInfo) -> eyre::Result<()> {
         self.current.store(Some(Arc::new(info)));
 
@@ -101,6 +132,7 @@ impl Player {
             }
         });
 
+        // Start buffering tracks immediately.
         itx.send(()).await?;
 
         loop {

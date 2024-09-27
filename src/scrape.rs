@@ -1,9 +1,11 @@
+//! Has all of the functions for the `scrape` command.
+
 use std::sync::LazyLock;
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use scraper::{Html, Selector};
 
-const BASE_URL: &'static str = "https://lofigirl.com/wp-content/uploads/";
+const BASE_URL: &str = "https://lofigirl.com/wp-content/uploads/";
 
 static SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("html > body > pre > a").unwrap());
@@ -48,7 +50,7 @@ async fn scan(extention: &str, include_full: bool) -> eyre::Result<Vec<String>> 
                 let path = format!("{}/{}", year, month);
 
                 let items = parse(&path).await.unwrap();
-                let items = items
+                items
                     .into_iter()
                     .filter_map(|x| {
                         if x.ends_with(extention) {
@@ -61,9 +63,7 @@ async fn scan(extention: &str, include_full: bool) -> eyre::Result<Vec<String>> 
                             None
                         }
                     })
-                    .collect::<Vec<String>>();
-
-                items
+                    .collect::<Vec<String>>()
             });
         }
     }

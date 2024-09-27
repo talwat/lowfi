@@ -1,3 +1,5 @@
+//! Responsible for the basic initialization & shutdown of the audio server & frontend.
+
 use std::sync::Arc;
 
 use tokio::{
@@ -8,6 +10,8 @@ use tokio::{
 use crate::player::Player;
 use crate::player::{ui, Messages};
 
+/// Initializes the audio server, and then safely stops
+/// it when the frontend quits.
 pub async fn play() -> eyre::Result<()> {
     let (tx, rx) = mpsc::channel(8);
 

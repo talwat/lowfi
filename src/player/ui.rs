@@ -23,18 +23,19 @@ fn format_duration(duration: &Duration) -> String {
     format!("{:02}:{:02}", minutes, seconds)
 }
 
-enum Action {
+/// This represents the main "action" bars state.
+enum ActionBar {
     Paused(TrackInfo),
     Playing(TrackInfo),
     Loading,
 }
 
-impl Action {
+impl ActionBar {
     fn format(&self) -> (String, usize) {
         let (word, subject) = match self {
-            Action::Playing(x) => ("playing", Some(x.name.clone())),
-            Action::Paused(x) => ("paused", Some(x.name.clone())),
-            Action::Loading => ("loading", None),
+            ActionBar::Playing(x) => ("playing", Some(x.name.clone())),
+            ActionBar::Paused(x) => ("paused", Some(x.name.clone())),
+            ActionBar::Loading => ("loading", None),
         };
 
         if let Some(subject) = subject {
@@ -43,11 +44,12 @@ impl Action {
                 word.len() + 1 + subject.len(),
             )
         } else {
-            (format!("{}", word), word.len())
+            (word.to_string(), word.len())
         }
     }
 }
 
+/// The code for the interface itself.
 async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
     const WIDTH: usize = 27;
     const PROGRESS_WIDTH: usize = WIDTH - 16;
@@ -58,12 +60,12 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
                 let name = (*x.clone()).clone();
 
                 if queue.sink.is_paused() {
-                    Action::Paused(name)
+                    ActionBar::Paused(name)
                 } else {
-                    Action::Playing(name)
+                    ActionBar::Playing(name)
                 }
             }
-            None => Action::Loading,
+            None => ActionBar::Loading,
         }
         .format();
 
@@ -88,7 +90,7 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
 
         let progress = format!(
             " [{}{}] {}/{} ",
-            "/".repeat(filled as usize),
+            "/".repeat(filled),
             " ".repeat(PROGRESS_WIDTH.saturating_sub(filled)),
             format_duration(&elapsed),
             format_duration(&duration),
@@ -118,6 +120,7 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
     }
 }
 
+/// Initializes the UI, this will also start taking input from the user.
 pub async fn start(queue: Arc<Player>, sender: Sender<Messages>) -> eyre::Result<()> {
     crossterm::terminal::enable_raw_mode()?;
     crossterm::execute!(stderr(), Hide)?;

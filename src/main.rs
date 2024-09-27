@@ -1,3 +1,12 @@
+#![warn(
+    clippy::all,
+    clippy::restriction,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo
+)]
+#![allow(clippy::single_call_fn)]
+
 use clap::{Parser, Subcommand};
 
 mod play;

@@ -3,6 +3,8 @@
 lowfi is a tiny rust app that serves a single purpose: play lofi.
 It'll do this as simply as it can: no albums, no ads, just lofi.
 
+![example image](images/example1.png)
+
 ## Disclaimer
 
 **All** of the audio files played in lowfi are from [Lofi Girl's](https://lofigirl.com/) website,

@@ -1,11 +1,16 @@
 [package]
 name = "lowfi"
-version = "1.2.0"
+version = "1.2.1"
 edition = "2021"
 description = "An extremely simple lofi player."
 license = "MIT"
 readme = "README.md"
-categories = ["command-line-interface", "command-line-utilities", "multimedia", "multimedia::audio"]
+categories = [
+    "command-line-interface",
+    "command-line-utilities",
+    "multimedia",
+    "multimedia::audio",
+]
 keywords = ["lowfi", "lofi", "music"]
 documentation = "https://github.com/talwat/lowfi"
 homepage = "https://github.com/talwat/lowfi"
@@ -14,21 +19,24 @@ repository = "https://github.com/talwat/lowfi"
 [dependencies]
 # Basics
 clap = { version = "4.5.18", features = ["derive", "cargo"] }
-eyre = "0.6.12"
+eyre = { version = "0.6.12" }
 rand = "0.8.5"
 
 # Async
-tokio = { version = "1.40.0", features = ["full"] }
+tokio = { version = "1.40.0", features = [
+    "macros",
+    "rt-multi-thread",
+], default-features = false }
 futures = "0.3.30"
 arc-swap = "1.7.1"
 
 # Data
-reqwest = { version = "0.12.7", features = ["blocking"] }
+reqwest = "0.12.7"
 bytes = "1.7.2"
 
 # Misc
 scraper = "0.20.0"
-rodio = { version = "0.19.0", features = ["mp3"], default-features = false }
+rodio = { version = "0.19.0", features = ["symphonia-mp3"], default-features = false }
 crossterm = "0.28.1"
 Inflector = "0.11.4"
 lazy_static = "1.5.0"

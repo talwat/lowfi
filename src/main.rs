@@ -9,6 +9,10 @@ mod tracks;
 #[derive(Parser)]
 #[command(about)]
 struct Args {
+    /// Whether to use an alternate terminal screen.
+    #[clap(long, short)]
+    alternate: bool,
+
     /// The command that was ran.
     /// This is [None] if no command was specified.
     #[command(subcommand)]
@@ -42,6 +46,6 @@ async fn main() -> eyre::Result<()> {
             } => scrape::scrape(extension, include_full).await,
         }
     } else {
-        play::play().await
+        play::play(cli.alternate).await
     }
 }

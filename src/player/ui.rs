@@ -6,10 +6,10 @@ use crate::tracks::TrackInfo;
 
 use super::Player;
 use crossterm::{
-    cursor::{Hide, MoveToColumn, MoveUp, RestorePosition, Show},
+    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, RestorePosition, Show},
     event::{self, KeyCode, KeyModifiers},
     style::{Print, Stylize},
-    terminal::{self, Clear, ClearType},
+    terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use tokio::{
     sync::mpsc::Sender,
@@ -136,15 +136,24 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
 }
 
 /// Initializes the UI, this will also start taking input from the user.
-pub async fn start(queue: Arc<Player>, sender: Sender<Messages>) -> eyre::Result<()> {
+///
+/// `alternate` controls whether to use [EnterAlternateScreen] in order to hide
+/// previous terminal history.
+pub async fn start(
+    queue: Arc<Player>,
+    sender: Sender<Messages>,
+    alternate: bool,
+) -> eyre::Result<()> {
     crossterm::execute!(
         stderr(),
         RestorePosition,
         Clear(ClearType::FromCursorDown),
         Hide
     )?;
-    terminal::enable_raw_mode()?;
-    //crossterm::execute!(stderr(), EnterAlternateScreen, MoveTo(0, 0))?;
+
+    if alternate {
+        crossterm::execute!(stderr(), EnterAlternateScreen, MoveTo(0, 0))?;
+    }
 
     task::spawn(interface(Arc::clone(&queue)));
 
@@ -179,7 +188,10 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>) -> eyre::Result
         }
     }
 
-    //crossterm::execute!(stderr(), LeaveAlternateScreen)?;
+    if alternate {
+        crossterm::execute!(stderr(), LeaveAlternateScreen)?;
+    }
+
     crossterm::execute!(stderr(), Clear(ClearType::FromCursorDown), Show)?;
     terminal::disable_raw_mode()?;
 

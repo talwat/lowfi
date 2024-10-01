@@ -58,7 +58,10 @@ jobs:
 
       - name: Install dependencies
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt install libasound2-dev libssl-dev openssl pkg-config
+        run: |
+          sudo apt install -y pkg-config
+          sudo apt install -y libasound2-dev
+          openssl version -d
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0

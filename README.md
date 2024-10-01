@@ -28,6 +28,8 @@ you're interested in downloading the tracks. Beware, there's a lot of them.
 
 ## Installing
 
+You'll need Rust 1.74.0+.
+
 ### Cargo
 
 The recommended installation method is to use cargo:
@@ -36,7 +38,7 @@ The recommended installation method is to use cargo:
 cargo install lowfi
 ```
 
-and making sure $HOME/.cargo/bin is added to $PATH.
+and making sure `$HOME/.cargo/bin` is added to `$PATH`.
 
 ### AUR
 

@@ -60,7 +60,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt install -y libasound2-dev
-          echo "OPENSSL_DIR=$(openssl version -d)" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=/usr/lib/ssl" >> $GITHUB_ENV
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0

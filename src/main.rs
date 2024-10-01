@@ -20,9 +20,9 @@ struct Args {
 enum Commands {
     /// Scrapes the lofi girl website file server for files.
     Scrape {
-        /// The file extention to search for, defaults to mp3.
+        /// The file extension to search for, defaults to mp3.
         #[clap(long, short, default_value = "mp3")]
-        extention: String,
+        extension: String,
 
         /// Whether to include the full HTTP URL or just the distinguishing part.
         #[clap(long, short)]
@@ -37,9 +37,9 @@ async fn main() -> eyre::Result<()> {
     if let Some(command) = cli.command {
         match command {
             Commands::Scrape {
-                extention,
+                extension,
                 include_full,
-            } => scrape::scrape(extention, include_full).await,
+            } => scrape::scrape(extension, include_full).await,
         }
     } else {
         play::play().await

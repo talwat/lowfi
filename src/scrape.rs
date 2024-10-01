@@ -26,8 +26,8 @@ async fn parse(path: &str) -> eyre::Result<Vec<String>> {
 ///
 /// It's a bit hacky, and basically works by checking all of the years, then months, and then all of the files.
 /// This is done as a way to avoid recursion, since async rust really hates recursive functions.
-async fn scan(extention: &str, include_full: bool) -> eyre::Result<Vec<String>> {
-    let extention = &format!(".{}", extention);
+async fn scan(extension: &str, include_full: bool) -> eyre::Result<Vec<String>> {
+    let extension = &format!(".{}", extension);
 
     let items = parse("").await?;
 
@@ -53,7 +53,7 @@ async fn scan(extention: &str, include_full: bool) -> eyre::Result<Vec<String>> 
                 items
                     .into_iter()
                     .filter_map(|x| {
-                        if x.ends_with(extention) {
+                        if x.ends_with(extension) {
                             if include_full {
                                 Some(format!("{BASE_URL}{path}{x}"))
                             } else {
@@ -76,8 +76,8 @@ async fn scan(extention: &str, include_full: bool) -> eyre::Result<Vec<String>> 
     eyre::Result::Ok(files)
 }
 
-pub async fn scrape(extention: String, include_full: bool) -> eyre::Result<()> {
-    let files = scan(&extention, include_full).await?;
+pub async fn scrape(extension: String, include_full: bool) -> eyre::Result<()> {
+    let files = scan(&extension, include_full).await?;
     for file in files {
         println!("{}", file);
     }

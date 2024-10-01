@@ -59,7 +59,7 @@ jobs:
       - name: Install dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt install -y libasound2-dev
+          sudo apt install -y alsa-lib libasound2-dev
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0

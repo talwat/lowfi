@@ -1,6 +1,6 @@
 [package]
 name = "lowfi"
-version = "1.2.2"
+version = "1.2.3"
 edition = "2021"
 description = "An extremely simple lofi player."
 license = "MIT"
@@ -40,4 +40,3 @@ rodio = { version = "0.19.0", features = ["symphonia-mp3"], default-features = f
 crossterm = "0.28.1"
 Inflector = "0.11.4"
 lazy_static = "1.5.0"
-openssl = { version = "*", features = ["vendored"] }

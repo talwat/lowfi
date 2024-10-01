@@ -5,12 +5,13 @@
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
+use downloader::Downloader;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
     select,
     sync::{
-        mpsc::{self, Receiver, Sender},
+        mpsc::{Receiver, Sender},
         RwLock,
     },
     task,
@@ -18,6 +19,7 @@ use tokio::{
 
 use crate::tracks::{DecodedTrack, Track, TrackInfo};
 
+pub mod downloader;
 pub mod ui;
 
 /// Handles communication between the frontend & audio player.
@@ -122,39 +124,22 @@ impl Player {
 
     /// This is the main "audio server".
     ///
-    /// `rx` is used to communicate with it, for example when to
+    /// `rx` & `ts` are used to communicate with it, for example when to
     /// skip tracks or pause.
     pub async fn play(
-        queue: Arc<Self>,
+        player: Arc<Self>,
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
     ) -> eyre::Result<()> {
-        // This is an internal channel which serves pretty much only one purpose,
-        // which is to notify the buffer refiller to get back to work.
-        // This channel is useful to prevent needing to check with some infinite loop.
-        let (itx, mut irx) = mpsc::channel(8);
-
-        // This refills the queue in the background.
-        task::spawn({
-            let queue = Arc::clone(&queue);
-
-            async move {
-                while irx.recv().await == Some(()) {
-                    while queue.tracks.read().await.len() < BUFFER_SIZE {
-                        let Ok(track) = Track::random(&queue.client).await else {
-                            continue;
-                        };
-                        queue.tracks.write().await.push_back(track);
-                    }
-                }
-            }
-        });
+        // `itx` is used to notify the `Downloader` when it needs to download new tracks.
+        let (downloader, itx) = Downloader::new(player.clone());
+        downloader.start().await;
 
         // Start buffering tracks immediately.
         itx.send(()).await?;
 
         loop {
-            let clone = Arc::clone(&queue);
+            let clone = Arc::clone(&player);
             let msg = select! {
                 Some(x) = rx.recv() => x,
 
@@ -166,17 +151,17 @@ impl Player {
                 Messages::Next | Messages::Init | Messages::TryAgain => {
                     // Skip as early as possible so that music doesn't play
                     // while lowfi is "loading".
-                    queue.sink.stop();
+                    player.sink.stop();
 
                     // Serves as an indicator that the queue is "loading".
                     // This is also set by Player::next.
-                    queue.current.store(None);
+                    player.current.store(None);
 
-                    let track = Self::next(Arc::clone(&queue)).await;
+                    let track = Self::next(Arc::clone(&player)).await;
 
                     match track {
                         Ok(track) => {
-                            queue.sink.append(track.data);
+                            player.sink.append(track.data);
 
                             // Notify the background downloader that there's an empty spot
                             // in the buffer.
@@ -192,10 +177,10 @@ impl Player {
                     };
                 }
                 Messages::Pause => {
-                    if queue.sink.is_paused() {
-                        queue.sink.play();
+                    if player.sink.is_paused() {
+                        player.sink.play();
                     } else {
-                        queue.sink.pause();
+                        player.sink.pause();
                     }
                 }
             }

@@ -1,6 +1,6 @@
 [package]
 name = "lowfi"
-version = "1.1.1"
+version = "1.2.0"
 edition = "2021"
 description = "An extremely simple lofi player."
 license = "MIT"
@@ -31,3 +31,4 @@ scraper = "0.20.0"
 rodio = { version = "0.19.0", features = ["mp3"], default-features = false }
 crossterm = "0.28.1"
 Inflector = "0.11.4"
+lazy_static = "1.5.0"

@@ -1,14 +1,14 @@
 //! Has all of the functions for the `scrape` command.
 
-use std::sync::LazyLock;
-
 use futures::{stream::FuturesUnordered, StreamExt};
+use lazy_static::lazy_static;
 use scraper::{Html, Selector};
 
 const BASE_URL: &str = "https://lofigirl.com/wp-content/uploads/";
 
-static SELECTOR: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("html > body > pre > a").unwrap());
+lazy_static! {
+    static ref SELECTOR: Selector = Selector::parse("html > body > pre > a").unwrap();
+}
 
 async fn parse(path: &str) -> eyre::Result<Vec<String>> {
     let response = reqwest::get(format!("{}{}", BASE_URL, path)).await?;

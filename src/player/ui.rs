@@ -6,7 +6,7 @@ use crate::tracks::TrackInfo;
 
 use super::Player;
 use crossterm::{
-    cursor::{Hide, MoveToColumn, MoveUp, Show},
+    cursor::{Hide, MoveToColumn, MoveUp, RestorePosition, Show},
     event::{self, KeyCode, KeyModifiers},
     style::{Print, Stylize},
     terminal::{self, Clear, ClearType},
@@ -18,6 +18,11 @@ use tokio::{
 };
 
 use super::Messages;
+
+/// How long to wait in between frames.
+/// This is fairly arbitrary, but an ideal value should be enough to feel
+/// snappy but not require too many resources.
+const FRAME_DELTA: f32 = 5.0 / 60.0;
 
 /// Small helper function to format durations.
 fn format_duration(duration: &Duration) -> String {
@@ -126,14 +131,19 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
             MoveUp(4)
         )?;
 
-        sleep(Duration::from_secs_f32(10.0 / 60.0)).await;
+        sleep(Duration::from_secs_f32(FRAME_DELTA)).await;
     }
 }
 
 /// Initializes the UI, this will also start taking input from the user.
 pub async fn start(queue: Arc<Player>, sender: Sender<Messages>) -> eyre::Result<()> {
+    crossterm::execute!(
+        stderr(),
+        RestorePosition,
+        Clear(ClearType::FromCursorDown),
+        Hide
+    )?;
     terminal::enable_raw_mode()?;
-    crossterm::execute!(stderr(), Hide)?;
     //crossterm::execute!(stderr(), EnterAlternateScreen, MoveTo(0, 0))?;
 
     task::spawn(interface(Arc::clone(&queue)));

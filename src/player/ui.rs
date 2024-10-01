@@ -112,8 +112,8 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
         ];
 
         // Formats the menu properly
-        let menu =
-            [main, progress, bar.join("    ")].map(|x| format!("│ {x} │\r\n").reset().to_string());
+        let menu = [main, progress, bar.join("    ")]
+            .map(|x| format!("│ {} │\r\n", x.reset()).to_string());
 
         crossterm::execute!(stderr(), Clear(ClearType::FromCursorDown))?;
         crossterm::execute!(

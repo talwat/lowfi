@@ -173,35 +173,40 @@ pub async fn start(
             continue;
         };
 
-        let KeyCode::Char(code) = event.code else {
-            continue;
-        };
-
-        match code {
-            'c' => {
-                // Handles Ctrl+C.
-                if event.modifiers == KeyModifiers::CONTROL {
-                    break;
-                }
-            }
-            'q' => {
-                break;
-            }
-            's' => {
-                if !queue.current.load().is_none() {
-                    sender.send(Messages::Next).await?
-                }
-            }
-            'p' => {
-                sender.send(Messages::Pause).await?;
-            }
-            '+' | '=' => {
+        match event.code {
+            KeyCode::Up | KeyCode::Right => {
                 sender.send(Messages::VolumeUp).await?;
             }
-            '-' | '_' => {
+            KeyCode::Down | KeyCode::Left => {
                 sender.send(Messages::VolumeDown).await?;
             }
-            _ => {}
+            KeyCode::Char(character) => match character {
+                'c' => {
+                    // Handles Ctrl+C.
+                    if event.modifiers == KeyModifiers::CONTROL {
+                        break;
+                    }
+                }
+                'q' => {
+                    break;
+                }
+                's' => {
+                    if !queue.current.load().is_none() {
+                        sender.send(Messages::Next).await?
+                    }
+                }
+                'p' => {
+                    sender.send(Messages::Pause).await?;
+                }
+                '+' | '=' => {
+                    sender.send(Messages::VolumeUp).await?;
+                }
+                '-' | '_' => {
+                    sender.send(Messages::VolumeDown).await?;
+                }
+                _ => (),
+            },
+            _ => (),
         }
     }
 

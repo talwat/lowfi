@@ -190,13 +190,13 @@ impl Player {
                     }
                 }
                 Messages::VolumeUp => {
-                    // Increase the volume, if possible
+                    // Increase the volume, if possible.
                     if player.sink.volume() < 1.0 {
                         player.sink.set_volume(player.sink.volume() + 0.1);
                     }
                 }
                 Messages::VolumeDown => {
-                    // Decreaes the volume, if possible
+                    // Decreaes the volume, if possible.
                     if player.sink.volume() > 0.0 {
                         player.sink.set_volume(player.sink.volume() - 0.1);
                     }

@@ -54,6 +54,13 @@ yay -S lowfi
 
 Yeah, that's it. Controls are documented in the app.
 
+### Extra Flags
+
+If you're having issues on Linux with error messages,
+or you don't want your terminal history to be visible when you
+run lofi, you can use the `--alternate` or `-a` flag to
+hide your history.
+
 ### Scraping
 
 lowfi also has a `scrape` command which is usually not relevant, but

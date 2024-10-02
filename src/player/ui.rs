@@ -195,10 +195,10 @@ pub async fn start(
             'p' => {
                 sender.send(Messages::Pause).await?;
             }
-            '+' => {
+            '+' | '=' => {
                 sender.send(Messages::VolumeUp).await?;
             }
-            '-' => {
+            '-' | '_' => {
                 sender.send(Messages::VolumeDown).await?;
             }
             _ => {}

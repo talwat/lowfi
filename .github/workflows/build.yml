@@ -19,13 +19,6 @@ jobs:
             name: lowfi-linux-x86_64
             command: build
 
-          - release_for: Linux aarch64
-            os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            bin: lowfi
-            name: lowfi-linux-aarch64
-            command: build
-
           - release_for: Windows x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -61,12 +54,17 @@ jobs:
         run: |
           sudo apt install -y libasound2-dev librust-alsa-sys-dev librust-curl+openssl-sys-dev
 
-      - name: Build binary
+      - name: Build binary (cross)
+        if: matrix.os != 'ubuntu-latest'
         uses: houseabsolute/actions-rust-cross@v0
         with:
           command: ${{ matrix.command }}
           target: ${{ matrix.target }}
           args: "--locked --release"
+      
+      - name: Build binary (native)
+        if: matrix.os == 'ubuntu-latest'
+        run: "cargo build --locked --release"
 
       - name: Rename binary
         run: |

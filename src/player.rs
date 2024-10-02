@@ -23,6 +23,7 @@ pub mod downloader;
 pub mod ui;
 
 /// Handles communication between the frontend & audio player.
+#[derive(PartialEq)]
 pub enum Messages {
     /// Notifies the audio server that it should update the track.
     Next,

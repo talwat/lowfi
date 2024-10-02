@@ -127,7 +127,7 @@ fn audio_bar(player: &Arc<Player>) -> String {
 /// The code for the interface itself.
 ///
 /// `volume_timer` is a bit strange, but it tracks how long the `volume` bar
-/// has been displayed for, so that it's only displayed for one second.
+/// has been displayed for, so that it's only displayed for a certain amount of frames.
 async fn interface(player: Arc<Player>, volume_timer: Arc<AtomicUsize>) -> eyre::Result<()> {
     loop {
         let (mut main, len) = player
@@ -216,45 +216,38 @@ pub async fn start(
             continue;
         };
 
-        match event.code {
-            KeyCode::Up | KeyCode::Right => {
-                sender.send(Messages::VolumeUp).await?;
-                volume_timer.store(1, Ordering::Relaxed);
-            }
-            KeyCode::Down | KeyCode::Left => {
-                sender.send(Messages::VolumeDown).await?;
-                volume_timer.store(1, Ordering::Relaxed);
-            }
+        let messages = match event.code {
+            // Arrow key volume controls.
+            KeyCode::Up | KeyCode::Right => Messages::VolumeUp,
+            KeyCode::Down | KeyCode::Left => Messages::VolumeDown,
             KeyCode::Char(character) => match character {
-                'c' => {
-                    // Handles Ctrl+C.
-                    if event.modifiers == KeyModifiers::CONTROL {
-                        break;
-                    }
-                }
-                'q' => {
-                    break;
-                }
-                's' => {
-                    if !queue.current.load().is_none() {
-                        sender.send(Messages::Next).await?
-                    }
-                }
-                'p' => {
-                    sender.send(Messages::Pause).await?;
-                }
-                '+' | '=' => {
-                    sender.send(Messages::VolumeUp).await?;
-                    volume_timer.store(1, Ordering::Relaxed);
-                }
-                '-' | '_' => {
-                    sender.send(Messages::VolumeDown).await?;
-                    volume_timer.store(1, Ordering::Relaxed);
-                }
-                _ => (),
+                // Ctrl+C
+                'c' if event.modifiers == KeyModifiers::CONTROL => break,
+
+                // Quit
+                'q' => break,
+
+                // Skip/Next
+                's' | 'n' if !queue.current.load().is_none() => Messages::Next,
+
+                // Pause
+                'p' => Messages::Pause,
+
+                // Volume up & down
+                '+' | '=' => Messages::VolumeUp,
+                '-' | '_' => Messages::VolumeDown,
+                _ => continue,
             },
-            _ => (),
+            _ => continue,
+        };
+
+        // If it's modifying the volume, then we'll set the `volume_timer` to 1
+        // so that the ui thread will know that it should show the audio bar.
+        if messages == Messages::VolumeDown || messages == Messages::VolumeUp {
+            volume_timer.store(1, Ordering::Relaxed);
         }
+
+        sender.send(messages).await?;
     }
 
     if alternate {

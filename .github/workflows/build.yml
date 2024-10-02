@@ -54,17 +54,12 @@ jobs:
         run: |
           sudo apt install -y libasound2-dev librust-alsa-sys-dev librust-curl+openssl-sys-dev
 
-      - name: Build binary (cross)
-        if: matrix.os != 'ubuntu-latest'
+      - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
           command: ${{ matrix.command }}
           target: ${{ matrix.target }}
           args: "--locked --release"
-      
-      - name: Build binary (native)
-        if: matrix.os == 'ubuntu-latest'
-        run: "cargo build --locked --release"
 
       - name: Rename binary
         run: |

@@ -64,7 +64,7 @@ impl ActionBar {
 /// The code for the interface itself.
 async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
     /// The total width of the UI.
-    const WIDTH: usize = 27;
+    const WIDTH: usize = 43;
 
     /// The width of the progress bar, not including the borders (`[` and `]`) or padding.
     const PROGRESS_WIDTH: usize = WIDTH - 16;
@@ -84,10 +84,20 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
             })
             .format();
 
-        if len > WIDTH {
-            main = format!("{}...", &main[..=WIDTH]);
+        let volume = format!(
+            " Volume: {}% ",
+            ((queue.sink.volume() * 100.0).round() as usize).to_string()
+        );
+
+        if len > WIDTH - volume.len() {
+            main = format!("{}...{}", &main[..=WIDTH - volume.len()], volume);
         } else {
-            main = format!("{}{}", main, " ".repeat(WIDTH - len));
+            main = format!(
+                "{}{}{}",
+                main,
+                " ".repeat(WIDTH - volume.len() - len),
+                volume,
+            );
         }
 
         let mut duration = Duration::new(0, 0);
@@ -114,6 +124,7 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
             format!("{}kip", "[s]".bold()),
             format!("{}ause", "[p]".bold()),
             format!("{}uit", "[q]".bold()),
+            format!("volume {}", "[+/-]".bold()),
         ];
 
         // Formats the menu properly
@@ -183,6 +194,12 @@ pub async fn start(
             }
             'p' => {
                 sender.send(Messages::Pause).await?;
+            }
+            '+' => {
+                sender.send(Messages::VolumeUp).await?;
+            }
+            '-' => {
+                sender.send(Messages::VolumeDown).await?;
             }
             _ => {}
         }

@@ -1,12 +1,10 @@
 //! Responsible for the basic initialization & shutdown of the audio server & frontend.
 
-use std::{io::stderr, sync::Arc};
+use std::io::stdout;
+use std::sync::Arc;
 
-use crossterm::{cursor::SavePosition, terminal};
-use tokio::{
-    sync::mpsc::{self},
-    task::{self},
-};
+use crossterm::cursor::SavePosition;
+use tokio::{sync::mpsc, task};
 
 use crate::player::Player;
 use crate::player::{ui, Messages};
@@ -16,12 +14,10 @@ use crate::player::{ui, Messages};
 pub async fn play(alternate: bool) -> eyre::Result<()> {
     // Save the position. This is important since later on we can revert to this position
     // and clear any potential error messages that may have showed up.
-    // TODO: Figure how to set some sort of flag to hide error messages within rodio,
+    // TODO: Figure how to set some sort of flag to hide error messages within alsa/rodio,
     // TODO: Instead of just ignoring & clearing them after.
-    crossterm::execute!(stderr(), SavePosition)?;
-
-    // Enable raw mode early in theory to prevent uncontrolled text in the terminal from the user.
-    terminal::enable_raw_mode()?;
+    // TODO: Fix this, as it doesn't work with some terminals when the cursor is at the bottom of the terminal.
+    crossterm::execute!(stdout(), SavePosition)?;
 
     let (tx, rx) = mpsc::channel(8);
 

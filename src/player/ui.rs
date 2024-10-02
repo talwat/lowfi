@@ -1,7 +1,7 @@
 //! The module which manages all user interface, including inputs.
 
 use std::{
-    io::stderr,
+    io::stdout,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -172,9 +172,9 @@ async fn interface(player: Arc<Player>, volume_timer: Arc<AtomicUsize>) -> eyre:
         let menu = [main, middle, controls.join("    ")]
             .map(|x| format!("│ {} │\r\n", x.reset()).to_string());
 
-        crossterm::execute!(stderr(), Clear(ClearType::FromCursorDown))?;
         crossterm::execute!(
-            stderr(),
+            stdout(),
+            Clear(ClearType::FromCursorDown),
             MoveToColumn(0),
             Print(format!("┌{}┐\r\n", "─".repeat(WIDTH + 2))),
             Print(menu.join("")),
@@ -197,14 +197,17 @@ pub async fn start(
     alternate: bool,
 ) -> eyre::Result<()> {
     crossterm::execute!(
-        stderr(),
+        stdout(),
         RestorePosition,
+        Clear(ClearType::CurrentLine),
         Clear(ClearType::FromCursorDown),
         Hide
     )?;
 
+    terminal::enable_raw_mode()?;
+
     if alternate {
-        crossterm::execute!(stderr(), EnterAlternateScreen, MoveTo(0, 0))?;
+        crossterm::execute!(stdout(), EnterAlternateScreen, MoveTo(0, 0))?;
     }
 
     let volume_timer = Arc::new(AtomicUsize::new(0));
@@ -251,10 +254,10 @@ pub async fn start(
     }
 
     if alternate {
-        crossterm::execute!(stderr(), LeaveAlternateScreen)?;
+        crossterm::execute!(stdout(), LeaveAlternateScreen)?;
     }
 
-    crossterm::execute!(stderr(), Clear(ClearType::FromCursorDown), Show)?;
+    crossterm::execute!(stdout(), Clear(ClearType::FromCursorDown), Show)?;
     terminal::disable_raw_mode()?;
 
     Ok(())

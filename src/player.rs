@@ -131,7 +131,7 @@ impl Player {
 
     /// This is the main "audio server".
     ///
-    /// `rx` & `ts` are used to communicate with it, for example when to
+    /// `rx` & `tx` are used to communicate with it, for example when to
     /// skip tracks or pause.
     pub async fn play(
         player: Arc<Self>,

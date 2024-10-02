@@ -1,6 +1,13 @@
 //! The module which manages all user interface, including inputs.
 
-use std::{io::stderr, sync::Arc, time::Duration};
+use std::{
+    io::stderr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use crate::tracks::TrackInfo;
 
@@ -19,10 +26,26 @@ use tokio::{
 
 use super::Messages;
 
+/// The total width of the UI.
+const WIDTH: usize = 27;
+
+/// The width of the progress bar, not including the borders (`[` and `]`) or padding.
+const PROGRESS_WIDTH: usize = WIDTH - 16;
+
+/// The width of the audio bar, again not including borders or padding.
+const AUDIO_WIDTH: usize = WIDTH - 17;
+
+/// Self explanitory.
+const FPS: usize = 12;
+
+/// How long the audio bar will be visible for when audio is adjusted.
+/// This is in frames.
+const AUDIO_BAR_DURATION: usize = 9;
+
 /// How long to wait in between frames.
 /// This is fairly arbitrary, but an ideal value should be enough to feel
 /// snappy but not require too many resources.
-const FRAME_DELTA: f32 = 5.0 / 60.0;
+const FRAME_DELTA: f32 = 1.0 / FPS as f32;
 
 /// Small helper function to format durations.
 fn format_duration(duration: &Duration) -> String {
@@ -61,22 +84,59 @@ impl ActionBar {
     }
 }
 
+/// Creates the progress bar, as well as all the padding needed.
+fn progress_bar(player: &Arc<Player>) -> String {
+    let mut duration = Duration::new(0, 0);
+    let elapsed = player.sink.get_pos();
+
+    let mut filled = 0;
+    if let Some(current) = player.current.load().as_ref() {
+        if let Some(x) = current.duration {
+            duration = x;
+
+            let elapsed = elapsed.as_secs() as f32 / duration.as_secs() as f32;
+            filled = (elapsed * PROGRESS_WIDTH as f32).round() as usize;
+        }
+    };
+
+    format!(
+        " [{}{}] {}/{} ",
+        "/".repeat(filled),
+        " ".repeat(PROGRESS_WIDTH.saturating_sub(filled)),
+        format_duration(&elapsed),
+        format_duration(&duration),
+    )
+}
+
+/// Creates the audio bar, as well as all the padding needed.
+fn audio_bar(player: &Arc<Player>) -> String {
+    let volume = player.sink.volume();
+
+    let audio = (player.sink.volume() * AUDIO_WIDTH as f32).round() as usize;
+    let percentage = format!("{}%", (volume * 100.0).ceil().abs());
+
+    format!(
+        " volume: [{}{}] {}{} ",
+        "/".repeat(audio),
+        " ".repeat(AUDIO_WIDTH.saturating_sub(audio)),
+        " ".repeat(4usize.saturating_sub(percentage.len())),
+        percentage,
+    )
+}
+
 /// The code for the interface itself.
-async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
-    /// The total width of the UI.
-    const WIDTH: usize = 27;
-
-    /// The width of the progress bar, not including the borders (`[` and `]`) or padding.
-    const PROGRESS_WIDTH: usize = WIDTH - 16;
-
+///
+/// `volume_timer` is a bit strange, but it tracks how long the `volume` bar
+/// has been displayed for, so that it's only displayed for a certain amount of frames.
+async fn interface(player: Arc<Player>, volume_timer: Arc<AtomicUsize>) -> eyre::Result<()> {
     loop {
-        let (mut main, len) = queue
+        let (mut main, len) = player
             .current
             .load()
             .as_ref()
             .map_or(ActionBar::Loading, |x| {
                 let name = (*Arc::clone(x)).clone();
-                if queue.sink.is_paused() {
+                if player.sink.is_paused() {
                     ActionBar::Paused(name)
                 } else {
                     ActionBar::Playing(name)
@@ -90,34 +150,26 @@ async fn interface(queue: Arc<Player>) -> eyre::Result<()> {
             main = format!("{}{}", main, " ".repeat(WIDTH - len));
         }
 
-        let mut duration = Duration::new(0, 0);
-        let elapsed = queue.sink.get_pos();
-
-        let mut filled = 0;
-        if let Some(current) = queue.current.load().as_ref() {
-            if let Some(x) = current.duration {
-                duration = x;
-
-                let elapsed = elapsed.as_secs() as f32 / duration.as_secs() as f32;
-                filled = (elapsed * PROGRESS_WIDTH as f32).round() as usize;
-            }
+        let timer = volume_timer.load(Ordering::Relaxed);
+        let middle = match timer {
+            0 => progress_bar(&player),
+            _ => audio_bar(&player),
         };
 
-        let progress = format!(
-            " [{}{}] {}/{} ",
-            "/".repeat(filled),
-            " ".repeat(PROGRESS_WIDTH.saturating_sub(filled)),
-            format_duration(&elapsed),
-            format_duration(&duration),
-        );
-        let bar = [
+        if timer > 0 && timer <= AUDIO_BAR_DURATION {
+            volume_timer.fetch_add(1, Ordering::Relaxed);
+        } else if timer > AUDIO_BAR_DURATION {
+            volume_timer.store(0, Ordering::Relaxed);
+        }
+
+        let controls = [
             format!("{}kip", "[s]".bold()),
             format!("{}ause", "[p]".bold()),
             format!("{}uit", "[q]".bold()),
         ];
 
         // Formats the menu properly
-        let menu = [main, progress, bar.join("    ")]
+        let menu = [main, middle, controls.join("    ")]
             .map(|x| format!("│ {} │\r\n", x.reset()).to_string());
 
         crossterm::execute!(stderr(), Clear(ClearType::FromCursorDown))?;
@@ -155,37 +207,47 @@ pub async fn start(
         crossterm::execute!(stderr(), EnterAlternateScreen, MoveTo(0, 0))?;
     }
 
-    task::spawn(interface(Arc::clone(&queue)));
+    let volume_timer = Arc::new(AtomicUsize::new(0));
+
+    task::spawn(interface(Arc::clone(&queue), volume_timer.clone()));
 
     loop {
         let event::Event::Key(event) = event::read()? else {
             continue;
         };
 
-        let KeyCode::Char(code) = event.code else {
-            continue;
+        let messages = match event.code {
+            // Arrow key volume controls.
+            KeyCode::Up | KeyCode::Right => Messages::VolumeUp,
+            KeyCode::Down | KeyCode::Left => Messages::VolumeDown,
+            KeyCode::Char(character) => match character {
+                // Ctrl+C
+                'c' if event.modifiers == KeyModifiers::CONTROL => break,
+
+                // Quit
+                'q' => break,
+
+                // Skip/Next
+                's' | 'n' if !queue.current.load().is_none() => Messages::Next,
+
+                // Pause
+                'p' => Messages::Pause,
+
+                // Volume up & down
+                '+' | '=' => Messages::VolumeUp,
+                '-' | '_' => Messages::VolumeDown,
+                _ => continue,
+            },
+            _ => continue,
         };
 
-        match code {
-            'c' => {
-                // Handles Ctrl+C.
-                if event.modifiers == KeyModifiers::CONTROL {
-                    break;
-                }
-            }
-            'q' => {
-                break;
-            }
-            's' => {
-                if !queue.current.load().is_none() {
-                    sender.send(Messages::Next).await?
-                }
-            }
-            'p' => {
-                sender.send(Messages::Pause).await?;
-            }
-            _ => {}
+        // If it's modifying the volume, then we'll set the `volume_timer` to 1
+        // so that the ui thread will know that it should show the audio bar.
+        if messages == Messages::VolumeDown || messages == Messages::VolumeUp {
+            volume_timer.store(1, Ordering::Relaxed);
         }
+
+        sender.send(messages).await?;
     }
 
     if alternate {

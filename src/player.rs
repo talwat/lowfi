@@ -86,8 +86,8 @@ unsafe impl Send for Player {}
 unsafe impl Sync for Player {}
 
 impl Player {
-    /// This gets the output stream while also shutting up alsa.
-    fn get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
+    /// This gets the output stream while also shutting up alsa with [libc].
+    fn silent_get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
         extern "C" {
             static stderr: *mut libc::FILE;
         }
@@ -110,7 +110,12 @@ impl Player {
 
     /// Initializes the entire player, including audio devices & sink.
     pub async fn new() -> eyre::Result<Self> {
-        let (_stream, handle) = Self::get_output_stream()?;
+        let (_stream, handle) = if cfg!(target_os = "linux") {
+            Self::silent_get_output_stream()?
+        } else {
+            OutputStream::try_default()?
+        };
+
         let sink = Sink::try_new(&handle)?;
 
         let player = Self {

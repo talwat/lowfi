@@ -7,7 +7,7 @@ mod tracks;
 
 /// An extremely simple lofi player.
 #[derive(Parser)]
-#[command(about)]
+#[command(about, version)]
 struct Args {
     /// Whether to use an alternate terminal screen.
     #[clap(long, short)]

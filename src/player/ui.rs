@@ -13,7 +13,7 @@ use crate::tracks::TrackInfo;
 
 use super::Player;
 use crossterm::{
-    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, RestorePosition, Show},
+    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
     event::{self, KeyCode, KeyModifiers},
     style::{Print, Stylize},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
@@ -196,13 +196,7 @@ pub async fn start(
     sender: Sender<Messages>,
     alternate: bool,
 ) -> eyre::Result<()> {
-    crossterm::execute!(
-        stdout(),
-        RestorePosition,
-        Clear(ClearType::CurrentLine),
-        Clear(ClearType::FromCursorDown),
-        Hide
-    )?;
+    crossterm::execute!(stdout(), Hide)?;
 
     terminal::enable_raw_mode()?;
 

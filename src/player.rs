@@ -6,6 +6,7 @@ use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
+use libc::freopen;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
@@ -85,12 +86,34 @@ unsafe impl Send for Player {}
 unsafe impl Sync for Player {}
 
 impl Player {
+    /// This gets the output stream while also shutting up alsa.
+    fn get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
+        extern "C" {
+            static stderr: *mut libc::FILE;
+        }
+
+        let mode = c"w".as_ptr();
+
+        // This is a bit of an ugly hack that basically just uses `libc` to redirect alsa's
+        // output to `/dev/null` so that it wont be shoved down our throats.
+
+        // SAFETY: Simple enough to be impossible to fail. Hopefully.
+        unsafe { freopen(c"/dev/null".as_ptr(), mode, stderr) };
+
+        let (stream, handle) = OutputStream::try_default()?;
+
+        // SAFETY: See the first call to `freopen`.
+        unsafe { freopen(c"/dev/tty".as_ptr(), mode, stderr) };
+
+        Ok((stream, handle))
+    }
+
     /// Initializes the entire player, including audio devices & sink.
     pub async fn new() -> eyre::Result<Self> {
-        let (_stream, handle) = OutputStream::try_default()?;
+        let (_stream, handle) = Self::get_output_stream()?;
         let sink = Sink::try_new(&handle)?;
 
-        Ok(Self {
+        let player = Self {
             tracks: RwLock::new(VecDeque::with_capacity(5)),
             current: ArcSwapOption::new(None),
             client: Client::builder()
@@ -104,7 +127,9 @@ impl Player {
             sink,
             _handle: handle,
             _stream,
-        })
+        };
+
+        Ok(player)
     }
 
     /// Just a shorthand for setting `current`.

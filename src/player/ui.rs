@@ -215,8 +215,10 @@ pub async fn start(
 
         let messages = match event.code {
             // Arrow key volume controls.
-            KeyCode::Up | KeyCode::Right => Messages::ChangeVolume(0.1),
-            KeyCode::Down | KeyCode::Left => Messages::ChangeVolume(-0.1),
+            KeyCode::Up => Messages::ChangeVolume(0.1),
+            KeyCode::Right => Messages::ChangeVolume(0.01),
+            KeyCode::Down => Messages::ChangeVolume(-0.1),
+            KeyCode::Left => Messages::ChangeVolume(-0.01),
             KeyCode::Char(character) => match character {
                 // Ctrl+C
                 'c' if event.modifiers == KeyModifiers::CONTROL => break,

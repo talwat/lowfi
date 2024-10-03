@@ -9,8 +9,6 @@ use std::{
     time::Duration,
 };
 
-use crate::tracks::TrackInfo;
-
 use super::Player;
 use crossterm::{
     cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
@@ -25,6 +23,8 @@ use tokio::{
 };
 
 use super::Messages;
+
+mod components;
 
 /// The total width of the UI.
 const WIDTH: usize = 27;
@@ -47,113 +47,18 @@ const AUDIO_BAR_DURATION: usize = 9;
 /// snappy but not require too many resources.
 const FRAME_DELTA: f32 = 1.0 / FPS as f32;
 
-/// Small helper function to format durations.
-fn format_duration(duration: &Duration) -> String {
-    let seconds = duration.as_secs() % 60;
-    let minutes = duration.as_secs() / 60;
-
-    format!("{:02}:{:02}", minutes, seconds)
-}
-
-/// This represents the main "action" bars state.
-enum ActionBar {
-    Paused(TrackInfo),
-    Playing(TrackInfo),
-    Loading,
-}
-
-impl ActionBar {
-    /// Formats the action bar to be displayed.
-    /// The second value is the character length of the result.
-    fn format(&self) -> (String, usize) {
-        let (word, subject) = match self {
-            Self::Playing(x) => ("playing", Some(x.name.clone())),
-            Self::Paused(x) => ("paused", Some(x.name.clone())),
-            Self::Loading => ("loading", None),
-        };
-
-        subject.map_or_else(
-            || (word.to_owned(), word.len()),
-            |subject| {
-                (
-                    format!("{} {}", word, subject.clone().bold()),
-                    word.len() + 1 + subject.len(),
-                )
-            },
-        )
-    }
-}
-
-/// Creates the progress bar, as well as all the padding needed.
-fn progress_bar(player: &Arc<Player>) -> String {
-    let mut duration = Duration::new(0, 0);
-    let elapsed = player.sink.get_pos();
-
-    let mut filled = 0;
-    if let Some(current) = player.current.load().as_ref() {
-        if let Some(x) = current.duration {
-            duration = x;
-
-            let elapsed = elapsed.as_secs() as f32 / duration.as_secs() as f32;
-            filled = (elapsed * PROGRESS_WIDTH as f32).round() as usize;
-        }
-    };
-
-    format!(
-        " [{}{}] {}/{} ",
-        "/".repeat(filled),
-        " ".repeat(PROGRESS_WIDTH.saturating_sub(filled)),
-        format_duration(&elapsed),
-        format_duration(&duration),
-    )
-}
-
-/// Creates the audio bar, as well as all the padding needed.
-fn audio_bar(player: &Arc<Player>) -> String {
-    let volume = player.sink.volume();
-
-    let audio = (player.sink.volume() * AUDIO_WIDTH as f32).round() as usize;
-    let percentage = format!("{}%", (volume * 100.0).ceil().abs());
-
-    format!(
-        " volume: [{}{}] {}{} ",
-        "/".repeat(audio),
-        " ".repeat(AUDIO_WIDTH.saturating_sub(audio)),
-        " ".repeat(4usize.saturating_sub(percentage.len())),
-        percentage,
-    )
-}
-
 /// The code for the interface itself.
 ///
 /// `volume_timer` is a bit strange, but it tracks how long the `volume` bar
 /// has been displayed for, so that it's only displayed for a certain amount of frames.
 async fn interface(player: Arc<Player>, volume_timer: Arc<AtomicUsize>) -> eyre::Result<()> {
     loop {
-        let (mut main, len) = player
-            .current
-            .load()
-            .as_ref()
-            .map_or(ActionBar::Loading, |x| {
-                let name = (*Arc::clone(x)).clone();
-                if player.sink.is_paused() {
-                    ActionBar::Paused(name)
-                } else {
-                    ActionBar::Playing(name)
-                }
-            })
-            .format();
-
-        if len > WIDTH {
-            main = format!("{}...", &main[..=WIDTH]);
-        } else {
-            main = format!("{}{}", main, " ".repeat(WIDTH - len));
-        }
+        let action = components::action(&player);
 
         let timer = volume_timer.load(Ordering::Relaxed);
         let middle = match timer {
-            0 => progress_bar(&player),
-            _ => audio_bar(&player),
+            0 => components::progress_bar(&player),
+            _ => components::audio_bar(&player),
         };
 
         if timer > 0 && timer <= AUDIO_BAR_DURATION {
@@ -169,7 +74,7 @@ async fn interface(player: Arc<Player>, volume_timer: Arc<AtomicUsize>) -> eyre:
         ];
 
         // Formats the menu properly
-        let menu = [main, middle, controls.join("    ")]
+        let menu = [action, middle, controls.join("    ")]
             .map(|x| format!("│ {} │\r\n", x.reset()).to_string());
 
         crossterm::execute!(

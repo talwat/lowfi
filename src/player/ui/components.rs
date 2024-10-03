@@ -2,15 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use crossterm::style::Stylize;
 
-use crate::{
-    player::{
-        ui::{AUDIO_WIDTH, PROGRESS_WIDTH},
-        Player,
-    },
-    tracks::TrackInfo,
-};
-
-use super::WIDTH;
+use crate::{player::Player, tracks::TrackInfo};
 
 /// Small helper function to format durations.
 pub fn format_duration(duration: &Duration) -> String {
@@ -21,7 +13,7 @@ pub fn format_duration(duration: &Duration) -> String {
 }
 
 /// Creates the progress bar, as well as all the padding needed.
-pub fn progress_bar(player: &Arc<Player>) -> String {
+pub fn progress_bar(player: &Arc<Player>, width: usize) -> String {
     let mut duration = Duration::new(0, 0);
     let elapsed = player.sink.get_pos();
 
@@ -31,30 +23,27 @@ pub fn progress_bar(player: &Arc<Player>) -> String {
             duration = x;
 
             let elapsed = elapsed.as_secs() as f32 / duration.as_secs() as f32;
-            filled = (elapsed * PROGRESS_WIDTH as f32).round() as usize;
+            filled = (elapsed * width as f32).round() as usize;
         }
     };
 
     format!(
         " [{}{}] {}/{} ",
         "/".repeat(filled),
-        " ".repeat(PROGRESS_WIDTH.saturating_sub(filled)),
+        " ".repeat(width.saturating_sub(filled)),
         format_duration(&elapsed),
         format_duration(&duration),
     )
 }
 
 /// Creates the audio bar, as well as all the padding needed.
-pub fn audio_bar(player: &Arc<Player>) -> String {
-    let volume = player.sink.volume();
-
-    let audio = (player.sink.volume() * AUDIO_WIDTH as f32).round() as usize;
-    let percentage = format!("{}%", (volume * 100.0).round().abs());
+pub fn audio_bar(volume: f32, percentage: &str, width: usize) -> String {
+    let audio = (volume * width as f32).round() as usize;
 
     format!(
         " volume: [{}{}] {}{} ",
         "/".repeat(audio),
-        " ".repeat(AUDIO_WIDTH.saturating_sub(audio)),
+        " ".repeat(width.saturating_sub(audio)),
         " ".repeat(4usize.saturating_sub(percentage.len())),
         percentage,
     )
@@ -91,7 +80,7 @@ impl ActionBar {
 
 /// Creates the top/action bar, which has the name of the track and it's status.
 /// This also creates all the needed padding.
-pub fn action(player: &Arc<Player>) -> String {
+pub fn action(player: &Arc<Player>, width: usize) -> String {
     let (main, len) = player
         .current
         .load()
@@ -106,9 +95,19 @@ pub fn action(player: &Arc<Player>) -> String {
         })
         .format();
 
-    if len > WIDTH {
-        format!("{}...", &main[..=WIDTH])
+    if len > width {
+        format!("{}...", &main[..=width])
     } else {
-        format!("{}{}", main, " ".repeat(WIDTH - len))
+        format!("{}{}", main, " ".repeat(width - len))
     }
+}
+
+pub fn controls(width: usize) -> String {
+    let controls = [["[s]", "kip"], ["[p]", "ause"], ["[q]", "uit"]];
+
+    let len: usize = controls.concat().iter().map(|x| x.len()).sum();
+
+    let controls = controls.map(|x| format!("{}{}", x[0].bold(), x[1]));
+
+    controls.join(&" ".repeat((width - len) / (controls.len() - 1)))
 }

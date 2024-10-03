@@ -218,7 +218,9 @@ impl Player {
                     }
                 }
                 Messages::ChangeVolume(change) => {
-                    player.sink.set_volume((player.sink.volume() + change).clamp(0.0, 1.0));
+                    player
+                        .sink
+                        .set_volume((player.sink.volume() + change).clamp(0.0, 1.0));
                 }
             }
         }

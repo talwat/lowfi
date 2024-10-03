@@ -9,6 +9,8 @@ use std::{
     time::Duration,
 };
 
+use crate::Args;
+
 use super::Player;
 use crossterm::{
     cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
@@ -16,6 +18,7 @@ use crossterm::{
     style::{Print, Stylize},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use lazy_static::lazy_static;
 use tokio::{
     sync::mpsc::Sender,
     task::{self},
@@ -29,53 +32,51 @@ mod components;
 /// The total width of the UI.
 const WIDTH: usize = 27;
 
-/// The width of the progress bar, not including the borders (`[` and `]`) or padding.
-const PROGRESS_WIDTH: usize = WIDTH - 16;
-
-/// The width of the audio bar, again not including borders or padding.
-const AUDIO_WIDTH: usize = WIDTH - 17;
-
 /// Self explanitory.
 const FPS: usize = 12;
 
 /// How long the audio bar will be visible for when audio is adjusted.
 /// This is in frames.
-const AUDIO_BAR_DURATION: usize = 9;
+const AUDIO_BAR_DURATION: usize = 10;
 
 /// How long to wait in between frames.
 /// This is fairly arbitrary, but an ideal value should be enough to feel
 /// snappy but not require too many resources.
 const FRAME_DELTA: f32 = 1.0 / FPS as f32;
 
+lazy_static! {
+    /// The volume timer, which controls how long the volume display should
+    /// show up and when it should disappear.
+    static ref VOLUME_TIMER: AtomicUsize = AtomicUsize::new(0);
+}
+
 /// The code for the interface itself.
 ///
 /// `volume_timer` is a bit strange, but it tracks how long the `volume` bar
 /// has been displayed for, so that it's only displayed for a certain amount of frames.
-async fn interface(player: Arc<Player>, volume_timer: Arc<AtomicUsize>) -> eyre::Result<()> {
+async fn interface(player: Arc<Player>) -> eyre::Result<()> {
     loop {
-        let action = components::action(&player);
+        let action = components::action(&player, WIDTH);
 
-        let timer = volume_timer.load(Ordering::Relaxed);
+        let timer = VOLUME_TIMER.load(Ordering::Relaxed);
+        let volume = player.sink.volume();
+        let percentage = format!("{}%", (volume * 100.0).round().abs());
+
         let middle = match timer {
-            0 => components::progress_bar(&player),
-            _ => components::audio_bar(&player),
+            0 => components::progress_bar(&player, WIDTH - 16),
+            _ => components::audio_bar(volume, &percentage, WIDTH - 17),
         };
 
         if timer > 0 && timer <= AUDIO_BAR_DURATION {
-            volume_timer.fetch_add(1, Ordering::Relaxed);
+            VOLUME_TIMER.fetch_add(1, Ordering::Relaxed);
         } else if timer > AUDIO_BAR_DURATION {
-            volume_timer.store(0, Ordering::Relaxed);
+            VOLUME_TIMER.store(0, Ordering::Relaxed);
         }
 
-        let controls = [
-            format!("{}kip", "[s]".bold()),
-            format!("{}ause", "[p]".bold()),
-            format!("{}uit", "[q]".bold()),
-        ];
+        let controls = components::controls(WIDTH);
 
         // Formats the menu properly
-        let menu = [action, middle, controls.join("    ")]
-            .map(|x| format!("│ {} │\r\n", x.reset()).to_string());
+        let menu = [action, middle, controls].map(|x| format!("│ {} │\r\n", x.reset()).to_string());
 
         crossterm::execute!(
             stdout(),
@@ -96,22 +97,16 @@ async fn interface(player: Arc<Player>, volume_timer: Arc<AtomicUsize>) -> eyre:
 ///
 /// `alternate` controls whether to use [EnterAlternateScreen] in order to hide
 /// previous terminal history.
-pub async fn start(
-    queue: Arc<Player>,
-    sender: Sender<Messages>,
-    alternate: bool,
-) -> eyre::Result<()> {
+pub async fn start(queue: Arc<Player>, sender: Sender<Messages>, args: Args) -> eyre::Result<()> {
     crossterm::execute!(stdout(), Hide)?;
 
     terminal::enable_raw_mode()?;
 
-    if alternate {
+    if args.alternate {
         crossterm::execute!(stdout(), EnterAlternateScreen, MoveTo(0, 0))?;
     }
 
-    let volume_timer = Arc::new(AtomicUsize::new(0));
-
-    task::spawn(interface(Arc::clone(&queue), volume_timer.clone()));
+    task::spawn(interface(Arc::clone(&queue)));
 
     loop {
         let event::Event::Key(event) = event::read()? else {
@@ -145,16 +140,16 @@ pub async fn start(
             _ => continue,
         };
 
-        // If it's modifying the volume, then we'll set the `volume_timer` to 1
+        // If it's modifying the volume, then we'll set the `VOLUME_TIMER` to 1
         // so that the ui thread will know that it should show the audio bar.
         if let Messages::ChangeVolume(_) = messages {
-            volume_timer.store(1, Ordering::Relaxed);
+            VOLUME_TIMER.store(1, Ordering::Relaxed);
         }
 
         sender.send(messages).await?;
     }
 
-    if alternate {
+    if args.alternate {
         crossterm::execute!(stdout(), LeaveAlternateScreen)?;
     }
 

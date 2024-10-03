@@ -46,6 +46,6 @@ async fn main() -> eyre::Result<()> {
             } => scrape::scrape(extension, include_full).await,
         }
     } else {
-        play::play(cli.alternate).await
+        play::play(cli).await
     }
 }

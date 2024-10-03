@@ -39,11 +39,8 @@ pub enum Messages {
     /// Pauses the [Sink]. This will also unpause it if it is paused.
     Pause,
 
-    /// Increase the volume of playback
-    VolumeUp,
-
-    /// Decrease the volume of playback
-    VolumeDown,
+    /// Change the volume of playback
+    ChangeVolume(f32),
 }
 
 const TIMEOUT: Duration = Duration::from_secs(8);
@@ -220,17 +217,8 @@ impl Player {
                         player.sink.pause();
                     }
                 }
-                Messages::VolumeUp => {
-                    // Increase the volume, if possible.
-                    if player.sink.volume() < 1.0 {
-                        player.sink.set_volume(player.sink.volume() + 0.1);
-                    }
-                }
-                Messages::VolumeDown => {
-                    // Decreaes the volume, if possible.
-                    if player.sink.volume() > 0.0 {
-                        player.sink.set_volume(player.sink.volume() - 0.1);
-                    }
+                Messages::ChangeVolume(change) => {
+                    player.sink.set_volume((player.sink.volume() + change).clamp(0.0, 1.0));
                 }
             }
         }

@@ -120,8 +120,10 @@ pub async fn start(
 
         let messages = match event.code {
             // Arrow key volume controls.
-            KeyCode::Up | KeyCode::Right => Messages::VolumeUp,
-            KeyCode::Down | KeyCode::Left => Messages::VolumeDown,
+            KeyCode::Up => Messages::ChangeVolume(0.1),
+            KeyCode::Right => Messages::ChangeVolume(0.01),
+            KeyCode::Down => Messages::ChangeVolume(-0.1),
+            KeyCode::Left => Messages::ChangeVolume(-0.01),
             KeyCode::Char(character) => match character {
                 // Ctrl+C
                 'c' if event.modifiers == KeyModifiers::CONTROL => break,
@@ -136,8 +138,8 @@ pub async fn start(
                 'p' => Messages::Pause,
 
                 // Volume up & down
-                '+' | '=' => Messages::VolumeUp,
-                '-' | '_' => Messages::VolumeDown,
+                '+' | '=' => Messages::ChangeVolume(0.1),
+                '-' | '_' => Messages::ChangeVolume(-0.1),
                 _ => continue,
             },
             _ => continue,
@@ -145,7 +147,7 @@ pub async fn start(
 
         // If it's modifying the volume, then we'll set the `volume_timer` to 1
         // so that the ui thread will know that it should show the audio bar.
-        if messages == Messages::VolumeDown || messages == Messages::VolumeUp {
+        if let Messages::ChangeVolume(_) = messages {
             volume_timer.store(1, Ordering::Relaxed);
         }
 

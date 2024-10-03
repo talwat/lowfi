@@ -13,7 +13,7 @@ use crate::Args;
 pub async fn play(args: Args) -> eyre::Result<()> {
     let (tx, rx) = mpsc::channel(8);
 
-    let player = Arc::new(Player::new().await?);
+    let player = Arc::new(Player::new(args.alternate).await?);
     let audio = task::spawn(Player::play(Arc::clone(&player), tx.clone(), rx));
     tx.send(Messages::Init).await?;
 

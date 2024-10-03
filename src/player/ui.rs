@@ -14,7 +14,10 @@ use crate::Args;
 use super::Player;
 use crossterm::{
     cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
-    event::{self, KeyCode, KeyModifiers, KeyboardEnhancementFlags, PushKeyboardEnhancementFlags},
+    event::{
+        self, KeyCode, KeyModifiers, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
+    },
     style::{Print, Stylize},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -105,11 +108,12 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>, args: Args) -> 
     }
 
     terminal::enable_raw_mode()?;
+    let enhancement = terminal::supports_keyboard_enhancement()?;
 
-    if terminal::supports_keyboard_enhancement()? {
+    if enhancement {
         crossterm::execute!(
             stdout(),
-            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,)
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
         )?;
     }
 
@@ -173,6 +177,11 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>, args: Args) -> 
     }
 
     crossterm::execute!(stdout(), Clear(ClearType::FromCursorDown), Show)?;
+
+    if enhancement {
+        crossterm::execute!(stdout(), PopKeyboardEnhancementFlags)?;
+    }
+
     terminal::disable_raw_mode()?;
 
     Ok(())

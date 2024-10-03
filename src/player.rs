@@ -106,8 +106,12 @@ impl Player {
     }
 
     /// Initializes the entire player, including audio devices & sink.
-    pub async fn new() -> eyre::Result<Self> {
-        let (_stream, handle) = if cfg!(target_os = "linux") {
+    ///
+    /// `silent` can control whether alsa's output should be redirected,
+    /// but this option is only applicable on Linux, as on MacOS & Windows
+    /// it will never be silent.
+    pub async fn new(silent: bool) -> eyre::Result<Self> {
+        let (_stream, handle) = if silent && cfg!(target_os = "linux") {
             Self::silent_get_output_stream()?
         } else {
             OutputStream::try_default()?

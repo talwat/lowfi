@@ -39,7 +39,7 @@ pub enum Messages {
     /// Pauses the [Sink]. This will also unpause it if it is paused.
     Pause,
 
-    /// Change the volume of playback
+    /// Change the volume of playback.
     ChangeVolume(f32),
 }
 

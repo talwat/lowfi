@@ -14,7 +14,7 @@ use crate::Args;
 use super::Player;
 use crossterm::{
     cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
-    event::{self, KeyCode, KeyModifiers},
+    event::{self, KeyCode, KeyModifiers, KeyboardEnhancementFlags, PushKeyboardEnhancementFlags},
     style::{Print, Stylize},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -100,10 +100,17 @@ async fn interface(player: Arc<Player>) -> eyre::Result<()> {
 pub async fn start(queue: Arc<Player>, sender: Sender<Messages>, args: Args) -> eyre::Result<()> {
     crossterm::execute!(stdout(), Hide)?;
 
-    terminal::enable_raw_mode()?;
-
     if args.alternate {
         crossterm::execute!(stdout(), EnterAlternateScreen, MoveTo(0, 0))?;
+    }
+
+    terminal::enable_raw_mode()?;
+
+    if terminal::supports_keyboard_enhancement()? {
+        crossterm::execute!(
+            stdout(),
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,)
+        )?;
     }
 
     task::spawn(interface(Arc::clone(&queue)));
@@ -119,7 +126,7 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>, args: Args) -> 
             KeyCode::Right => Messages::ChangeVolume(0.01),
             KeyCode::Down => Messages::ChangeVolume(-0.1),
             KeyCode::Left => Messages::ChangeVolume(-0.01),
-            KeyCode::Char(character) => match character {
+            KeyCode::Char(character) => match character.to_ascii_lowercase() {
                 // Ctrl+C
                 'c' if event.modifiers == KeyModifiers::CONTROL => break,
 
@@ -135,6 +142,18 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>, args: Args) -> 
                 // Volume up & down
                 '+' | '=' => Messages::ChangeVolume(0.1),
                 '-' | '_' => Messages::ChangeVolume(-0.1),
+                _ => continue,
+            },
+            // Media keys
+            KeyCode::Media(media) => match media {
+                event::MediaKeyCode::Play => Messages::Pause,
+                event::MediaKeyCode::Pause => Messages::Pause,
+                event::MediaKeyCode::PlayPause => Messages::Pause,
+                event::MediaKeyCode::Stop => Messages::Pause,
+                event::MediaKeyCode::TrackNext => Messages::Next,
+                event::MediaKeyCode::LowerVolume => Messages::ChangeVolume(-0.1),
+                event::MediaKeyCode::RaiseVolume => Messages::ChangeVolume(0.1),
+                event::MediaKeyCode::MuteVolume => Messages::ChangeVolume(-1.0),
                 _ => continue,
             },
             _ => continue,

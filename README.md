@@ -57,7 +57,7 @@ yay -S lowfi
 git clone https://github.com/talwat/lowfi
 cd lowfi
 
-cargo build
+cargo build --release
 ./target/debug/lowfi
 ```
 

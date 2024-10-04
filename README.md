@@ -30,7 +30,7 @@ you're interested in downloading the tracks. Beware, there's a lot of them.
 
 You'll need Rust 1.74.0+.
 
-If you're on linux, you also need the OpenSSH & Alsa headers.
+If you're on linux, you also need the OpenSSL & Alsa headers.
 Alsa can be installed with `alsa-lib` on Arch or `libasound2-dev` on Ubuntu.
 
 ### Cargo

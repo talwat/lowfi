@@ -11,7 +11,6 @@ use std::{
 
 use crate::Args;
 
-use super::Player;
 use crossterm::{
     cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
     event::{
@@ -21,14 +20,11 @@ use crossterm::{
     style::{Print, Stylize},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use lazy_static::lazy_static;
-use tokio::{
-    sync::mpsc::Sender,
-    task::{self},
-    time::sleep,
-};
 
-use super::Messages;
+use lazy_static::lazy_static;
+use tokio::{sync::mpsc::Sender, task, time::sleep};
+
+use super::{Messages, Player};
 
 mod components;
 
@@ -51,6 +47,61 @@ lazy_static! {
     /// The volume timer, which controls how long the volume display should
     /// show up and when it should disappear.
     static ref VOLUME_TIMER: AtomicUsize = AtomicUsize::new(0);
+}
+
+async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
+    loop {
+        let event::Event::Key(event) = event::read()? else {
+            continue;
+        };
+
+        let messages = match event.code {
+            // Arrow key volume controls.
+            KeyCode::Up => Messages::ChangeVolume(0.1),
+            KeyCode::Right => Messages::ChangeVolume(0.01),
+            KeyCode::Down => Messages::ChangeVolume(-0.1),
+            KeyCode::Left => Messages::ChangeVolume(-0.01),
+            KeyCode::Char(character) => match character.to_ascii_lowercase() {
+                // Ctrl+C
+                'c' if event.modifiers == KeyModifiers::CONTROL => return Ok(()),
+
+                // Quit
+                'q' => return Ok(()),
+
+                // Skip/Next
+                's' | 'n' => Messages::Next,
+
+                // Pause
+                'p' => Messages::PlayPause,
+
+                // Volume up & down
+                '+' | '=' => Messages::ChangeVolume(0.1),
+                '-' | '_' => Messages::ChangeVolume(-0.1),
+                _ => continue,
+            },
+            // Media keys
+            KeyCode::Media(media) => match media {
+                event::MediaKeyCode::Play => Messages::PlayPause,
+                event::MediaKeyCode::Pause => Messages::PlayPause,
+                event::MediaKeyCode::PlayPause => Messages::PlayPause,
+                event::MediaKeyCode::Stop => Messages::PlayPause,
+                event::MediaKeyCode::TrackNext => Messages::Next,
+                event::MediaKeyCode::LowerVolume => Messages::ChangeVolume(-0.1),
+                event::MediaKeyCode::RaiseVolume => Messages::ChangeVolume(0.1),
+                event::MediaKeyCode::MuteVolume => Messages::ChangeVolume(-1.0),
+                _ => continue,
+            },
+            _ => continue,
+        };
+
+        // If it's modifying the volume, then we'll set the `VOLUME_TIMER` to 1
+        // so that the UI thread will know that it should show the audio bar.
+        if let Messages::ChangeVolume(_) = messages {
+            VOLUME_TIMER.store(1, Ordering::Relaxed);
+        }
+
+        sender.send(messages).await?;
+    }
 }
 
 /// The code for the interface itself.
@@ -96,11 +147,21 @@ async fn interface(player: Arc<Player>) -> eyre::Result<()> {
     }
 }
 
+#[cfg(feature = "mpris")]
+async fn mpris(
+    player: Arc<Player>,
+    sender: Sender<Messages>,
+) -> mpris_server::Server<crate::player::mpris::Player> {
+    mpris_server::Server::new("lowfi", crate::player::mpris::Player { player, sender })
+        .await
+        .unwrap()
+}
+
 /// Initializes the UI, this will also start taking input from the user.
 ///
 /// `alternate` controls whether to use [EnterAlternateScreen] in order to hide
 /// previous terminal history.
-pub async fn start(queue: Arc<Player>, sender: Sender<Messages>, args: Args) -> eyre::Result<()> {
+pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) -> eyre::Result<()> {
     crossterm::execute!(stdout(), Hide)?;
 
     if args.alternate {
@@ -117,60 +178,18 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>, args: Args) -> 
         )?;
     }
 
-    task::spawn(interface(Arc::clone(&queue)));
-
-    loop {
-        let event::Event::Key(event) = event::read()? else {
-            continue;
-        };
-
-        let messages = match event.code {
-            // Arrow key volume controls.
-            KeyCode::Up => Messages::ChangeVolume(0.1),
-            KeyCode::Right => Messages::ChangeVolume(0.01),
-            KeyCode::Down => Messages::ChangeVolume(-0.1),
-            KeyCode::Left => Messages::ChangeVolume(-0.01),
-            KeyCode::Char(character) => match character.to_ascii_lowercase() {
-                // Ctrl+C
-                'c' if event.modifiers == KeyModifiers::CONTROL => break,
-
-                // Quit
-                'q' => break,
-
-                // Skip/Next
-                's' | 'n' if !queue.current.load().is_none() => Messages::Next,
-
-                // Pause
-                'p' => Messages::Pause,
-
-                // Volume up & down
-                '+' | '=' => Messages::ChangeVolume(0.1),
-                '-' | '_' => Messages::ChangeVolume(-0.1),
-                _ => continue,
-            },
-            // Media keys
-            KeyCode::Media(media) => match media {
-                event::MediaKeyCode::Play => Messages::Pause,
-                event::MediaKeyCode::Pause => Messages::Pause,
-                event::MediaKeyCode::PlayPause => Messages::Pause,
-                event::MediaKeyCode::Stop => Messages::Pause,
-                event::MediaKeyCode::TrackNext => Messages::Next,
-                event::MediaKeyCode::LowerVolume => Messages::ChangeVolume(-0.1),
-                event::MediaKeyCode::RaiseVolume => Messages::ChangeVolume(0.1),
-                event::MediaKeyCode::MuteVolume => Messages::ChangeVolume(-1.0),
-                _ => continue,
-            },
-            _ => continue,
-        };
-
-        // If it's modifying the volume, then we'll set the `VOLUME_TIMER` to 1
-        // so that the ui thread will know that it should show the audio bar.
-        if let Messages::ChangeVolume(_) = messages {
-            VOLUME_TIMER.store(1, Ordering::Relaxed);
-        }
-
-        sender.send(messages).await?;
+    let interface = task::spawn(interface(Arc::clone(&player)));
+    #[cfg(feature = "mpris")]
+    {
+        player
+            .mpris
+            .get_or_init(|| mpris(player.clone(), sender.clone()))
+            .await;
     }
+
+    input(sender).await?;
+
+    interface.abort();
 
     if args.alternate {
         crossterm::execute!(stdout(), LeaveAlternateScreen)?;

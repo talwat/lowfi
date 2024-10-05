@@ -13,15 +13,18 @@ use tokio::{
     select,
     sync::{
         mpsc::{Receiver, Sender},
-        RwLock,
+        OnceCell, RwLock,
     },
-    task,
+    task::{self, LocalSet},
 };
 
 use crate::tracks::{DecodedTrack, Track, TrackInfo};
 
 pub mod downloader;
 pub mod ui;
+
+#[cfg(feature = "mpris")]
+pub mod mpris;
 
 /// Handles communication between the frontend & audio player.
 #[derive(PartialEq)]
@@ -37,7 +40,7 @@ pub enum Messages {
     Init,
 
     /// Pauses the [Sink]. This will also unpause it if it is paused.
-    Pause,
+    PlayPause,
 
     /// Change the volume of playback.
     ChangeVolume(f32),
@@ -56,6 +59,9 @@ pub struct Player {
     /// The [`TrackInfo`] of the current track.
     /// This is [`None`] when lowfi is buffering.
     pub current: ArcSwapOption<TrackInfo>,
+
+    #[cfg(feature = "mpris")]
+    pub mpris: OnceCell<mpris_server::Server<mpris::Player>>,
 
     /// The tracks, which is a [VecDeque] that holds
     /// *undecoded* [Track]s.
@@ -133,6 +139,9 @@ impl Player {
             sink,
             _handle: handle,
             _stream,
+
+            #[cfg(feature = "mpris")]
+            mpris: OnceCell::new(),
         };
 
         Ok(player)
@@ -146,18 +155,47 @@ impl Player {
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.
-    pub async fn next(queue: Arc<Self>) -> eyre::Result<DecodedTrack> {
-        let track = match queue.tracks.write().await.pop_front() {
+    pub async fn next(&self) -> eyre::Result<DecodedTrack> {
+        let track = match self.tracks.write().await.pop_front() {
             Some(x) => x,
             // If the queue is completely empty, then fallback to simply getting a new track.
             // This is relevant particularly at the first song.
-            None => Track::random(&queue.client).await?,
+            None => Track::random(&self.client).await?,
         };
 
         let decoded = track.decode()?;
-        queue.set_current(decoded.info.clone()).await?;
 
         Ok(decoded)
+    }
+
+    async fn handle_next(
+        player: Arc<Self>,
+        itx: Sender<()>,
+        tx: Sender<Messages>,
+    ) -> eyre::Result<()> {
+        let track = player.next().await;
+
+        match track {
+            Ok(track) => {
+                player.sink.append(track.data);
+
+                // Set the current track, after it's been appended to the sink.
+                player.set_current(track.info.clone()).await?;
+
+                // Notify the background downloader that there's an empty spot
+                // in the buffer.
+                itx.send(()).await?;
+            }
+            Err(error) => {
+                if !error.downcast::<reqwest::Error>()?.is_timeout() {
+                    tokio::time::sleep(TIMEOUT).await;
+                }
+
+                tx.send(Messages::TryAgain).await?
+            }
+        };
+
+        Ok(())
     }
 
     /// This is the main "audio server".
@@ -182,39 +220,27 @@ impl Player {
                 Some(x) = rx.recv() => x,
 
                 // This future will finish only at the end of the current track.
-                Ok(_) = task::spawn_blocking(move || clone.sink.sleep_until_end()) => Messages::Next,
+                Ok(_) = task::spawn_blocking(move || clone.sink.sleep_until_end()), if player.current.load().is_some() => Messages::Next,
             };
 
             match msg {
                 Messages::Next | Messages::Init | Messages::TryAgain => {
+                    if msg == Messages::Next && player.current.load().is_none() {
+                        continue;
+                    }
+
                     // Skip as early as possible so that music doesn't play
                     // while lowfi is "loading".
                     player.sink.stop();
 
                     // Serves as an indicator that the queue is "loading".
-                    // This is also set by Player::next.
                     player.current.store(None);
 
-                    let track = Self::next(Arc::clone(&player)).await;
-
-                    match track {
-                        Ok(track) => {
-                            player.sink.append(track.data);
-
-                            // Notify the background downloader that there's an empty spot
-                            // in the buffer.
-                            itx.send(()).await?;
-                        }
-                        Err(error) => {
-                            if !error.downcast::<reqwest::Error>()?.is_timeout() {
-                                tokio::time::sleep(TIMEOUT).await;
-                            }
-
-                            tx.send(Messages::TryAgain).await?
-                        }
-                    };
+                    // Handle the rest of the signal in the background,
+                    // as to not block the main audio thread.
+                    task::spawn(Self::handle_next(player.clone(), itx.clone(), tx.clone()));
                 }
-                Messages::Pause => {
+                Messages::PlayPause => {
                     if player.sink.is_paused() {
                         player.sink.play();
                     } else {

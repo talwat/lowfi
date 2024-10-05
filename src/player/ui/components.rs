@@ -13,7 +13,7 @@ pub fn format_duration(duration: &Duration) -> String {
 }
 
 /// Creates the progress bar, as well as all the padding needed.
-pub fn progress_bar(player: &Arc<Player>, width: usize) -> String {
+pub fn progress_bar(player: &Player, width: usize) -> String {
     let mut duration = Duration::new(0, 0);
     let elapsed = player.sink.get_pos();
 
@@ -80,7 +80,7 @@ impl ActionBar {
 
 /// Creates the top/action bar, which has the name of the track and it's status.
 /// This also creates all the needed padding.
-pub fn action(player: &Arc<Player>, width: usize) -> String {
+pub fn action(player: &Player, width: usize) -> String {
     let (main, len) = player
         .current
         .load()

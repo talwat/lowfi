@@ -58,7 +58,7 @@ git clone https://github.com/talwat/lowfi
 cd lowfi
 
 cargo build --release
-./target/debug/lowfi
+./target/release/lowfi
 ```
 
 ## Usage

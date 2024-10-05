@@ -57,6 +57,7 @@ impl TrackInfo {
             .unwrap()
             .strip_suffix(".mp3")
             .unwrap()
+            .to_lowercase()
             .to_title_case()
             // Inflector doesn't like contractions...
             // Replaces a few very common ones.

@@ -14,13 +14,14 @@ use crate::Args;
 use crossterm::{
     cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
     event::{
-        self, KeyCode, KeyModifiers, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-        PushKeyboardEnhancementFlags,
+        self, EventStream, KeyCode, KeyModifiers, KeyboardEnhancementFlags,
+        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     style::{Print, Stylize},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
+use futures::{FutureExt, StreamExt};
 use lazy_static::lazy_static;
 use tokio::{sync::mpsc::Sender, task, time::sleep};
 
@@ -50,8 +51,10 @@ lazy_static! {
 }
 
 async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
+    let mut reader = EventStream::new();
+
     loop {
-        let event::Event::Key(event) = event::read()? else {
+        let Some(Ok(event::Event::Key(event))) = reader.next().fuse().await else {
             continue;
         };
 
@@ -63,10 +66,10 @@ async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
             KeyCode::Left => Messages::ChangeVolume(-0.01),
             KeyCode::Char(character) => match character.to_ascii_lowercase() {
                 // Ctrl+C
-                'c' if event.modifiers == KeyModifiers::CONTROL => return Ok(()),
+                'c' if event.modifiers == KeyModifiers::CONTROL => Messages::Quit,
 
                 // Quit
-                'q' => return Ok(()),
+                'q' => Messages::Quit,
 
                 // Skip/Next
                 's' | 'n' => Messages::Next,
@@ -77,6 +80,7 @@ async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
                 // Volume up & down
                 '+' | '=' => Messages::ChangeVolume(0.1),
                 '-' | '_' => Messages::ChangeVolume(-0.1),
+
                 _ => continue,
             },
             // Media keys
@@ -104,7 +108,7 @@ async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
     }
 }
 
-/// The code for the interface itself.
+/// The code for the terminal interface itself.
 ///
 /// `volume_timer` is a bit strange, but it tracks how long the `volume` bar
 /// has been displayed for, so that it's only displayed for a certain amount of frames.
@@ -157,28 +161,68 @@ async fn mpris(
         .unwrap()
 }
 
+pub struct Environment {
+    enhancement: bool,
+    alternate: bool,
+}
+
+impl Environment {
+    pub fn ready(alternate: bool) -> eyre::Result<Self> {
+        crossterm::execute!(stdout(), Hide)?;
+
+        if alternate {
+            crossterm::execute!(stdout(), EnterAlternateScreen, MoveTo(0, 0))?;
+        }
+
+        terminal::enable_raw_mode()?;
+        let enhancement = terminal::supports_keyboard_enhancement()?;
+
+        if enhancement {
+            crossterm::execute!(
+                stdout(),
+                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+            )?;
+        }
+
+        Ok(Self {
+            enhancement,
+            alternate,
+        })
+    }
+
+    pub fn cleanup(&self) -> eyre::Result<()> {
+        if self.alternate {
+            crossterm::execute!(stdout(), LeaveAlternateScreen)?;
+        }
+
+        crossterm::execute!(stdout(), Clear(ClearType::FromCursorDown), Show)?;
+
+        if self.enhancement {
+            crossterm::execute!(stdout(), PopKeyboardEnhancementFlags)?;
+        }
+
+        terminal::disable_raw_mode()?;
+
+        eprintln!("bye! :)");
+
+        Ok(())
+    }
+}
+
+impl Drop for Environment {
+    fn drop(&mut self) {
+        // Well, we're dropping it, so it doesn't really matter if there's an error.
+        let _ = self.cleanup();
+    }
+}
+
 /// Initializes the UI, this will also start taking input from the user.
 ///
 /// `alternate` controls whether to use [EnterAlternateScreen] in order to hide
 /// previous terminal history.
 pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) -> eyre::Result<()> {
-    crossterm::execute!(stdout(), Hide)?;
+    let environment = Environment::ready(args.alternate)?;
 
-    if args.alternate {
-        crossterm::execute!(stdout(), EnterAlternateScreen, MoveTo(0, 0))?;
-    }
-
-    terminal::enable_raw_mode()?;
-    let enhancement = terminal::supports_keyboard_enhancement()?;
-
-    if enhancement {
-        crossterm::execute!(
-            stdout(),
-            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
-        )?;
-    }
-
-    let interface = task::spawn(interface(Arc::clone(&player)));
     #[cfg(feature = "mpris")]
     {
         player
@@ -187,21 +231,13 @@ pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) ->
             .await;
     }
 
-    input(sender).await?;
+    let interface = task::spawn(interface(Arc::clone(&player)));
+    let input = task::spawn(input(sender.clone()));
 
+    input.await??;
     interface.abort();
 
-    if args.alternate {
-        crossterm::execute!(stdout(), LeaveAlternateScreen)?;
-    }
-
-    crossterm::execute!(stdout(), Clear(ClearType::FromCursorDown), Show)?;
-
-    if enhancement {
-        crossterm::execute!(stdout(), PopKeyboardEnhancementFlags)?;
-    }
-
-    terminal::disable_raw_mode()?;
+    environment.cleanup()?;
 
     Ok(())
 }

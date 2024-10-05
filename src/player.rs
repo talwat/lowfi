@@ -15,7 +15,7 @@ use tokio::{
         mpsc::{Receiver, Sender},
         OnceCell, RwLock,
     },
-    task::{self, LocalSet},
+    task,
 };
 
 use crate::tracks::{DecodedTrack, Track, TrackInfo};
@@ -27,10 +27,15 @@ pub mod ui;
 pub mod mpris;
 
 /// Handles communication between the frontend & audio player.
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Messages {
     /// Notifies the audio server that it should update the track.
     Next,
+
+    /// Special in that this isn't sent in a "client to server" sort of way,
+    /// but rather is sent by a child of the server when a song has not only
+    /// been requested but also downloaded aswell.
+    NewSong,
 
     /// This signal is only sent if a track timed out. In that case,
     /// lowfi will try again and again to retrieve the track.
@@ -44,6 +49,9 @@ pub enum Messages {
 
     /// Change the volume of playback.
     ChangeVolume(f32),
+
+    /// Quits gracefully.
+    Quit,
 }
 
 const TIMEOUT: Duration = Duration::from_secs(8);
@@ -57,9 +65,11 @@ pub struct Player {
     pub sink: Sink,
 
     /// The [`TrackInfo`] of the current track.
-    /// This is [`None`] when lowfi is buffering.
+    /// This is [`None`] when lowfi is buffering/loading.
     pub current: ArcSwapOption<TrackInfo>,
 
+    /// This is the MPRIS server, which is initialized later on in the
+    /// user interface.
     #[cfg(feature = "mpris")]
     pub mpris: OnceCell<mpris_server::Server<mpris::Player>>,
 
@@ -168,11 +178,22 @@ impl Player {
         Ok(decoded)
     }
 
+    /// This basically just calls [`Player::next`], and then appends the new track to the player.
+    ///
+    /// This also notifies the background thread to get to work, and will send `TryAgain`
+    /// if it fails. This functions purpose is to be called in the background, so that
+    /// when the audio server recieves a `Next` signal it will still be able to respond to other
+    /// signals while it's loading.
     async fn handle_next(
         player: Arc<Self>,
         itx: Sender<()>,
         tx: Sender<Messages>,
     ) -> eyre::Result<()> {
+        // Serves as an indicator that the queue is "loading".
+        player.current.store(None);
+
+        player.sink.stop();
+
         let track = player.next().await;
 
         match track {
@@ -185,6 +206,9 @@ impl Player {
                 // Notify the background downloader that there's an empty spot
                 // in the buffer.
                 itx.send(()).await?;
+
+                // Notify the audio server that the next song has actually been downloaded.
+                tx.send(Messages::NewSong).await?
             }
             Err(error) => {
                 if !error.downcast::<reqwest::Error>()?.is_timeout() {
@@ -209,18 +233,34 @@ impl Player {
     ) -> eyre::Result<()> {
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
         let (downloader, itx) = Downloader::new(player.clone());
-        downloader.start().await;
+        let downloader = downloader.start().await;
 
         // Start buffering tracks immediately.
         itx.send(()).await?;
 
         loop {
             let clone = Arc::clone(&player);
-            let msg = select! {
-                Some(x) = rx.recv() => x,
 
+            let msg = select! {
+                biased;
+
+                Some(x) = rx.recv() => x,
                 // This future will finish only at the end of the current track.
-                Ok(_) = task::spawn_blocking(move || clone.sink.sleep_until_end()), if player.current.load().is_some() => Messages::Next,
+                // The condition is a kind-of hack which gets around the quirks
+                // of `sleep_until_end`.
+                //
+                // That's because `sleep_until_end` will return instantly if the sink
+                // is uninitialized. That's why we put a check to make sure that we're
+                // only considering it if the sink is empty, but a song is specified by the
+                // player.
+                //
+                // This makes sense since at the end of a song, the sink will be empty,
+                // but `player.current` still has yet to be cycled.
+                //
+                // This is in contrast to a typical `Next` signal, where the sink will
+                // not be empty.
+                Ok(_) = task::spawn_blocking(move || clone.sink.sleep_until_end()),
+                        if player.sink.empty() && player.current.load().is_some() => Messages::Next,
             };
 
             match msg {
@@ -228,13 +268,6 @@ impl Player {
                     if msg == Messages::Next && player.current.load().is_none() {
                         continue;
                     }
-
-                    // Skip as early as possible so that music doesn't play
-                    // while lowfi is "loading".
-                    player.sink.stop();
-
-                    // Serves as an indicator that the queue is "loading".
-                    player.current.store(None);
 
                     // Handle the rest of the signal in the background,
                     // as to not block the main audio thread.
@@ -252,7 +285,16 @@ impl Player {
                         .sink
                         .set_volume((player.sink.volume() + change).clamp(0.0, 1.0));
                 }
+                // This basically just continues, but more importantly, it'll re-evaluate
+                // the select macro at the beginning of the loop.
+                // See the top section to find out why this matters.
+                Messages::NewSong => continue,
+                Messages::Quit => break,
             }
         }
+
+        downloader.abort();
+
+        Ok(())
     }
 }

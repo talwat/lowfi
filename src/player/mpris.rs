@@ -11,6 +11,7 @@ use super::Messages;
 
 const ERROR: fdo::Error = fdo::Error::Failed(String::new());
 
+/// The actual MPRIS server.
 pub struct Player {
     pub player: Arc<super::Player>,
     pub sender: Sender<Messages>,

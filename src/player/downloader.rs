@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use tokio::{
     sync::mpsc::{self, Receiver, Sender},
-    task,
+    task::{self, JoinHandle},
 };
 
 use crate::tracks::Track;
@@ -34,7 +34,7 @@ impl Downloader {
     }
 
     /// Actually starts & consumes the [Downloader].
-    pub async fn start(mut self) {
+    pub async fn start(mut self) -> JoinHandle<()> {
         task::spawn(async move {
             // Loop through each update notification.
             while self.rx.recv().await == Some(()) {
@@ -47,6 +47,6 @@ impl Downloader {
                     self.player.tracks.write().await.push_back(track);
                 }
             }
-        });
+        })
     }
 }

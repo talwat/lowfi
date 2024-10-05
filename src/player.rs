@@ -2,7 +2,8 @@
 //! This also has the code for the underlying
 //! audio server which adds new tracks.
 
-use std::{collections::VecDeque, sync::Arc, time::Duration};
+use std::{collections::VecDeque, sync::Arc, time::Duration, fs, path::PathBuf};
+use dirs;
 
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
@@ -81,6 +82,23 @@ unsafe impl Send for Player {}
 
 /// SAFETY: See implementation for [Send].
 unsafe impl Sync for Player {}
+
+fn get_lowfi_config_dir() -> PathBuf {
+    let home_dir = dirs::home_dir().unwrap();
+    // If config dir doesn't exist use home dir as fallback
+    let config_dir = match dirs::config_dir() {
+        Some(path) => path,
+        None => home_dir,
+    };
+
+    let lowfi_config_dir = config_dir.join("lowfi");
+    // Create lowfi dir if it doesn't exists
+    if !lowfi_config_dir.exists() {
+        fs::create_dir_all(&lowfi_config_dir).unwrap();
+    }
+
+    lowfi_config_dir
+}
 
 impl Player {
     /// This gets the output stream while also shutting up alsa with [libc].
@@ -195,6 +213,17 @@ impl Player {
                     // This is also set by Player::next.
                     player.current.store(None);
 
+                    // Get last remembered volume value
+                    let lowfi_config_dir = get_lowfi_config_dir();
+                    let volume_file_path = lowfi_config_dir.join("volume");
+                    let last_volume = match fs::read_to_string(volume_file_path) {
+                      Ok(volume) => volume.parse::<f32>().unwrap_or_default(),
+                      Err(_) => 1.0
+                    };
+
+                    // Set volume to last remembered value
+                    player.sink.set_volume(last_volume);
+ 
                     let track = Self::next(Arc::clone(&player)).await;
 
                     match track {
@@ -222,9 +251,15 @@ impl Player {
                     }
                 }
                 Messages::ChangeVolume(change) => {
-                    player
-                        .sink
-                        .set_volume((player.sink.volume() + change).clamp(0.0, 1.0));
+                    let new_volume = (player.sink.volume() + change).clamp(0.0, 1.0);
+
+                    player.sink.set_volume(new_volume);
+
+                    let lowfi_config_dir = get_lowfi_config_dir();
+                    let volume_file_path = lowfi_config_dir.join("volume");
+
+                    // Write new volume value to file
+                    fs::write(volume_file_path, new_volume.to_string()).expect("Unable to write file");
                 }
             }
         }

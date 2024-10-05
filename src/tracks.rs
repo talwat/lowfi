@@ -65,8 +65,11 @@ impl TrackInfo {
             .replace(" T ", "'t ")
             .replace(" D ", "'d ")
             .replace(" Ve ", "'ve ")
+            .replace(" Ll ", "'ll ")
+            .replace(" Re ", "'re ")
             .replace(" M ", "'m ");
 
+        // This is incremented for each digit in front of the song name.
         let mut skip = 0;
 
         // SAFETY: All of the track names originate with the `'static` lifetime,

@@ -51,6 +51,16 @@ If you're on Arch, you can also use the AUR:
 yay -S lowfi
 ```
 
+### Manual
+
+```sh
+git clone https://github.com/talwat/lowfi
+cd lowfi
+
+cargo build --release
+./target/release/lowfi
+```
+
 ## Usage
 
 `lowfi`

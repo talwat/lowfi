@@ -18,7 +18,10 @@ use tokio::{
     task,
 };
 
-use crate::tracks::{DecodedTrack, Track, TrackInfo};
+use crate::{
+    play::InitialProperties,
+    tracks::{DecodedTrack, Track, TrackInfo},
+};
 
 pub mod downloader;
 pub mod ui;
@@ -236,6 +239,7 @@ impl Player {
     /// skip tracks or pause.
     pub async fn play(
         player: Arc<Self>,
+        properties: InitialProperties,
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
     ) -> eyre::Result<()> {
@@ -245,6 +249,9 @@ impl Player {
 
         // Start buffering tracks immediately.
         itx.send(()).await?;
+
+        // Set the initial sink volume to the one specified.
+        player.sink.set_volume(properties.volume as f32 / 100.0);
 
         loop {
             let clone = Arc::clone(&player);

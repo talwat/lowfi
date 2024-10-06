@@ -29,6 +29,7 @@ rand = "0.8.5"
 tokio = { version = "1.40.0", features = [
     "macros",
     "rt-multi-thread",
+    "fs"
 ], default-features = false }
 futures = "0.3.30"
 arc-swap = "1.7.1"
@@ -37,11 +38,14 @@ arc-swap = "1.7.1"
 reqwest = "0.12.7"
 bytes = "1.7.2"
 
+# I/O
+crossterm = { version = "0.28.1", features = ["event-stream"] }
+rodio = { version = "0.19.0", features = ["symphonia-mp3"], default-features = false }
+mpris-server = { version = "0.8.1", optional = true }
+dirs = "5.0.1"
+
 # Misc
 scraper = "0.20.0"
-rodio = { version = "0.19.0", features = ["symphonia-mp3"], default-features = false }
-crossterm = { version = "0.28.1", features = ["event-stream"] }
 Inflector = "0.11.4"
 lazy_static = "1.5.0"
 libc = "0.2.159"
-mpris-server = { version = "0.8.1", optional = true }

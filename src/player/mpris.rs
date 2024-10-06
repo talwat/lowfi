@@ -23,11 +23,11 @@ impl RootInterface for Player {
     }
 
     async fn quit(&self) -> fdo::Result<()> {
-        Err(ERROR)
+        self.sender.send(Messages::Quit).await.map_err(|_| ERROR)
     }
 
     async fn can_quit(&self) -> fdo::Result<bool> {
-        Ok(false)
+        Ok(true)
     }
 
     async fn fullscreen(&self) -> fdo::Result<bool> {
@@ -111,7 +111,7 @@ impl PlayerInterface for Player {
     }
 
     async fn playback_status(&self) -> fdo::Result<PlaybackStatus> {
-        Ok(if self.player.current.load().is_none() {
+        Ok(if !self.player.current_exists() {
             PlaybackStatus::Stopped
         } else if self.player.sink.is_paused() {
             PlaybackStatus::Paused

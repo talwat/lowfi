@@ -13,7 +13,7 @@ use tokio::{
     select,
     sync::{
         mpsc::{Receiver, Sender},
-        OnceCell, RwLock,
+        RwLock,
     },
     task,
 };
@@ -71,7 +71,7 @@ pub struct Player {
     /// This is the MPRIS server, which is initialized later on in the
     /// user interface.
     #[cfg(feature = "mpris")]
-    pub mpris: OnceCell<mpris_server::Server<mpris::Player>>,
+    pub mpris: tokio::sync::OnceCell<mpris_server::Server<mpris::Player>>,
 
     /// The tracks, which is a [VecDeque] that holds
     /// *undecoded* [Track]s.
@@ -121,6 +121,18 @@ impl Player {
         Ok((stream, handle))
     }
 
+    /// Just a shorthand for setting `current`.
+    async fn set_current(&self, info: TrackInfo) -> eyre::Result<()> {
+        self.current.store(Some(Arc::new(info)));
+
+        Ok(())
+    }
+
+    /// A shorthand for checking if `self.current` is [Some].
+    pub fn current_exists(&self) -> bool {
+        self.current.load().is_some()
+    }
+
     /// Initializes the entire player, including audio devices & sink.
     ///
     /// `silent` can control whether alsa's output should be redirected,
@@ -151,17 +163,10 @@ impl Player {
             _stream,
 
             #[cfg(feature = "mpris")]
-            mpris: OnceCell::new(),
+            mpris: tokio::sync::OnceCell::new(),
         };
 
         Ok(player)
-    }
-
-    /// Just a shorthand for setting `current`.
-    async fn set_current(&self, info: TrackInfo) -> eyre::Result<()> {
-        self.current.store(Some(Arc::new(info)));
-
-        Ok(())
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.
@@ -198,10 +203,13 @@ impl Player {
 
         match track {
             Ok(track) => {
-                player.sink.append(track.data);
-
-                // Set the current track, after it's been appended to the sink.
+                // Set the current track.
                 player.set_current(track.info.clone()).await?;
+
+                // Actually start playing it, this is done later so that the amount
+                // or times where "loading" appears briefly even though the track is
+                // from the buffer is minimized.
+                player.sink.append(track.data);
 
                 // Notify the background downloader that there's an empty spot
                 // in the buffer.
@@ -260,12 +268,13 @@ impl Player {
                 // This is in contrast to a typical `Next` signal, where the sink will
                 // not be empty.
                 Ok(_) = task::spawn_blocking(move || clone.sink.sleep_until_end()),
-                        if player.sink.empty() && player.current.load().is_some() => Messages::Next,
+                        if player.sink.empty() && player.current_exists() => Messages::Next,
             };
 
             match msg {
                 Messages::Next | Messages::Init | Messages::TryAgain => {
-                    if msg == Messages::Next && player.current.load().is_none() {
+                    // This basically just prevents `Next` while a song is still currently loading.
+                    if msg == Messages::Next && !player.current_exists() {
                         continue;
                     }
 

@@ -16,6 +16,9 @@ documentation = "https://github.com/talwat/lowfi"
 homepage = "https://github.com/talwat/lowfi"
 repository = "https://github.com/talwat/lowfi"
 
+[features]
+mpris = ["dep:mpris-server"]
+
 [dependencies]
 # Basics
 clap = { version = "4.5.18", features = ["derive", "cargo"] }
@@ -37,7 +40,8 @@ bytes = "1.7.2"
 # Misc
 scraper = "0.20.0"
 rodio = { version = "0.19.0", features = ["symphonia-mp3"], default-features = false }
-crossterm = "0.28.1"
+crossterm = { version = "0.28.1", features = ["event-stream"] }
 Inflector = "0.11.4"
 lazy_static = "1.5.0"
 libc = "0.2.159"
+mpris-server = { version = "0.8.1", optional = true }

@@ -12,15 +12,14 @@ use crate::Args;
 /// it when the frontend quits.
 pub async fn play(args: Args) -> eyre::Result<()> {
     let (tx, rx) = mpsc::channel(8);
+    let player = Arc::new(Player::new(!args.alternate).await?);
+    let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args));
 
-    let player = Arc::new(Player::new(args.alternate).await?);
-    let audio = task::spawn(Player::play(Arc::clone(&player), tx.clone(), rx));
     tx.send(Messages::Init).await?;
 
-    ui::start(Arc::clone(&player), tx.clone(), args).await?;
-
-    audio.abort();
+    Player::play(Arc::clone(&player), tx.clone(), rx).await?;
     player.sink.stop();
+    ui.abort();
 
     Ok(())
 }

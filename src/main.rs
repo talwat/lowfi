@@ -13,6 +13,10 @@ struct Args {
     #[clap(long, short)]
     alternate: bool,
 
+    /// Whether to hide the bottom control bar.
+    #[clap(long, short)]
+    minimalist: bool,
+
     /// The command that was ran.
     /// This is [None] if no command was specified.
     #[command(subcommand)]

@@ -57,7 +57,7 @@ lazy_static! {
 ///
 /// `volume_timer` is a bit strange, but it tracks how long the `volume` bar
 /// has been displayed for, so that it's only displayed for a certain amount of frames.
-async fn interface(player: Arc<Player>) -> eyre::Result<()> {
+async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
     loop {
         let action = components::action(&player, WIDTH);
 
@@ -78,8 +78,17 @@ async fn interface(player: Arc<Player>) -> eyre::Result<()> {
 
         let controls = components::controls(WIDTH);
 
+        let menu = if minimalist {
+            vec![action, middle]
+        } else {
+            vec![action, middle, controls]
+        };
+
         // Formats the menu properly
-        let menu = [action, middle, controls].map(|x| format!("│ {} │\r\n", x.reset()).to_string());
+        let menu: Vec<String> = menu
+            .into_iter()
+            .map(|x| format!("│ {} │\r\n", x.reset()).to_string())
+            .collect();
 
         crossterm::execute!(
             stdout(),
@@ -89,7 +98,7 @@ async fn interface(player: Arc<Player>) -> eyre::Result<()> {
             Print(menu.join("")),
             Print(format!("└{}┘", "─".repeat(WIDTH + 2))),
             MoveToColumn(0),
-            MoveUp(4)
+            MoveUp(menu.len() as u16 + 1)
         )?;
 
         sleep(Duration::from_secs_f32(FRAME_DELTA)).await;
@@ -117,7 +126,7 @@ pub async fn start(queue: Arc<Player>, sender: Sender<Messages>, args: Args) -> 
         )?;
     }
 
-    task::spawn(interface(Arc::clone(&queue)));
+    task::spawn(interface(Arc::clone(&queue), args.minimalist));
 
     loop {
         let event::Event::Key(event) = event::read()? else {

@@ -240,7 +240,7 @@ pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) ->
             .await;
     }
 
-    let interface = task::spawn(interface(Arc::clone(&player)));
+    let interface = task::spawn(interface(Arc::clone(&player), args.minimalist));
 
     input(sender.clone()).await?;
     interface.abort();

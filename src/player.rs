@@ -31,7 +31,7 @@ pub mod ui;
 pub mod mpris;
 
 /// Handles communication between the frontend & audio player.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Messages {
     /// Notifies the audio server that it should update the track.
     Next,
@@ -204,6 +204,7 @@ impl Player {
         // Serves as an indicator that the queue is "loading".
         player.current.store(None);
 
+        // Stop the sink.
         player.sink.stop();
 
         let track = player.next().await;
@@ -257,6 +258,11 @@ impl Player {
         // Set the initial sink volume to the one specified.
         player.sink.set_volume(properties.volume as f32 / 100.0);
 
+        // Whether the last signal was a `NewSong`.
+        // This is helpful, since we only want to autoplay
+        // if there hasn't been any manual intervention.
+        let mut new = false;
+
         loop {
             let clone = Arc::clone(&player);
 
@@ -269,21 +275,22 @@ impl Player {
                 // of `sleep_until_end`.
                 //
                 // That's because `sleep_until_end` will return instantly if the sink
-                // is uninitialized. That's why we put a check to make sure that we're
-                // only considering it if the sink is empty, but a song is specified by the
-                // player.
+                // is uninitialized. That's why we put a check to make sure that the last
+                // signal we got was `NewSong`, since we shouldn't start waiting for the
+                // song to be over until it has actually started.
                 //
-                // This makes sense since at the end of a song, the sink will be empty,
-                // but `player.current` still has yet to be cycled.
-                //
-                // This is in contrast to a typical `Next` signal, where the sink will
-                // not be empty.
+                // It's also important to note that the condition is only checked at the
+                // beginning of the loop, not throughout.
                 Ok(_) = task::spawn_blocking(move || clone.sink.sleep_until_end()),
-                        if player.sink.empty() && player.current_exists() => Messages::Next,
+                        if new => Messages::Next,
             };
 
             match msg {
                 Messages::Next | Messages::Init | Messages::TryAgain => {
+                    // We manually skipped, so we shouldn't actually wait for the song
+                    // to be over until we recieve the `NewSong` signal.
+                    new = false;
+
                     // This basically just prevents `Next` while a song is still currently loading.
                     if msg == Messages::Next && !player.current_exists() {
                         continue;
@@ -308,7 +315,13 @@ impl Player {
                 // This basically just continues, but more importantly, it'll re-evaluate
                 // the select macro at the beginning of the loop.
                 // See the top section to find out why this matters.
-                Messages::NewSong => continue,
+                Messages::NewSong => {
+                    // We've recieved `NewSong`, so on the next loop iteration we'll
+                    // begin waiting for the song to be over in order to autoplay.
+                    new = true;
+
+                    continue;
+                }
                 Messages::Quit => break,
             }
         }

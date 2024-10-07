@@ -69,10 +69,8 @@ Yeah, that's it. Controls are documented in the app.
 
 ### Extra Flags
 
-If you're having issues on Linux with error messages,
-or you don't want your terminal history to be visible when you
-run lofi, you can use the `--alternate` or `-a` flag to
-hide your history.
+If you have something you'd like to tweak about lowfi, you can run `lowfi help`
+to view the available options.
 
 ### Scraping
 

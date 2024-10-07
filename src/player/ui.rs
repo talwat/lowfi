@@ -114,15 +114,7 @@ async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
 /// has been displayed for, so that it's only displayed for a certain amount of frames.
 async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
     loop {
-        let action = format!(
-            "{} {}",
-            components::action(&player, WIDTH - 2),
-            player
-                .tracks
-                .try_read()
-                .and_then(|x| Ok(x.len().to_string()))
-                .unwrap_or(String::from("?"))
-        );
+        let action = components::action(&player, WIDTH);
 
         let timer = VOLUME_TIMER.load(Ordering::Relaxed);
         let volume = player.sink.volume();

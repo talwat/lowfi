@@ -28,10 +28,19 @@ you're interested in downloading the tracks. Beware, there's a lot of them.
 
 ## Installing
 
+> ![NOTE]
+> If you're interested in maintaining a package for `lowfi`
+> on package managers such as homebrew and the like, open an issue.
+
+### Dependencies
+
 You'll need Rust 1.74.0+.
 
-If you're on linux, you also need the OpenSSL & Alsa headers.
-Alsa can be installed with `alsa-lib` on Arch or `libasound2-dev` on Ubuntu.
+On MacOS & Windows, no extra dependencies are needed.
+
+On Linux, you'll also need alsa and it's headers (`alsa-lib` on Arch,
+`libasound2-dev` on Ubuntu). Make sure to also install `pulseaudio-alsa`
+if you're using pulseaudio.
 
 ### Cargo
 
@@ -39,6 +48,9 @@ The recommended installation method is to use cargo:
 
 ```sh
 cargo install lowfi
+
+# If you want MPRIS support.
+cargo install lowfi --features mpris
 ```
 
 and making sure `$HOME/.cargo/bin` is added to `$PATH`.

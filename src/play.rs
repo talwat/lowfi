@@ -44,7 +44,7 @@ impl InitialProperties {
         // Basically just read from the volume file if it exists, otherwise return 100.
         let volume = if volume.exists() {
             let contents = fs::read_to_string(volume).await?;
-            let stripped = contents.strip_suffix("%").unwrap_or(&contents);
+            let stripped = contents.trim().strip_suffix("%").unwrap_or(&contents);
             stripped
                 .parse()
                 .map_err(|_| eyre!("volume.txt file is invalid"))?

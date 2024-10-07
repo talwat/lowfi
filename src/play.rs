@@ -74,7 +74,7 @@ pub async fn play(args: Args) -> eyre::Result<()> {
     let properties = InitialProperties::load().await?;
 
     let (tx, rx) = mpsc::channel(8);
-    let player = Arc::new(Player::new(!args.alternate).await?);
+    let player = Arc::new(Player::new(!args.alternate, &args).await?);
     let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args));
 
     tx.send(Messages::Init).await?;

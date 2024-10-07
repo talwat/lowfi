@@ -21,6 +21,7 @@ use tokio::{
 use crate::{
     play::InitialProperties,
     tracks::{DecodedTrack, Track, TrackInfo},
+    Args,
 };
 
 pub mod downloader;
@@ -141,7 +142,7 @@ impl Player {
     /// `silent` can control whether alsa's output should be redirected,
     /// but this option is only applicable on Linux, as on MacOS & Windows
     /// it will never be silent.
-    pub async fn new(silent: bool) -> eyre::Result<Self> {
+    pub async fn new(silent: bool, args: &Args) -> eyre::Result<Self> {
         let (_stream, handle) = if silent && cfg!(target_os = "linux") {
             Self::silent_get_output_stream()?
         } else {
@@ -149,6 +150,9 @@ impl Player {
         };
 
         let sink = Sink::try_new(&handle)?;
+        if args.paused {
+            sink.pause();
+        }
 
         let player = Self {
             tracks: RwLock::new(VecDeque::with_capacity(5)),

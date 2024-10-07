@@ -221,7 +221,7 @@ impl Player {
 
                 // Notify the background downloader that there's an empty spot
                 // in the buffer.
-                itx.send(()).await?;
+                Downloader::notify(&itx).await?;
 
                 // Notify the audio server that the next song has actually been downloaded.
                 tx.send(Messages::NewSong).await?
@@ -249,11 +249,11 @@ impl Player {
         mut rx: Receiver<Messages>,
     ) -> eyre::Result<()> {
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
-        let (downloader, itx) = Downloader::new(player.clone());
-        let downloader = downloader.start().await;
+        let downloader = Downloader::new(player.clone());
+        let (itx, downloader) = downloader.start().await;
 
         // Start buffering tracks immediately.
-        itx.send(()).await?;
+        Downloader::notify(&itx).await?;
 
         // Set the initial sink volume to the one specified.
         player.sink.set_volume(properties.volume as f32 / 100.0);

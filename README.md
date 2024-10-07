@@ -28,7 +28,8 @@ you're interested in downloading the tracks. Beware, there's a lot of them.
 
 ## Installing
 
-> ![NOTE]
+> [!NOTE]
+>
 > If you're interested in maintaining a package for `lowfi`
 > on package managers such as homebrew and the like, open an issue.
 

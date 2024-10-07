@@ -148,7 +148,7 @@ impl Player {
     /// but this option is only applicable on Linux, as on MacOS & Windows
     /// it will never be silent.
     pub async fn new(silent: bool, args: &Args) -> eyre::Result<Self> {
-        let (_stream, handle) = if silent && cfg!(target_os = "linux") {
+        let (_stream, handle) = if silent && cfg!(target_os = "linux") && !args.debug {
             Self::silent_get_output_stream()?
         } else {
             OutputStream::try_default()?

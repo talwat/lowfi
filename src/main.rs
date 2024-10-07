@@ -17,9 +17,13 @@ struct Args {
     #[clap(long, short)]
     minimalist: bool,
 
-    /// Whether to start lowfi paused
+    /// Whether to start lowfi paused.
     #[clap(long, short)]
     paused: bool,
+
+    /// Whether to include ALSA & other logs.
+    #[clap(long, short)]
+    debug: bool,
 
     /// The command that was ran.
     /// This is [None] if no command was specified.

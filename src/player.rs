@@ -137,6 +137,11 @@ impl Player {
         self.current.load().is_some()
     }
 
+    /// Sets the volume of the sink, and also clamps the value to avoid negative/over 100% values.
+    pub fn set_volume(&self, volume: f32) {
+        self.sink.set_volume(volume.clamp(0.0, 1.0))
+    }
+
     /// Initializes the entire player, including audio devices & sink.
     ///
     /// `silent` can control whether alsa's output should be redirected,
@@ -256,7 +261,7 @@ impl Player {
         Downloader::notify(&itx).await?;
 
         // Set the initial sink volume to the one specified.
-        player.sink.set_volume(properties.volume as f32 / 100.0);
+        player.set_volume(properties.volume as f32 / 100.0);
 
         // Whether the last signal was a `NewSong`.
         // This is helpful, since we only want to autoplay
@@ -308,9 +313,7 @@ impl Player {
                     }
                 }
                 Messages::ChangeVolume(change) => {
-                    player
-                        .sink
-                        .set_volume((player.sink.volume() + change).clamp(0.0, 1.0));
+                    player.set_volume(player.sink.volume() + change);
                 }
                 // This basically just continues, but more importantly, it'll re-evaluate
                 // the select macro at the beginning of the loop.

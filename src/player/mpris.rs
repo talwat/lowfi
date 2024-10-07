@@ -169,7 +169,7 @@ impl PlayerInterface for Player {
     }
 
     async fn set_volume(&self, volume: Volume) -> Result<()> {
-        self.player.sink.set_volume(volume as f32);
+        self.player.set_volume(volume as f32);
 
         Ok(())
     }

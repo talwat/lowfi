@@ -14,13 +14,12 @@ use rodio::{Decoder, Source};
 #[derive(Clone)]
 pub struct List {
     lines: Vec<String>,
-    base: Option<String>,
 }
 
 impl List {
     /// Gets the base URL of the [List].
-    pub fn base(&self) -> Option<&str> {
-        self.base.as_deref()
+    pub fn base(&self) -> &str {
+        self.lines[0].trim()
     }
 
     /// Gets the name of a random track.
@@ -33,10 +32,11 @@ impl List {
 
     /// Downloads a raw track, but doesn't decode it.
     async fn download(&self, track: &str, client: &Client) -> eyre::Result<Bytes> {
-        let url = if let Some(base) = self.base() {
-            format!("{}/{}", base, track)
-        } else {
+        // If the track has a protocol, then we should ignore the base for it.
+        let url = if track.contains("://") {
             track.to_owned()
+        } else {
+            format!("{}/{}", self.base(), track)
         };
 
         let response = client.get(url).send().await?;
@@ -60,20 +60,17 @@ impl List {
     ///
     /// Each track will be first appended to the base URL,
     /// and then the result use to download the track.
+    ///
+    /// The exception to this is if the track name
+    /// begins with something like `https://`,
+    /// where in that case the base will not be prepended to it.
     pub fn new(text: &str) -> eyre::Result<Self> {
         let lines: Vec<String> = text
             .split_ascii_whitespace()
             .map(|x| x.to_owned())
             .collect();
 
-        // Naive approach to URL validation, but it works for our purposes.
-        let base = if lines[0].contains("://") {
-            Some(lines[0].strip_suffix("/").unwrap_or(&lines[0]).to_owned())
-        } else {
-            None
-        };
-
-        Ok(Self { lines, base })
+        Ok(Self { lines })
     }
 }
 

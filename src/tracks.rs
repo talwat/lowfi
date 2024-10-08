@@ -98,7 +98,7 @@ impl Info {
     fn format_name(name: &str) -> String {
         let mut formatted = name
             .split("/")
-            .nth(2)
+            .last()
             .unwrap()
             .strip_suffix(".mp3")
             .unwrap()

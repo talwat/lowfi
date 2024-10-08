@@ -9,7 +9,7 @@ use tokio::{sync::mpsc, task};
 
 use crate::player::Player;
 use crate::player::{ui, Messages};
-use crate::Args;
+use crate::{tracks, Args};
 
 /// The attributes that are applied at startup.
 /// This includes the volume, but also the config file.
@@ -73,13 +73,16 @@ pub async fn play(args: Args) -> eyre::Result<()> {
     // Load the initial properties (volume & config).
     let properties = InitialProperties::load().await?;
 
+    // Load the list.
+    let list = tracks::List::new(include_str!("../data/tracks.txt"))?;
+
     let (tx, rx) = mpsc::channel(8);
     let player = Arc::new(Player::new(!args.alternate, &args).await?);
     let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args));
 
     tx.send(Messages::Init).await?;
 
-    Player::play(Arc::clone(&player), properties, tx.clone(), rx).await?;
+    Player::play(Arc::clone(&player), properties, list, tx.clone(), rx).await?;
 
     // Save the volume.txt file for the next session.
     InitialProperties::save_volume(player.sink.volume()).await?;

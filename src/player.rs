@@ -18,11 +18,7 @@ use tokio::{
     task,
 };
 
-use crate::{
-    play::InitialProperties,
-    tracks::{DecodedTrack, Track, TrackInfo},
-    Args,
-};
+use crate::{play::InitialProperties, tracks, Args};
 
 pub mod downloader;
 pub mod ui;
@@ -70,7 +66,7 @@ pub struct Player {
 
     /// The [`TrackInfo`] of the current track.
     /// This is [`None`] when lowfi is buffering/loading.
-    pub current: ArcSwapOption<TrackInfo>,
+    pub current: ArcSwapOption<tracks::Info>,
 
     /// This is the MPRIS server, which is initialized later on in the
     /// user interface.
@@ -79,7 +75,7 @@ pub struct Player {
 
     /// The tracks, which is a [VecDeque] that holds
     /// *undecoded* [Track]s.
-    tracks: RwLock<VecDeque<Track>>,
+    tracks: RwLock<VecDeque<tracks::Track>>,
 
     /// The web client, which can contain a UserAgent & some
     /// settings that help lowfi work more effectively.
@@ -126,7 +122,7 @@ impl Player {
     }
 
     /// Just a shorthand for setting `current`.
-    async fn set_current(&self, info: TrackInfo) -> eyre::Result<()> {
+    async fn set_current(&self, info: tracks::Info) -> eyre::Result<()> {
         self.current.store(Some(Arc::new(info)));
 
         Ok(())
@@ -182,12 +178,12 @@ impl Player {
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.
-    pub async fn next(&self) -> eyre::Result<DecodedTrack> {
+    pub async fn next(&self, list: &tracks::List) -> eyre::Result<tracks::Decoded> {
         let track = match self.tracks.write().await.pop_front() {
             Some(x) => x,
             // If the queue is completely empty, then fallback to simply getting a new track.
             // This is relevant particularly at the first song.
-            None => Track::random(&self.client).await?,
+            None => list.download_random(&self.client).await?,
         };
 
         let decoded = track.decode()?;
@@ -203,6 +199,7 @@ impl Player {
     /// signals while it's loading.
     async fn handle_next(
         player: Arc<Self>,
+        list: Arc<tracks::List>,
         itx: Sender<()>,
         tx: Sender<Messages>,
     ) -> eyre::Result<()> {
@@ -212,7 +209,7 @@ impl Player {
         // Stop the sink.
         player.sink.stop();
 
-        let track = player.next().await;
+        let track = player.next(&list).await;
 
         match track {
             Ok(track) => {
@@ -247,14 +244,20 @@ impl Player {
     ///
     /// `rx` & `tx` are used to communicate with it, for example when to
     /// skip tracks or pause.
+    ///
+    /// `list` is the list of tracks the audio server will download & play.
     pub async fn play(
         player: Arc<Self>,
         properties: InitialProperties,
+        list: tracks::List,
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
     ) -> eyre::Result<()> {
+        // We're putting `list` in an Arc to share it with child threads.
+        let list = Arc::new(list);
+
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
-        let downloader = Downloader::new(player.clone());
+        let downloader = Downloader::new(player.clone(), list.clone());
         let (itx, downloader) = downloader.start().await;
 
         // Start buffering tracks immediately.
@@ -303,7 +306,12 @@ impl Player {
 
                     // Handle the rest of the signal in the background,
                     // as to not block the main audio thread.
-                    task::spawn(Self::handle_next(player.clone(), itx.clone(), tx.clone()));
+                    task::spawn(Self::handle_next(
+                        player.clone(),
+                        list.clone(),
+                        itx.clone(),
+                        tx.clone(),
+                    ));
                 }
                 Messages::PlayPause => {
                     if player.sink.is_paused() {

@@ -7,7 +7,7 @@ use tokio::{
     task::{self, JoinHandle},
 };
 
-use crate::tracks::Track;
+use crate::tracks;
 
 use super::{Player, BUFFER_SIZE};
 
@@ -17,6 +17,9 @@ use super::{Player, BUFFER_SIZE};
 pub struct Downloader {
     /// The player for the downloader to download to & with.
     player: Arc<Player>,
+
+    /// The track list to download.
+    list: Arc<tracks::List>,
 
     /// The internal reciever, which is used by the downloader to know
     /// when to begin downloading more tracks.
@@ -38,9 +41,14 @@ impl Downloader {
     ///
     /// This also sends a [`Sender`] which can be used to notify
     /// when the downloader needs to begin downloading more tracks.
-    pub fn new(player: Arc<Player>) -> Self {
+    pub fn new(player: Arc<Player>, list: Arc<tracks::List>) -> Self {
         let (tx, rx) = mpsc::channel(8);
-        Self { player, rx, tx }
+        Self {
+            player,
+            list,
+            rx,
+            tx,
+        }
     }
 
     /// Actually starts & consumes the [Downloader].
@@ -52,7 +60,7 @@ impl Downloader {
                 while self.rx.recv().await == Some(()) {
                     //  For each update notification, we'll push tracks until the buffer is completely full.
                     while self.player.tracks.read().await.len() < BUFFER_SIZE {
-                        let Ok(track) = Track::random(&self.player.client).await else {
+                        let Ok(track) = self.list.download_random(&self.player.client).await else {
                             continue;
                         };
 

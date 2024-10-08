@@ -10,23 +10,57 @@ use rand::Rng;
 use reqwest::Client;
 use rodio::{Decoder, Source};
 
-/// Downloads a raw track, but doesn't decode it.
-async fn download(track: &str, client: &Client) -> eyre::Result<Bytes> {
-    let url = format!("https://lofigirl.com/wp-content/uploads/{}", track);
-    let response = client.get(url).send().await?;
-    let data = response.bytes().await?;
-
-    Ok(data)
+/// Represents a list of tracks that can be played.
+#[derive(Clone)]
+pub struct List {
+    lines: Vec<String>,
 }
 
-/// Gets a random track from `tracks.txt` and returns it.
-fn random() -> &'static str {
-    let tracks: Vec<&str> = include_str!("../data/tracks.txt")
-        .split_ascii_whitespace()
-        .collect();
+impl List {
+    /// Gets the base URL of the [List].
+    pub fn base(&self) -> &str {
+        self.lines[0].trim()
+    }
+    /// Gets the name of a random track.
+    pub fn random(&self) -> String {
+        // We're getting from 1 here, since due to how rust vectors work it's
+        // slow to drain only a single element from the start, so we can just keep it in.
+        let random = rand::thread_rng().gen_range(1..self.lines.len());
+        self.lines[random].to_owned()
+    }
 
-    let random = rand::thread_rng().gen_range(0..tracks.len());
-    tracks[random]
+    /// Downloads a raw track, but doesn't decode it.
+    pub async fn download(&self, track: &str, client: &Client) -> eyre::Result<Bytes> {
+        let url = format!("{}/{}", self.base(), track);
+        let response = client.get(url).send().await?;
+        let data = response.bytes().await?;
+
+        Ok(data)
+    }
+
+    /// Fetches and downloads a random track from the [List].
+    pub async fn download_random(&self, client: &Client) -> eyre::Result<Track> {
+        let name = self.random();
+        let data = self.download(&name, client).await?;
+
+        Ok(Track { name, data })
+    }
+
+    /// Parses text into a [List].
+    ///
+    /// In [List]'s, the first line should be the base URL,
+    /// followed by the rest of the tracks.
+    ///
+    /// Each track will be first appended to the base URL,
+    /// and then the result use to download the track.
+    pub fn new(text: &str) -> eyre::Result<Self> {
+        let lines: Vec<String> = text
+            .split_ascii_whitespace()
+            .map(|x| x.to_owned())
+            .collect();
+
+        Ok(Self { lines })
+    }
 }
 
 /// Just a shorthand for a decoded [Bytes].
@@ -37,7 +71,7 @@ pub type DecodedData = Decoder<Cursor<Bytes>>;
 /// This is not included in [Track] as the duration has to be acquired
 /// from the decoded data and not from the raw data.
 #[derive(Debug, PartialEq, Clone)]
-pub struct TrackInfo {
+pub struct Info {
     /// This is a formatted name, so it doesn't include the full path.
     pub name: String,
 
@@ -46,11 +80,11 @@ pub struct TrackInfo {
     pub duration: Option<Duration>,
 }
 
-impl TrackInfo {
+impl Info {
     /// Formats a name with [Inflector].
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks.
-    fn format_name(name: &'static str) -> String {
+    fn format_name(name: &str) -> String {
         let mut formatted = name
             .split("/")
             .nth(2)
@@ -87,30 +121,30 @@ impl TrackInfo {
     }
 
     /// Creates a new [`TrackInfo`] from a raw name & decoded track data.
-    pub fn new(name: &'static str, decoded: &DecodedData) -> Self {
+    pub fn new(name: String, decoded: &DecodedData) -> Self {
         Self {
             duration: decoded.total_duration(),
-            name: Self::format_name(name),
+            name: Self::format_name(&name),
         }
     }
 }
 
 /// This struct is seperate from [Track] since it is generated lazily from
 /// a track, and not when the track is first downloaded.
-pub struct DecodedTrack {
+pub struct Decoded {
     /// Has both the formatted name and some information from the decoded data.
-    pub info: TrackInfo,
+    pub info: Info,
 
     /// The decoded data, which is able to be played by [rodio].
     pub data: DecodedData,
 }
 
-impl DecodedTrack {
+impl Decoded {
     /// Creates a new track.
     /// This is equivalent to [Track::decode].
     pub fn new(track: Track) -> eyre::Result<Self> {
         let data = Decoder::new(Cursor::new(track.data))?;
-        let info = TrackInfo::new(track.name, &data);
+        let info = Info::new(track.name, &data);
 
         Ok(Self { info, data })
     }
@@ -119,7 +153,7 @@ impl DecodedTrack {
 /// The main track struct, which only includes data & the track name.
 pub struct Track {
     /// This name is not formatted, and also includes the month & year of the track.
-    pub name: &'static str,
+    pub name: String,
 
     /// The raw data of the track, which is not decoded and
     /// therefore much more memory efficient.
@@ -127,18 +161,10 @@ pub struct Track {
 }
 
 impl Track {
-    /// Fetches and downloads a random track from the tracklist.
-    pub async fn random(client: &Client) -> eyre::Result<Self> {
-        let name = random();
-        let data = download(name, client).await?;
-
-        Ok(Self { data, name })
-    }
-
     /// This will actually decode and format the track,
     /// returning a [`DecodedTrack`] which can be played
     /// and also has a duration & formatted name.
-    pub fn decode(self) -> eyre::Result<DecodedTrack> {
-        DecodedTrack::new(self)
+    pub fn decode(self) -> eyre::Result<Decoded> {
+        Decoded::new(self)
     }
 }

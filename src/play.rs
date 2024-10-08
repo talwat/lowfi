@@ -74,7 +74,7 @@ pub async fn play(args: Args) -> eyre::Result<()> {
     let properties = InitialProperties::load().await?;
 
     // Load the list.
-    let list = tracks::List::new(include_str!("../data/tracks.txt"))?;
+    let list = tracks::List::new(include_str!("../data/lofigirl.txt"))?;
 
     let (tx, rx) = mpsc::channel(8);
     let player = Arc::new(Player::new(!args.alternate, &args).await?);

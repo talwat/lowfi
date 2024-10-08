@@ -183,7 +183,7 @@ impl Player {
             Some(x) => x,
             // If the queue is completely empty, then fallback to simply getting a new track.
             // This is relevant particularly at the first song.
-            None => list.download_random(&self.client).await?,
+            None => list.random(&self.client).await?,
         };
 
         let decoded = track.decode()?;

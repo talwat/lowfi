@@ -21,8 +21,9 @@ impl List {
     pub fn base(&self) -> &str {
         self.lines[0].trim()
     }
+
     /// Gets the name of a random track.
-    pub fn random(&self) -> String {
+    fn random_name(&self) -> String {
         // We're getting from 1 here, since due to how rust vectors work it's
         // slow to drain only a single element from the start, so we can just keep it in.
         let random = rand::thread_rng().gen_range(1..self.lines.len());
@@ -30,7 +31,7 @@ impl List {
     }
 
     /// Downloads a raw track, but doesn't decode it.
-    pub async fn download(&self, track: &str, client: &Client) -> eyre::Result<Bytes> {
+    async fn download(&self, track: &str, client: &Client) -> eyre::Result<Bytes> {
         let url = format!("{}/{}", self.base(), track);
         let response = client.get(url).send().await?;
         let data = response.bytes().await?;
@@ -39,8 +40,8 @@ impl List {
     }
 
     /// Fetches and downloads a random track from the [List].
-    pub async fn download_random(&self, client: &Client) -> eyre::Result<Track> {
-        let name = self.random();
+    pub async fn random(&self, client: &Client) -> eyre::Result<Track> {
+        let name = self.random_name();
         let data = self.download(&name, client).await?;
 
         Ok(Track { name, data })

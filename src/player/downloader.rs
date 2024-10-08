@@ -60,7 +60,7 @@ impl Downloader {
                 while self.rx.recv().await == Some(()) {
                     //  For each update notification, we'll push tracks until the buffer is completely full.
                     while self.player.tracks.read().await.len() < BUFFER_SIZE {
-                        let Ok(track) = self.list.download_random(&self.player.client).await else {
+                        let Ok(track) = self.list.random(&self.player.client).await else {
                             continue;
                         };
 

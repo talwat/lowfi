@@ -1,6 +1,6 @@
 //! Contains the [`Downloader`] struct.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use tokio::{
     sync::mpsc::{self, Receiver, Sender},

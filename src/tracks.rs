@@ -14,12 +14,13 @@ use rodio::{Decoder, Source};
 #[derive(Clone)]
 pub struct List {
     lines: Vec<String>,
+    base: Option<String>,
 }
 
 impl List {
     /// Gets the base URL of the [List].
-    pub fn base(&self) -> &str {
-        self.lines[0].trim()
+    pub fn base(&self) -> Option<&str> {
+        self.base.as_deref()
     }
 
     /// Gets the name of a random track.
@@ -32,7 +33,12 @@ impl List {
 
     /// Downloads a raw track, but doesn't decode it.
     async fn download(&self, track: &str, client: &Client) -> eyre::Result<Bytes> {
-        let url = format!("{}/{}", self.base(), track);
+        let url = if let Some(base) = self.base() {
+            format!("{}/{}", base, track)
+        } else {
+            track.to_owned()
+        };
+
         let response = client.get(url).send().await?;
         let data = response.bytes().await?;
 
@@ -60,7 +66,14 @@ impl List {
             .map(|x| x.to_owned())
             .collect();
 
-        Ok(Self { lines })
+        // Naive approach to URL validation, but it works for our purposes.
+        let base = if lines[0].contains("://") {
+            Some(lines[0].strip_suffix("/").unwrap_or(&lines[0]).to_owned())
+        } else {
+            None
+        };
+
+        Ok(Self { lines, base })
     }
 }
 

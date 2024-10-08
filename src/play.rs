@@ -12,10 +12,10 @@ use crate::player::{ui, Messages};
 use crate::{tracks, Args};
 
 /// The attributes that are applied at startup.
-/// This includes the volume, but also the config file.
+/// This includes the volume, but also the other configuration options.
 ///
 /// The volume is seperated from the config since it specifically
-/// will be written by lowfi, whereas the config will not.
+/// will be written by lowfi, whereas the other configuration options will not.
 pub struct InitialProperties {
     /// The volume, as a percentage.
     pub volume: u16,
@@ -35,7 +35,7 @@ impl InitialProperties {
         Ok(config)
     }
 
-    /// Loads the [InitialProperties], including the config and volume file.
+    /// Loads the [InitialProperties], including volume file & other config.
     pub async fn load() -> eyre::Result<Self> {
         let config = Self::config().await?;
 
@@ -70,19 +70,19 @@ impl InitialProperties {
 /// Initializes the audio server, and then safely stops
 /// it when the frontend quits.
 pub async fn play(args: Args) -> eyre::Result<()> {
-    // Load the initial properties (volume & config).
+    // Load the initial properties (volume).
     let properties = InitialProperties::load().await?;
 
-    // Load the list.
+    // Load the track list.
     let list = tracks::List::new(include_str!("../data/lofigirl.txt"))?;
 
     let (tx, rx) = mpsc::channel(8);
-    let player = Arc::new(Player::new(!args.alternate, &args).await?);
+    let player = Arc::new(Player::new(!args.alternate, list, &args).await?);
     let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args));
 
     tx.send(Messages::Init).await?;
 
-    Player::play(Arc::clone(&player), properties, list, tx.clone(), rx).await?;
+    Player::play(Arc::clone(&player), properties, tx.clone(), rx).await?;
 
     // Save the volume.txt file for the next session.
     InitialProperties::save_volume(player.sink.volume()).await?;

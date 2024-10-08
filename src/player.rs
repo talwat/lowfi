@@ -58,7 +58,8 @@ pub enum Messages {
     Quit,
 }
 
-const TIMEOUT: Duration = Duration::from_secs(8);
+/// The time to wait in between errors.
+const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The amount of songs to buffer up.
 const BUFFER_SIZE: usize = 5;

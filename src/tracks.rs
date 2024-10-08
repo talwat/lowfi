@@ -31,7 +31,7 @@ impl List {
     }
 
     /// Downloads a raw track, but doesn't decode it.
-    async fn download(&self, track: &str, client: &Client) -> eyre::Result<Bytes> {
+    async fn download(&self, track: &str, client: &Client) -> reqwest::Result<Bytes> {
         // If the track has a protocol, then we should ignore the base for it.
         let url = if track.contains("://") {
             track.to_owned()
@@ -46,7 +46,7 @@ impl List {
     }
 
     /// Fetches and downloads a random track from the [List].
-    pub async fn random(&self, client: &Client) -> eyre::Result<Track> {
+    pub async fn random(&self, client: &Client) -> reqwest::Result<Track> {
         let name = self.random_name();
         let data = self.download(&name, client).await?;
 

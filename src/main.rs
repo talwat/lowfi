@@ -25,6 +25,10 @@ struct Args {
     #[clap(long, short)]
     debug: bool,
 
+    /// The path to the track list file.
+    #[clap(long, short)]
+    tracks: Option<String>,
+
     /// The command that was ran.
     /// This is [None] if no command was specified.
     #[command(subcommand)]

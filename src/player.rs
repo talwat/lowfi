@@ -18,11 +18,7 @@ use tokio::{
     task,
 };
 
-use crate::{
-    play::InitialProperties,
-    tracks::{self, List},
-    Args,
-};
+use crate::{play::PersistentVolume, tracks, Args};
 
 pub mod downloader;
 pub mod ui;
@@ -151,7 +147,7 @@ impl Player {
     /// `silent` can control whether alsa's output should be redirected,
     /// but this option is only applicable on Linux, as on MacOS & Windows
     /// it will never be silent.
-    pub async fn new(silent: bool, list: List, args: &Args) -> eyre::Result<Self> {
+    pub async fn new(silent: bool, list: tracks::List, args: &Args) -> eyre::Result<Self> {
         let (_stream, handle) = if silent && cfg!(target_os = "linux") && !args.debug {
             Self::silent_get_output_stream()?
         } else {
@@ -256,7 +252,7 @@ impl Player {
     /// `list` is the list of tracks the audio server will download & play.
     pub async fn play(
         player: Arc<Self>,
-        properties: InitialProperties,
+        volume: PersistentVolume,
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
     ) -> eyre::Result<()> {
@@ -268,7 +264,7 @@ impl Player {
         Downloader::notify(&itx).await?;
 
         // Set the initial sink volume to the one specified.
-        player.set_volume(properties.volume as f32 / 100.0);
+        player.set_volume(volume.float());
 
         // Whether the last signal was a `NewSong`.
         // This is helpful, since we only want to autoplay

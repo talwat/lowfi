@@ -67,12 +67,12 @@ pub struct Player {
 
     /// The [`TrackInfo`] of the current track.
     /// This is [`None`] when lowfi is buffering/loading.
-    pub current: ArcSwapOption<tracks::Info>,
+    current: ArcSwapOption<tracks::Info>,
 
     /// This is the MPRIS server, which is initialized later on in the
     /// user interface.
     #[cfg(feature = "mpris")]
-    pub mpris: tokio::sync::OnceCell<mpris_server::Server<mpris::Player>>,
+    mpris: tokio::sync::OnceCell<mpris_server::Server<mpris::Player>>,
 
     /// The tracks, which is a [VecDeque] that holds
     /// *undecoded* [Track]s.
@@ -80,6 +80,9 @@ pub struct Player {
 
     /// The actual list of tracks to be played.
     list: tracks::List,
+
+    /// The initial volume level.
+    volume: PersistentVolume,
 
     /// The web client, which can contain a UserAgent & some
     /// settings that help lowfi work more effectively.
@@ -144,11 +147,16 @@ impl Player {
 
     /// Initializes the entire player, including audio devices & sink.
     ///
-    /// `silent` can control whether alsa's output should be redirected,
-    /// but this option is only applicable on Linux, as on MacOS & Windows
-    /// it will never be silent.
-    pub async fn new(silent: bool, list: tracks::List, args: &Args) -> eyre::Result<Self> {
-        let (_stream, handle) = if silent && cfg!(target_os = "linux") && !args.debug {
+    /// This also will load the track list & persistent volume.
+    pub async fn new(args: &Args) -> eyre::Result<Self> {
+        // Load the volume file.
+        let volume = PersistentVolume::load().await?;
+
+        // Load the track list.
+        let list = tracks::List::new(include_str!("../data/lofigirl.txt"))?;
+
+        // We should only shut up alsa forcefully if we really have to.
+        let (_stream, handle) = if cfg!(target_os = "linux") && !args.alternate && !args.debug {
             Self::silent_get_output_stream()?
         } else {
             OutputStream::try_default()?
@@ -171,6 +179,7 @@ impl Player {
                 .timeout(TIMEOUT)
                 .build()?,
             sink,
+            volume,
             list,
             _handle: handle,
             _stream,
@@ -248,11 +257,8 @@ impl Player {
     ///
     /// `rx` & `tx` are used to communicate with it, for example when to
     /// skip tracks or pause.
-    ///
-    /// `list` is the list of tracks the audio server will download & play.
     pub async fn play(
         player: Arc<Self>,
-        volume: PersistentVolume,
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
     ) -> eyre::Result<()> {
@@ -264,7 +270,7 @@ impl Player {
         Downloader::notify(&itx).await?;
 
         // Set the initial sink volume to the one specified.
-        player.set_volume(volume.float());
+        player.set_volume(player.volume.float());
 
         // Whether the last signal was a `NewSong`.
         // This is helpful, since we only want to autoplay

@@ -9,7 +9,7 @@ use tokio::{sync::mpsc, task};
 
 use crate::player::Player;
 use crate::player::{ui, Messages};
-use crate::{tracks, Args};
+use crate::Args;
 
 /// This is the representation of the persistent volume,
 /// which is loaded at startup and saved on shutdown.
@@ -72,21 +72,17 @@ impl PersistentVolume {
 /// Initializes the audio server, and then safely stops
 /// it when the frontend quits.
 pub async fn play(args: Args) -> eyre::Result<()> {
-    // Load the volume file.
-    let volume = PersistentVolume::load().await?;
-
-    // Load the track list.
-    let list = tracks::List::new(include_str!("../data/lofigirl.txt"))?;
+    // Actually initializes the player.
+    let player = Arc::new(Player::new(&args).await?);
 
     let (tx, rx) = mpsc::channel(8);
-    let player = Arc::new(Player::new(!args.alternate, list, &args).await?);
     let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args));
 
     // Sends the player an "init" signal telling it to start playing a song straight away.
     tx.send(Messages::Init).await?;
 
     // Actually starts the player.
-    Player::play(Arc::clone(&player), volume, tx.clone(), rx).await?;
+    Player::play(Arc::clone(&player), tx.clone(), rx).await?;
 
     // Save the volume.txt file for the next session.
     PersistentVolume::save(player.sink.volume()).await?;

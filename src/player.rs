@@ -10,7 +10,7 @@ use libc::freopen;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
-    select,
+    fs, select,
     sync::{
         mpsc::{Receiver, Sender},
         RwLock,
@@ -153,7 +153,12 @@ impl Player {
         let volume = PersistentVolume::load().await?;
 
         // Load the track list.
-        let list = tracks::List::new(include_str!("../data/lofigirl.txt"))?;
+        let list = if let Some(path) = &args.tracks {
+            let raw = fs::read_to_string(path).await?;
+            tracks::List::new(&raw)?
+        } else {
+            tracks::List::new(include_str!("../data/lofigirl.txt"))?
+        };
 
         // We should only shut up alsa forcefully if we really have to.
         let (_stream, handle) = if cfg!(target_os = "linux") && !args.alternate && !args.debug {

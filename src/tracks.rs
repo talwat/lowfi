@@ -9,6 +9,7 @@ use inflector::Inflector;
 use rand::Rng;
 use reqwest::Client;
 use rodio::{Decoder, Source};
+use url::form_urlencoded;
 
 /// Represents a list of tracks that can be played.
 #[derive(Clone)]
@@ -36,7 +37,7 @@ impl List {
         let url = if track.contains("://") {
             track.to_owned()
         } else {
-            format!("{}/{}", self.base(), track)
+            format!("{}{}", self.base(), track)
         };
 
         let response = client.get(url).send().await?;
@@ -55,15 +56,17 @@ impl List {
 
     /// Parses text into a [List].
     ///
-    /// In [List]'s, the first line should be the base URL,
-    /// followed by the rest of the tracks.
+    /// In [List]'s, the first line should be the base URL, followed
+    /// by the rest of the tracks.
     ///
-    /// Each track will be first appended to the base URL,
-    /// and then the result use to download the track.
+    /// Each track will be first appended to the base URL, and then
+    /// the result use to download the track.
     ///
-    /// The exception to this is if the track name
-    /// begins with something like `https://`,
-    /// where in that case the base will not be prepended to it.
+    /// lowfi won't put a `/` between the base & track for added flexibility,
+    /// so for most cases you should have a trailing `/` in your base url.
+    ///
+    /// The exception to this is if the track name begins with something like
+    /// `https://`, where in that case the base will not be prepended to it.
     pub fn new(text: &str) -> eyre::Result<Self> {
         let lines: Vec<String> = text
             .split_ascii_whitespace()
@@ -92,28 +95,36 @@ pub struct Info {
 }
 
 impl Info {
+    /// Decodes a URL string into normal UTF-8.
+    fn decode_url(text: &str) -> String {
+        form_urlencoded::parse(text.as_bytes())
+            .map(|(key, val)| [key, val].concat())
+            .collect()
+    }
+
     /// Formats a name with [Inflector].
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks.
     fn format_name(name: &str) -> String {
-        let mut formatted = name
-            .split("/")
-            .last()
-            .unwrap()
-            .strip_suffix(".mp3")
-            .unwrap()
-            .to_lowercase()
-            .to_title_case()
-            // Inflector doesn't like contractions...
-            // Replaces a few very common ones.
-            // TODO: Properly handle these.
-            .replace(" S ", "'s ")
-            .replace(" T ", "'t ")
-            .replace(" D ", "'d ")
-            .replace(" Ve ", "'ve ")
-            .replace(" Ll ", "'ll ")
-            .replace(" Re ", "'re ")
-            .replace(" M ", "'m ");
+        let mut formatted = Self::decode_url(
+            name.split("/")
+                .last()
+                .unwrap()
+                .strip_suffix(".mp3")
+                .unwrap(),
+        )
+        .to_lowercase()
+        .to_title_case()
+        // Inflector doesn't like contractions...
+        // Replaces a few very common ones.
+        // TODO: Properly handle these.
+        .replace(" S ", "'s ")
+        .replace(" T ", "'t ")
+        .replace(" D ", "'d ")
+        .replace(" Ve ", "'ve ")
+        .replace(" Ll ", "'ll ")
+        .replace(" Re ", "'re ")
+        .replace(" M ", "'m ");
 
         // This is incremented for each digit in front of the song name.
         let mut skip = 0;

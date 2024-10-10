@@ -1330,6 +1330,7 @@ dependencies = [
  "rodio",
  "scraper",
  "tokio",
+ "url",
 ]
 
 [[package]]

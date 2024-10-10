@@ -12,6 +12,21 @@ use rodio::{Decoder, Source};
 use url::form_urlencoded;
 
 /// Represents a list of tracks that can be played.
+/// 
+/// # Format
+/// 
+/// In [List]'s, the first line should be the base URL, followed
+/// by the rest of the tracks.
+///
+/// Each track will be first appended to the base URL, and then
+/// the result use to download the track. All tracks should end
+/// in `.mp3` and as such must be in the MP3 format.
+///
+/// lowfi won't put a `/` between the base & track for added flexibility,
+/// so for most cases you should have a trailing `/` in your base url.
+///
+/// The exception to this is if the track name begins with something like
+/// `https://`, where in that case the base will not be prepended to it.
 #[derive(Clone)]
 pub struct List {
     lines: Vec<String>,
@@ -55,19 +70,6 @@ impl List {
     }
 
     /// Parses text into a [List].
-    ///
-    /// In [List]'s, the first line should be the base URL, followed
-    /// by the rest of the tracks.
-    ///
-    /// Each track will be first appended to the base URL, and then
-    /// the result use to download the track. All tracks should end
-    /// in `.mp3` and as such must be in the MP3 format.
-    ///
-    /// lowfi won't put a `/` between the base & track for added flexibility,
-    /// so for most cases you should have a trailing `/` in your base url.
-    ///
-    /// The exception to this is if the track name begins with something like
-    /// `https://`, where in that case the base will not be prepended to it.
     pub fn new(text: &str) -> eyre::Result<Self> {
         let lines: Vec<String> = text
             .split_ascii_whitespace()

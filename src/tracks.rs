@@ -60,7 +60,8 @@ impl List {
     /// by the rest of the tracks.
     ///
     /// Each track will be first appended to the base URL, and then
-    /// the result use to download the track.
+    /// the result use to download the track. All tracks should end
+    /// in `.mp3` and as such must be in the MP3 format.
     ///
     /// lowfi won't put a `/` between the base & track for added flexibility,
     /// so for most cases you should have a trailing `/` in your base url.

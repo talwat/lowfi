@@ -80,6 +80,21 @@ cargo build --release
 
 Yeah, that's it. Controls are documented in the app.
 
+### Volume Control
+
+Press `+` or `-` to increase or decrease the volume respectively.
+
+### Options
+
+| options          | description                                 |
+| ---------------- | ------------------------------------------- |
+| -a, --alternate  | Whether to use an alternate terminal screen |
+| -m, --minimalist | Whether to hide the bottom control bar      |
+| -p, --paused     | Whether to start lowfi paused               |
+| -d, --debug      | Whether to include ALSA & other logs        |
+| -h, --help       | Print help                                  |
+| -V, --version    | Print version                               |
+
 ### Extra Flags
 
 If you have something you'd like to tweak about lowfi, you can run `lowfi help`

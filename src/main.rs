@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{ Parser, Subcommand };
 
 mod play;
 mod player;
@@ -7,7 +7,14 @@ mod tracks;
 
 /// An extremely simple lofi player.
 #[derive(Parser)]
-#[command(about, version)]
+#[command(
+    about = "An extremely simple lofi player with volume control.",
+    version,
+    long_about = "An extremely simple lofi player.\n\n\
+    VOLUME CONTROL:\n\
+    Use `+` to increase the volume and `-` to decrease the volume.\n\
+    The volume controls are active during playback."
+)]
 struct Args {
     /// Whether to use an alternate terminal screen.
     #[clap(long, short)]
@@ -52,10 +59,8 @@ async fn main() -> eyre::Result<()> {
 
     if let Some(command) = cli.command {
         match command {
-            Commands::Scrape {
-                extension,
-                include_full,
-            } => scrape::scrape(extension, include_full).await,
+            Commands::Scrape { extension, include_full } =>
+                scrape::scrape(extension, include_full).await,
         }
     } else {
         play::play(cli).await

@@ -10,7 +10,7 @@ use libc::freopen;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
-    select,
+    fs, select,
     sync::{
         mpsc::{Receiver, Sender},
         RwLock,
@@ -18,11 +18,7 @@ use tokio::{
     task,
 };
 
-use crate::{
-    play::InitialProperties,
-    tracks::{DecodedTrack, Track, TrackInfo},
-    Args,
-};
+use crate::{play::PersistentVolume, tracks, Args};
 
 pub mod downloader;
 pub mod ui;
@@ -58,7 +54,8 @@ pub enum Messages {
     Quit,
 }
 
-const TIMEOUT: Duration = Duration::from_secs(8);
+/// The time to wait in between errors.
+const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The amount of songs to buffer up.
 const BUFFER_SIZE: usize = 5;
@@ -70,16 +67,22 @@ pub struct Player {
 
     /// The [`TrackInfo`] of the current track.
     /// This is [`None`] when lowfi is buffering/loading.
-    pub current: ArcSwapOption<TrackInfo>,
+    current: ArcSwapOption<tracks::Info>,
 
     /// This is the MPRIS server, which is initialized later on in the
     /// user interface.
     #[cfg(feature = "mpris")]
-    pub mpris: tokio::sync::OnceCell<mpris_server::Server<mpris::Player>>,
+    mpris: tokio::sync::OnceCell<mpris_server::Server<mpris::Player>>,
 
     /// The tracks, which is a [VecDeque] that holds
     /// *undecoded* [Track]s.
-    tracks: RwLock<VecDeque<Track>>,
+    tracks: RwLock<VecDeque<tracks::Track>>,
+
+    /// The actual list of tracks to be played.
+    list: tracks::List,
+
+    /// The initial volume level.
+    volume: PersistentVolume,
 
     /// The web client, which can contain a UserAgent & some
     /// settings that help lowfi work more effectively.
@@ -126,7 +129,7 @@ impl Player {
     }
 
     /// Just a shorthand for setting `current`.
-    async fn set_current(&self, info: TrackInfo) -> eyre::Result<()> {
+    async fn set_current(&self, info: tracks::Info) -> eyre::Result<()> {
         self.current.store(Some(Arc::new(info)));
 
         Ok(())
@@ -144,11 +147,33 @@ impl Player {
 
     /// Initializes the entire player, including audio devices & sink.
     ///
-    /// `silent` can control whether alsa's output should be redirected,
-    /// but this option is only applicable on Linux, as on MacOS & Windows
-    /// it will never be silent.
-    pub async fn new(silent: bool, args: &Args) -> eyre::Result<Self> {
-        let (_stream, handle) = if silent && cfg!(target_os = "linux") && !args.debug {
+    /// This also will load the track list & persistent volume.
+    pub async fn new(args: &Args) -> eyre::Result<Self> {
+        // Load the volume file.
+        let volume = PersistentVolume::load().await?;
+
+        // Load the track list.
+        let list = if let Some(arg) = &args.tracks {
+            // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
+            let name = dirs::data_dir()
+                .unwrap()
+                .join("lowfi")
+                .join(arg)
+                .join(".txt");
+
+            let raw = if name.exists() {
+                fs::read_to_string(name).await?
+            } else {
+                fs::read_to_string(arg).await?
+            };
+
+            tracks::List::new(&raw)?
+        } else {
+            tracks::List::new(include_str!("../data/lofigirl.txt"))?
+        };
+
+        // We should only shut up alsa forcefully if we really have to.
+        let (_stream, handle) = if cfg!(target_os = "linux") && !args.alternate && !args.debug {
             Self::silent_get_output_stream()?
         } else {
             OutputStream::try_default()?
@@ -171,6 +196,8 @@ impl Player {
                 .timeout(TIMEOUT)
                 .build()?,
             sink,
+            volume,
+            list,
             _handle: handle,
             _stream,
 
@@ -182,12 +209,12 @@ impl Player {
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.
-    pub async fn next(&self) -> eyre::Result<DecodedTrack> {
+    pub async fn next(&self) -> eyre::Result<tracks::Decoded> {
         let track = match self.tracks.write().await.pop_front() {
             Some(x) => x,
             // If the queue is completely empty, then fallback to simply getting a new track.
             // This is relevant particularly at the first song.
-            None => Track::random(&self.client).await?,
+            None => self.list.random(&self.client).await?,
         };
 
         let decoded = track.decode()?;
@@ -249,7 +276,6 @@ impl Player {
     /// skip tracks or pause.
     pub async fn play(
         player: Arc<Self>,
-        properties: InitialProperties,
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
     ) -> eyre::Result<()> {
@@ -261,7 +287,7 @@ impl Player {
         Downloader::notify(&itx).await?;
 
         // Set the initial sink volume to the one specified.
-        player.set_volume(properties.volume as f32 / 100.0);
+        player.set_volume(player.volume.float());
 
         // Whether the last signal was a `NewSong`.
         // This is helpful, since we only want to autoplay

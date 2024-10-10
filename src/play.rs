@@ -11,17 +11,15 @@ use crate::player::Player;
 use crate::player::{ui, Messages};
 use crate::Args;
 
-/// The attributes that are applied at startup.
-/// This includes the volume, but also the config file.
-///
-/// The volume is seperated from the config since it specifically
-/// will be written by lowfi, whereas the config will not.
-pub struct InitialProperties {
+/// This is the representation of the persistent volume,
+/// which is loaded at startup and saved on shutdown.
+#[derive(Clone, Copy)]
+pub struct PersistentVolume {
     /// The volume, as a percentage.
-    pub volume: u16,
+    inner: u16,
 }
 
-impl InitialProperties {
+impl PersistentVolume {
     /// Retrieves the config directory.
     async fn config() -> eyre::Result<PathBuf> {
         let config = dirs::config_dir()
@@ -35,10 +33,14 @@ impl InitialProperties {
         Ok(config)
     }
 
-    /// Loads the [InitialProperties], including the config and volume file.
+    /// Returns the volume as a float from 0 to 1.
+    pub fn float(&self) -> f32 {
+        self.inner as f32 / 100.0
+    }
+
+    /// Loads the [PersistentVolume] from [dirs::config_dir()].
     pub async fn load() -> eyre::Result<Self> {
         let config = Self::config().await?;
-
         let volume = config.join(PathBuf::from("volume.txt"));
 
         // Basically just read from the volume file if it exists, otherwise return 100.
@@ -54,11 +56,11 @@ impl InitialProperties {
             100u16
         };
 
-        Ok(InitialProperties { volume })
+        Ok(PersistentVolume { inner: volume })
     }
 
-    /// Saves `volume.txt`, and uses the home directory which was previously acquired.
-    pub async fn save_volume(volume: f32) -> eyre::Result<()> {
+    /// Saves `volume` to `volume.txt`.
+    pub async fn save(volume: f32) -> eyre::Result<()> {
         let config = Self::config().await?;
         let path = config.join(PathBuf::from("volume.txt"));
 
@@ -71,19 +73,20 @@ impl InitialProperties {
 /// Initializes the audio server, and then safely stops
 /// it when the frontend quits.
 pub async fn play(args: Args) -> eyre::Result<()> {
-    // Load the initial properties (volume & config).
-    let properties = InitialProperties::load().await?;
+    // Actually initializes the player.
+    let player = Arc::new(Player::new(&args).await?);
 
     let (tx, rx) = mpsc::channel(8);
-    let player = Arc::new(Player::new(!args.alternate, &args).await?);
     let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args));
 
+    // Sends the player an "init" signal telling it to start playing a song straight away.
     tx.send(Messages::Init).await?;
 
-    Player::play(Arc::clone(&player), properties, tx.clone(), rx).await?;
+    // Actually starts the player.
+    Player::play(Arc::clone(&player), tx.clone(), rx).await?;
 
     // Save the volume.txt file for the next session.
-    InitialProperties::save_volume(player.sink.volume()).await?;
+    PersistentVolume::save(player.sink.volume()).await?;
     player.sink.stop();
     ui.abort();
 

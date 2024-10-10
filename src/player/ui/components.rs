@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use crossterm::style::Stylize;
 
-use crate::{player::Player, tracks::TrackInfo};
+use crate::{player::Player, tracks::Info};
 
 /// Small helper function to format durations.
 pub fn format_duration(duration: &Duration) -> String {
@@ -51,8 +51,8 @@ pub fn audio_bar(volume: f32, percentage: &str, width: usize) -> String {
 
 /// This represents the main "action" bars state.
 enum ActionBar {
-    Paused(TrackInfo),
-    Playing(TrackInfo),
+    Paused(Info),
+    Playing(Info),
     Loading,
 }
 

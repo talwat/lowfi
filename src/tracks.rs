@@ -12,9 +12,9 @@ use rodio::{Decoder, Source};
 use url::form_urlencoded;
 
 /// Represents a list of tracks that can be played.
-/// 
+///
 /// # Format
-/// 
+///
 /// In [List]'s, the first line should be the base URL, followed
 /// by the rest of the tracks.
 ///
@@ -24,7 +24,6 @@ use url::form_urlencoded;
 ///
 /// lowfi won't put a `/` between the base & track for added flexibility,
 /// so for most cases you should have a trailing `/` in your base url.
-///
 /// The exception to this is if the track name begins with something like
 /// `https://`, where in that case the base will not be prepended to it.
 #[derive(Clone)]
@@ -109,7 +108,7 @@ impl Info {
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks.
     fn format_name(name: &str) -> String {
-        let mut formatted = Self::decode_url(
+        let formatted = Self::decode_url(
             name.split("/")
                 .last()
                 .unwrap()
@@ -132,9 +131,7 @@ impl Info {
         // This is incremented for each digit in front of the song name.
         let mut skip = 0;
 
-        // SAFETY: All of the track names originate with the `'static` lifetime,
-        // SAFETY: so basically this has already been checked.
-        for character in unsafe { formatted.as_bytes_mut() } {
+        for character in formatted.as_bytes() {
             if character.is_ascii_digit() {
                 skip += 1;
             } else {

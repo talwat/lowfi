@@ -153,8 +153,20 @@ impl Player {
         let volume = PersistentVolume::load().await?;
 
         // Load the track list.
-        let list = if let Some(path) = &args.tracks {
-            let raw = fs::read_to_string(path).await?;
+        let list = if let Some(arg) = &args.tracks {
+            // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
+            let name = dirs::data_dir()
+                .unwrap()
+                .join("lowfi")
+                .join(arg)
+                .join(".txt");
+
+            let raw = if name.exists() {
+                fs::read_to_string(name).await?
+            } else {
+                fs::read_to_string(arg).await?
+            };
+
             tracks::List::new(&raw)?
         } else {
             tracks::List::new(include_str!("../data/lofigirl.txt"))?

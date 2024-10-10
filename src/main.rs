@@ -25,7 +25,7 @@ struct Args {
     #[clap(long, short)]
     debug: bool,
 
-    /// The path to the track list file.
+    /// This is either a path, or a name of a file in the data directory (eg. ~/.local/share/lowfi).
     #[clap(long, short)]
     tracks: Option<String>,
 

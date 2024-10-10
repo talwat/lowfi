@@ -96,3 +96,42 @@ An example of scrape is as follows,
 `lowfi scrape --extension zip --include-full`
 
 where more information can be found by running `lowfi help scrape`.
+
+### Custom Track Lists
+
+lowfi also can support custom track lists, although the default one with Lofi Girl's
+is embedded into the binary.
+
+To use a cusotm list, use the `--tracks` flag. This can either be a path to some file,
+or it could also be the name of a file (without the `.txt` extension) in the data
+directory, so on Linux it's `~/.local/share/lowfi`.
+
+For example, `lowfi --tracks minipop` would load `~/.local/share/lowfi/minipop.txt`.
+Whereas if you did `lowfi --tracks /home/user/Music/minipop.txt` it would load from that
+specified directory.
+
+#### The Format
+
+In List's, the first line should be the base URL, followed by the rest of the tracks.
+
+Each track will be first appended to the base URL, and then the result use to download
+the track. All tracks should end in `.mp3` and as such must be in the MP3 format.
+
+lowfi won't put a `/` between the base & track for added flexibility, so for most cases you
+should have a trailing `/` in your base url. The exception to this is if the track name begins
+with something like `https://`, where in that case the base will not be prepended to it.
+
+For example, in this list:
+
+```txt
+https://lofigirl.com/wp-content/uploads/
+2023/06/01-gCoope-Odd-Panda-Passing-Time.mp3
+2023/06/01-Sample-Track.mp3
+```
+
+lowfi would download from this URL:
+`https://lofigirl.com/wp-content/uploads/2023/06/01-gCoope-Odd-Panda-Passing-Time.mp3`
+
+or this one:
+
+`https://lofigirl.com/wp-content/uploads/2023/06/01-Sample-Track.mp3`

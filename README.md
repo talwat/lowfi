@@ -78,7 +78,16 @@ cargo build --release
 
 `lowfi`
 
-Yeah, that's it. Controls are documented in the app.
+Yeah, that's it.
+
+### Controls
+
+| Key   | Function       |
+|-------|----------------|
+|  `s`  | Skip song      |
+|  `p`  | Play/Pause     |
+| `+/-` | Volume Up/Down |
+|  `q`  | Quit           |
 
 ### Extra Flags
 

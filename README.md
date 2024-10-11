@@ -130,8 +130,13 @@ https://lofigirl.com/wp-content/uploads/
 ```
 
 lowfi would download from this URL:
-`https://lofigirl.com/wp-content/uploads/2023/06/01-gCoope-Odd-Panda-Passing-Time.mp3`
 
-or this one:
+```txt
+https://lofigirl.com/wp-content/uploads/2023/06/01-gCoope-Odd-Panda-Passing-Time.mp3`
+```
 
-`https://lofigirl.com/wp-content/uploads/2023/06/01-Sample-Track.mp3`
+Or this one:
+
+```txt
+https://lofigirl.com/wp-content/uploads/2023/06/01-Sample-Track.mp3
+```

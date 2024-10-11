@@ -81,12 +81,12 @@ cargo build --release
 Yeah, that's it.
 
 ### Controls
-| key                | function       |
-|--------------------|----------------|
-|  `s`               | skip song      |
-|  `p`               | play/pause     |
-| `+/-` or `up/down` | volume up/down |
-|  `q`               | quit           |
+| key   | function       |
+|-------|----------------|
+|  `s`  | skip song      |
+|  `p`  | play/pause     |
+| `+/-` | volume up/down |
+|  `q`  | quit           |
 
 ### Extra Flags
 

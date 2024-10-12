@@ -48,6 +48,12 @@ pub enum Messages {
     /// Similar to Next, but specific to the first track.
     Init,
 
+    /// Unpause the [Sink].
+    Play,
+
+    /// Pauses the [Sink].
+    Pause,
+
     /// Pauses the [Sink]. This will also unpause it if it is paused.
     PlayPause,
 
@@ -304,6 +310,12 @@ impl Player {
                     // Handle the rest of the signal in the background,
                     // as to not block the main audio thread.
                     task::spawn(Self::handle_next(player.clone(), itx.clone(), tx.clone()));
+                }
+                Messages::Play => {
+                    player.sink.play();
+                }
+                Messages::Pause => {
+                    player.sink.pause();
                 }
                 Messages::PlayPause => {
                     if player.sink.is_paused() {

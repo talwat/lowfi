@@ -125,18 +125,12 @@ For example, in this list:
 
 ```txt
 https://lofigirl.com/wp-content/uploads/
-2023/06/01-gCoope-Odd-Panda-Passing-Time.mp3
-2023/06/01-Sample-Track.mp3
+2023/06/Foudroie-Finding-The-Edge-V2.mp3
+https://file-examples.com/storage/fea570b16e6703ef79e65b4/2017/11/file_example_MP3_5MG.mp3
 ```
 
-lowfi would download from this URL:
+lowfi would download these three URLs:
 
-```txt
-https://lofigirl.com/wp-content/uploads/2023/06/01-gCoope-Odd-Panda-Passing-Time.mp3`
-```
-
-Or this one:
-
-```txt
-https://lofigirl.com/wp-content/uploads/2023/06/01-Sample-Track.mp3
-```
+- `https://lofigirl.com/wp-content/uploads/2023/06/Foudroie-Finding-The-Edge-V2.mp3`
+- `https://file-examples.com/storage/fea570b16e6703ef79e65b4/2017/11/file_example_MP3_5MG.mp3`
+- `https://lofigirl.com/wp-content/uploads/2023/04/2-In-Front-Of-Me.mp3`

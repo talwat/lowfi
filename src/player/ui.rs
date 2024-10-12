@@ -88,7 +88,7 @@ async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
                 event::MediaKeyCode::Play => Messages::PlayPause,
                 event::MediaKeyCode::Pause => Messages::PlayPause,
                 event::MediaKeyCode::PlayPause => Messages::PlayPause,
-                event::MediaKeyCode::Stop => Messages::PlayPause,
+                event::MediaKeyCode::Stop => Messages::Pause,
                 event::MediaKeyCode::TrackNext => Messages::Next,
                 event::MediaKeyCode::LowerVolume => Messages::ChangeVolume(-0.1),
                 event::MediaKeyCode::RaiseVolume => Messages::ChangeVolume(0.1),

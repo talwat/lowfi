@@ -66,14 +66,14 @@ impl ActionBar {
             Self::Loading => ("loading", None),
         };
 
-        let len = word.chars().size_hint().1.unwrap();
-
         subject.map_or_else(
-            || (word.to_owned(), len),
+            || (word.to_owned(), word.len()),
             |subject| {
+                let len = subject.chars().size_hint().1.unwrap();
+
                 (
                     format!("{} {}", word, subject.clone().bold()),
-                    len + 1 + subject.len(),
+                    word.len() + 1 + len,
                 )
             },
         )

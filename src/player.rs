@@ -18,7 +18,11 @@ use tokio::{
     task,
 };
 
-use crate::{play::PersistentVolume, tracks, Args};
+use crate::{
+    play::PersistentVolume,
+    tracks::{self, list::List},
+    Args,
+};
 
 pub mod downloader;
 pub mod ui;
@@ -79,7 +83,7 @@ pub struct Player {
     tracks: RwLock<VecDeque<tracks::Track>>,
 
     /// The actual list of tracks to be played.
-    list: tracks::List,
+    list: List,
 
     /// The initial volume level.
     volume: PersistentVolume,
@@ -167,9 +171,9 @@ impl Player {
                 fs::read_to_string(arg).await?
             };
 
-            tracks::List::new(&raw)?
+            List::new(&raw)?
         } else {
-            tracks::List::new(include_str!("../data/lofigirl.txt"))?
+            List::new(include_str!("../data/lofigirl.txt"))?
         };
 
         // We should only shut up alsa forcefully if we really have to.

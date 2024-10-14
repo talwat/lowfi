@@ -99,6 +99,15 @@ where more information can be found by running `lowfi help scrape`.
 
 ### Custom Track Lists
 
+> [!WARNING]
+>
+> Custom track lists are going to be pretty particular.
+> This is because I still want to keep `lowfi` as simple as possible,
+> so custom lists will be very similar to how the built in list functions.
+>
+> This also means that there will be no added flexibility to these lists,
+> so you'll have to work that out on your own.
+
 lowfi also can support custom track lists, although the default one with Lofi Girl's
 is embedded into the binary.
 

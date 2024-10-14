@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use rand::Rng;
 use reqwest::Client;
+use tokio::fs;
 
 use super::Track;
 
@@ -69,5 +70,27 @@ impl List {
             .collect();
 
         Ok(Self { lines })
+    }
+
+    /// Reads a [List] from the filesystem using the CLI argument provided.
+    pub async fn load(tracks: &Option<String>) -> eyre::Result<Self> {
+        if let Some(arg) = tracks {
+            // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
+            let name = dirs::data_dir()
+                .unwrap()
+                .join("lowfi")
+                .join(arg)
+                .join(".txt");
+
+            let raw = if name.exists() {
+                fs::read_to_string(name).await?
+            } else {
+                fs::read_to_string(arg).await?
+            };
+
+            List::new(&raw)
+        } else {
+            List::new(include_str!("../../data/lofigirl.txt"))
+        }
     }
 }

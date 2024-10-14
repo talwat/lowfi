@@ -10,7 +10,7 @@ use libc::freopen;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
-    fs, select,
+    select,
     sync::{
         mpsc::{Receiver, Sender},
         RwLock,
@@ -157,24 +157,7 @@ impl Player {
         let volume = PersistentVolume::load().await?;
 
         // Load the track list.
-        let list = if let Some(arg) = &args.tracks {
-            // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
-            let name = dirs::data_dir()
-                .unwrap()
-                .join("lowfi")
-                .join(arg)
-                .join(".txt");
-
-            let raw = if name.exists() {
-                fs::read_to_string(name).await?
-            } else {
-                fs::read_to_string(arg).await?
-            };
-
-            List::new(&raw)?
-        } else {
-            List::new(include_str!("../data/lofigirl.txt"))?
-        };
+        let list = List::load(&args.tracks).await?;
 
         // We should only shut up alsa forcefully if we really have to.
         let (_stream, handle) = if cfg!(target_os = "linux") && !args.alternate && !args.debug {

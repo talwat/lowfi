@@ -26,7 +26,7 @@ struct Args {
     debug: bool,
 
     /// This is either a path, or a name of a file in the data directory (eg. ~/.local/share/lowfi).
-    #[clap(long, short)]
+    #[clap(long, short, alias = "list", short_alias = 'l')]
     tracks: Option<String>,
 
     /// The command that was ran.

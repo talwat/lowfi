@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use crossterm::style::Stylize;
-use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{player::Player, tracks::Info};
 
@@ -62,19 +61,17 @@ impl ActionBar {
     /// The second value is the character length of the result.
     fn format(&self) -> (String, usize) {
         let (word, subject) = match self {
-            Self::Playing(x) => ("playing", Some(x.name.clone())),
-            Self::Paused(x) => ("paused", Some(x.name.clone())),
+            Self::Playing(x) => ("playing", Some((x.name.clone(), x.name_len))),
+            Self::Paused(x) => ("paused", Some((x.name.clone(), x.name_len))),
             Self::Loading => ("loading", None),
         };
 
         subject.map_or_else(
             || (word.to_owned(), word.len()),
-            |subject| {
-                let graphemes = subject.graphemes(true).collect::<Vec<&str>>();
-
+            |(subject, len)| {
                 (
                     format!("{} {}", word, subject.clone().bold()),
-                    word.len() + 1 + graphemes.len(),
+                    word.len() + 1 + len,
                 )
             },
         )

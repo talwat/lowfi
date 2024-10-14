@@ -9,6 +9,7 @@ use inflector::Inflector;
 use rand::Rng;
 use reqwest::Client;
 use rodio::{Decoder, Source};
+use unicode_segmentation::UnicodeSegmentation;
 use url::form_urlencoded;
 
 /// Represents a list of tracks that can be played.
@@ -91,6 +92,9 @@ pub struct Info {
     /// This is a formatted name, so it doesn't include the full path.
     pub name: String,
 
+    /// This is the *actual* length of the name, counted with unicode characters in mind.
+    pub name_len: usize,
+
     /// The duration of the track, this is an [Option] because there are
     /// cases where the duration of a track is unknown.
     pub duration: Option<Duration>,
@@ -144,9 +148,13 @@ impl Info {
 
     /// Creates a new [`TrackInfo`] from a raw name & decoded track data.
     pub fn new(name: String, decoded: &DecodedData) -> Self {
+        let name = Self::format_name(&name);
+        let graphemes = name.graphemes(true).collect::<Vec<&str>>();
+
         Self {
             duration: decoded.total_duration(),
-            name: Self::format_name(&name),
+            name_len: graphemes.len(),
+            name,
         }
     }
 }

@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use crossterm::style::Stylize;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{player::Player, tracks::Info};
 
@@ -69,11 +70,11 @@ impl ActionBar {
         subject.map_or_else(
             || (word.to_owned(), word.len()),
             |subject| {
-                let len = subject.chars().size_hint().1.unwrap();
+                let graphemes = subject.graphemes(true).collect::<Vec<&str>>();
 
                 (
                     format!("{} {}", word, subject.clone().bold()),
-                    word.len() + 1 + len,
+                    word.len() + 1 + graphemes.len(),
                 )
             },
         )

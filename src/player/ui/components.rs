@@ -61,8 +61,8 @@ impl ActionBar {
     /// The second value is the character length of the result.
     fn format(&self) -> (String, usize) {
         let (word, subject) = match self {
-            Self::Playing(x) => ("playing", Some((x.name.clone(), x.name_len))),
-            Self::Paused(x) => ("paused", Some((x.name.clone(), x.name_len))),
+            Self::Playing(x) => ("playing", Some((x.name.clone(), x.width))),
+            Self::Paused(x) => ("paused", Some((x.name.clone(), x.width))),
             Self::Loading => ("loading", None),
         };
 

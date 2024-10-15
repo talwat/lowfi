@@ -184,17 +184,19 @@ impl Player {
             sink.pause();
         }
 
+        let client = Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .timeout(TIMEOUT)
+            .build()?;
+
         let player = Self {
             tracks: RwLock::new(VecDeque::with_capacity(5)),
             current: ArcSwapOption::new(None),
-            client: Client::builder()
-                .user_agent(concat!(
-                    env!("CARGO_PKG_NAME"),
-                    "/",
-                    env!("CARGO_PKG_VERSION")
-                ))
-                .timeout(TIMEOUT)
-                .build()?,
+            client,
             sink,
             volume,
             list,

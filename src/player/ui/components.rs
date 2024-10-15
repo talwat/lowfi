@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{ops::Deref, sync::Arc, time::Duration};
 
 use crossterm::style::Stylize;
 
@@ -13,12 +13,16 @@ pub fn format_duration(duration: &Duration) -> String {
 }
 
 /// Creates the progress bar, as well as all the padding needed.
-pub fn progress_bar(player: &Player, width: usize) -> String {
+pub fn progress_bar(player: &Player, current: Option<&Arc<Info>>, width: usize) -> String {
     let mut duration = Duration::new(0, 0);
-    let elapsed = player.sink.get_pos();
+    let elapsed = if current.is_some() {
+        player.sink.get_pos()
+    } else {
+        Duration::new(0, 0)
+    };
 
     let mut filled = 0;
-    if let Some(current) = player.current.load().as_ref() {
+    if let Some(current) = current {
         if let Some(x) = current.duration {
             duration = x;
 
@@ -80,17 +84,15 @@ impl ActionBar {
 
 /// Creates the top/action bar, which has the name of the track and it's status.
 /// This also creates all the needed padding.
-pub fn action(player: &Player, width: usize) -> String {
-    let (main, len) = player
-        .current
-        .load()
-        .as_ref()
-        .map_or(ActionBar::Loading, |x| {
-            let name = (*Arc::clone(x)).clone();
+pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> String {
+    let (main, len) = current
+        .map_or(ActionBar::Loading, |info| {
+            let info = info.deref().clone();
+
             if player.sink.is_paused() {
-                ActionBar::Paused(name)
+                ActionBar::Paused(info)
             } else {
-                ActionBar::Playing(name)
+                ActionBar::Playing(info)
             }
         })
         .format();

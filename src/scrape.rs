@@ -1,4 +1,7 @@
 //! Has all of the functions for the `scrape` command.
+//!
+//! This command is completely optional, and as such isn't subject to the same
+//! quality standards as the rest of the codebase.
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use lazy_static::lazy_static;

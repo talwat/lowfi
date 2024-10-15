@@ -1,3 +1,6 @@
+//! The module containing all of the logic behind track lists,
+//! as well as obtaining track names & downloading the raw mp3 data.
+
 use bytes::Bytes;
 use rand::Rng;
 use reqwest::Client;
@@ -7,19 +10,7 @@ use super::Track;
 
 /// Represents a list of tracks that can be played.
 ///
-/// # Format
-///
-/// In [List]'s, the first line should be the base URL, followed
-/// by the rest of the tracks.
-///
-/// Each track will be first appended to the base URL, and then
-/// the result use to download the track. All tracks should end
-/// in `.mp3` and as such must be in the MP3 format.
-///
-/// lowfi won't put a `/` between the base & track for added flexibility,
-/// so for most cases you should have a trailing `/` in your base url.
-/// The exception to this is if the track name begins with something like
-/// `https://`, where in that case the base will not be prepended to it.
+/// See the [README](https://github.com/talwat/lowfi?tab=readme-ov-file#the-format) for more details about the format.
 #[derive(Clone)]
 pub struct List {
     lines: Vec<String>,

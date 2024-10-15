@@ -47,9 +47,13 @@ const FRAME_DELTA: f32 = 1.0 / FPS as f32;
 lazy_static! {
     /// The volume timer, which controls how long the volume display should
     /// show up and when it should disappear.
+    ///
+    /// When this is 0, it means that the audio bar shouldn't be displayed.
+    /// To make it start counting, you need to set it to 1.
     static ref VOLUME_TIMER: AtomicUsize = AtomicUsize::new(0);
 }
 
+/// Recieves input from the terminal for various events.
 async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
     let mut reader = EventStream::new();
 
@@ -110,26 +114,32 @@ async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
 
 /// The code for the terminal interface itself.
 ///
-/// `volume_timer` is a bit strange, but it tracks how long the `volume` bar
-/// has been displayed for, so that it's only displayed for a certain amount of frames.
+/// * `minimalist` - All this does is hide the bottom control bar.
 async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
     let mut stdout = std::io::stdout();
 
     loop {
-        let action = components::action(&player, WIDTH);
+        // Load `current` once so that it doesn't have to be loaded over and over
+        // again by different UI components.
+        let current = player.current.load();
+        let current = current.as_ref();
 
-        let timer = VOLUME_TIMER.load(Ordering::Relaxed);
+        let action = components::action(&player, current, WIDTH);
+
         let volume = player.sink.volume();
         let percentage = format!("{}%", (volume * 100.0).round().abs());
 
+        let timer = VOLUME_TIMER.load(Ordering::Relaxed);
         let middle = match timer {
-            0 => components::progress_bar(&player, WIDTH - 16),
+            0 => components::progress_bar(&player, current, WIDTH - 16),
             _ => components::audio_bar(volume, &percentage, WIDTH - 17),
         };
 
         if timer > 0 && timer <= AUDIO_BAR_DURATION {
+            // We'll keep increasing the timer until it eventually hits `AUDIO_BAR_DURATION`.
             VOLUME_TIMER.fetch_add(1, Ordering::Relaxed);
         } else if timer > AUDIO_BAR_DURATION {
+            // If enough time has passed, we'll reset it back to 0.
             VOLUME_TIMER.store(0, Ordering::Relaxed);
         }
 

@@ -105,3 +105,51 @@ An example of scrape is as follows,
 `lowfi scrape --extension zip --include-full`
 
 where more information can be found by running `lowfi help scrape`.
+
+### Custom Track Lists
+
+> [!WARNING]
+>
+> Custom track lists are going to be pretty particular.
+> This is because I still want to keep `lowfi` as simple as possible,
+> so custom lists will be very similar to how the built in list functions.
+>
+> This also means that there will be no added flexibility to these lists,
+> so you'll have to work that out on your own.
+
+lowfi also can support custom track lists, although the default one with Lofi Girl's
+is embedded into the binary.
+
+To use a custom list, use the `--tracks` flag. This can either be a path to some file,
+or it could also be the name of a file (without the `.txt` extension) in the data
+directory, so on Linux it's `~/.local/share/lowfi`.
+
+For example, `lowfi --tracks minipop` would load `~/.local/share/lowfi/minipop.txt`.
+Whereas if you did `lowfi --tracks /home/user/Music/minipop.txt` it would load from that
+specified directory.
+
+#### The Format
+
+In List's, the first line should be the base URL, followed by the rest of the tracks.
+
+Each track will be first appended to the base URL, and then the result use to download
+the track. All tracks should end in `.mp3` and as such must be in the MP3 format.
+
+lowfi won't put a `/` between the base & track for added flexibility, so for most cases you
+should have a trailing `/` in your base url. The exception to this is if the track name begins
+with something like `https://`, where in that case the base will not be prepended to it.
+
+For example, in this list:
+
+```txt
+https://lofigirl.com/wp-content/uploads/
+2023/06/Foudroie-Finding-The-Edge-V2.mp3
+2023/04/2-In-Front-Of-Me.mp3
+https://file-examples.com/storage/fea570b16e6703ef79e65b4/2017/11/file_example_MP3_5MG.mp3
+```
+
+lowfi would download these three URLs:
+
+- `https://lofigirl.com/wp-content/uploads/2023/06/Foudroie-Finding-The-Edge-V2.mp3`
+- `https://file-examples.com/storage/fea570b16e6703ef79e65b4/2017/11/file_example_MP3_5MG.mp3`
+- `https://lofigirl.com/wp-content/uploads/2023/04/2-In-Front-Of-Me.mp3`

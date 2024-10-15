@@ -7,9 +7,7 @@ use tokio::{
     task::{self, JoinHandle},
 };
 
-use crate::tracks::Track;
-
-use super::{Player, BUFFER_SIZE};
+use super::{Player, BUFFER_SIZE, TIMEOUT};
 
 /// This struct is responsible for downloading tracks in the background.
 ///
@@ -52,11 +50,14 @@ impl Downloader {
                 while self.rx.recv().await == Some(()) {
                     //  For each update notification, we'll push tracks until the buffer is completely full.
                     while self.player.tracks.read().await.len() < BUFFER_SIZE {
-                        let Ok(track) = Track::random(&self.player.client).await else {
-                            continue;
-                        };
-
-                        self.player.tracks.write().await.push_back(track);
+                        match self.player.list.random(&self.player.client).await {
+                            Ok(track) => self.player.tracks.write().await.push_back(track),
+                            Err(error) => {
+                                if !error.is_timeout() {
+                                    tokio::time::sleep(TIMEOUT).await;
+                                }
+                            }
+                        }
                     }
                 }
             }),

@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use crossterm::style::Stylize;
 
-use crate::{player::Player, tracks::TrackInfo};
+use crate::{player::Player, tracks::Info};
 
 /// Small helper function to format durations.
 pub fn format_duration(duration: &Duration) -> String {
@@ -51,8 +51,8 @@ pub fn audio_bar(volume: f32, percentage: &str, width: usize) -> String {
 
 /// This represents the main "action" bars state.
 enum ActionBar {
-    Paused(TrackInfo),
-    Playing(TrackInfo),
+    Paused(Info),
+    Playing(Info),
     Loading,
 }
 
@@ -61,17 +61,17 @@ impl ActionBar {
     /// The second value is the character length of the result.
     fn format(&self) -> (String, usize) {
         let (word, subject) = match self {
-            Self::Playing(x) => ("playing", Some(x.name.clone())),
-            Self::Paused(x) => ("paused", Some(x.name.clone())),
+            Self::Playing(x) => ("playing", Some((x.name.clone(), x.width))),
+            Self::Paused(x) => ("paused", Some((x.name.clone(), x.width))),
             Self::Loading => ("loading", None),
         };
 
         subject.map_or_else(
             || (word.to_owned(), word.len()),
-            |subject| {
+            |(subject, len)| {
                 (
                     format!("{} {}", word, subject.clone().bold()),
-                    word.len() + 1 + subject.len(),
+                    word.len() + 1 + len,
                 )
             },
         )

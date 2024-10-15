@@ -56,6 +56,11 @@ cargo install lowfi --features mpris
 
 and making sure `$HOME/.cargo/bin` is added to `$PATH`.
 
+### Release Binaries
+
+If you're struggling or unwilling to use cargo, you can just download
+precompiled binaries from the [latest release](https://github.com/talwat/lowfi/releases/latest).
+
 ### AUR
 
 If you're on Arch, you can also use the AUR:

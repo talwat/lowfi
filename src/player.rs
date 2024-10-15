@@ -2,7 +2,7 @@
 //! This also has the code for the underlying
 //! audio server which adds new tracks.
 
-use std::{collections::VecDeque, sync::Arc, time::Duration};
+use std::{collections::VecDeque, ffi::CString, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
@@ -118,22 +118,29 @@ unsafe impl Sync for Player {}
 impl Player {
     /// This gets the output stream while also shutting up alsa with [libc].
     fn silent_get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
+        // Get the file descriptor to stderr from libc.
         extern "C" {
             static stderr: *mut libc::FILE;
         }
 
-        let mode = c"w".as_ptr();
-
         // This is a bit of an ugly hack that basically just uses `libc` to redirect alsa's
         // output to `/dev/null` so that it wont be shoved down our throats.
 
-        // SAFETY: Simple enough to be impossible to fail. Hopefully.
-        unsafe { freopen(c"/dev/null".as_ptr(), mode, stderr) };
+        // The mode which to redirect terminal output with.
+        let mode = CString::new("w")?.as_ptr();
 
+        // First redirect to /dev/null, which basically silences alsa.
+        let null = CString::new("/dev/null")?.as_ptr();
+        // SAFETY: Simple enough to be impossible to fail. Hopefully.
+        unsafe { freopen(null, mode, stderr) };
+
+        // Make the OutputStream while stderr is still redirected to /dev/null.
         let (stream, handle) = OutputStream::try_default()?;
 
+        // Redirect back to the current terminal, so that other output isn't silenced.
+        let tty = CString::new("/dev/tty")?.as_ptr();
         // SAFETY: See the first call to `freopen`.
-        unsafe { freopen(c"/dev/tty".as_ptr(), mode, stderr) };
+        unsafe { freopen(tty, mode, stderr) };
 
         Ok((stream, handle))
     }

@@ -131,7 +131,7 @@ async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
             VOLUME_TIMER.store(0, Ordering::Relaxed);
         }
 
-        let controls = components::controls(&player, WIDTH);
+        let controls = components::controls(WIDTH);
 
         let menu = if minimalist {
             vec![action, middle]

@@ -77,10 +77,7 @@ impl PlayerInterface for Player {
     }
 
     async fn pause(&self) -> fdo::Result<()> {
-        self.sender
-            .send(Messages::Pause)
-            .await
-            .map_err(|_| ERROR)
+        self.sender.send(Messages::Pause).await.map_err(|_| ERROR)
     }
 
     async fn play_pause(&self) -> fdo::Result<()> {
@@ -95,10 +92,7 @@ impl PlayerInterface for Player {
     }
 
     async fn play(&self) -> fdo::Result<()> {
-        self.sender
-            .send(Messages::Play)
-            .await
-            .map_err(|_| ERROR)
+        self.sender.send(Messages::Play).await.map_err(|_| ERROR)
     }
 
     async fn seek(&self, _offset: Time) -> fdo::Result<()> {

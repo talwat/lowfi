@@ -13,6 +13,8 @@ use super::Track;
 /// See the [README](https://github.com/talwat/lowfi?tab=readme-ov-file#the-format) for more details about the format.
 #[derive(Clone)]
 pub struct List {
+    /// Just the raw file, but seperated by `/n` (newlines).
+    /// `lines[0]` is the base, with the rest being tracks.
     lines: Vec<String>,
 }
 
@@ -24,8 +26,11 @@ impl List {
 
     /// Gets the name of a random track.
     fn random_name(&self) -> String {
-        // We're getting from 1 here, since due to how rust vectors work it's
-        // slow to drain only a single element from the start, so we can just keep it in.
+        // We're getting from 1 here, since the base is at `self.lines[0]`.
+        //
+        // We're also not pre-trimming `self.lines` into `base` & `tracks` due to
+        // how rust vectors work, sinceslow to drain only a single element from
+        // the start, so it's faster to just keep it in & work around it.
         let random = rand::thread_rng().gen_range(1..self.lines.len());
         self.lines[random].to_owned()
     }

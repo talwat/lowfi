@@ -13,21 +13,18 @@ use crate::Args;
 
 use crossterm::{
     cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
-    event::{
-        self, EventStream, KeyCode, KeyModifiers, KeyboardEnhancementFlags,
-        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
-    },
+    event::{KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags},
     style::{Print, Stylize},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
-use futures::{FutureExt, StreamExt};
 use lazy_static::lazy_static;
 use tokio::{sync::mpsc::Sender, task, time::sleep};
 
 use super::{Messages, Player};
 
 mod components;
+mod input;
 
 /// The total width of the UI.
 const WIDTH: usize = 27;
@@ -51,65 +48,6 @@ lazy_static! {
     /// When this is 0, it means that the audio bar shouldn't be displayed.
     /// To make it start counting, you need to set it to 1.
     static ref VOLUME_TIMER: AtomicUsize = AtomicUsize::new(0);
-}
-
-/// Recieves input from the terminal for various events.
-async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
-    let mut reader = EventStream::new();
-
-    loop {
-        let Some(Ok(event::Event::Key(event))) = reader.next().fuse().await else {
-            continue;
-        };
-
-        let messages = match event.code {
-            // Arrow key volume controls.
-            KeyCode::Up => Messages::ChangeVolume(0.1),
-            KeyCode::Right => Messages::ChangeVolume(0.01),
-            KeyCode::Down => Messages::ChangeVolume(-0.1),
-            KeyCode::Left => Messages::ChangeVolume(-0.01),
-            KeyCode::Char(character) => match character.to_ascii_lowercase() {
-                // Ctrl+C
-                'c' if event.modifiers == KeyModifiers::CONTROL => Messages::Quit,
-
-                // Quit
-                'q' => Messages::Quit,
-
-                // Skip/Next
-                's' | 'n' => Messages::Next,
-
-                // Pause
-                'p' => Messages::PlayPause,
-
-                // Volume up & down
-                '+' | '=' => Messages::ChangeVolume(0.1),
-                '-' | '_' => Messages::ChangeVolume(-0.1),
-
-                _ => continue,
-            },
-            // Media keys
-            KeyCode::Media(media) => match media {
-                event::MediaKeyCode::Play => Messages::PlayPause,
-                event::MediaKeyCode::Pause => Messages::PlayPause,
-                event::MediaKeyCode::PlayPause => Messages::PlayPause,
-                event::MediaKeyCode::Stop => Messages::Pause,
-                event::MediaKeyCode::TrackNext => Messages::Next,
-                event::MediaKeyCode::LowerVolume => Messages::ChangeVolume(-0.1),
-                event::MediaKeyCode::RaiseVolume => Messages::ChangeVolume(0.1),
-                event::MediaKeyCode::MuteVolume => Messages::ChangeVolume(-1.0),
-                _ => continue,
-            },
-            _ => continue,
-        };
-
-        // If it's modifying the volume, then we'll set the `VOLUME_TIMER` to 1
-        // so that the UI thread will know that it should show the audio bar.
-        if let Messages::ChangeVolume(_) = messages {
-            VOLUME_TIMER.store(1, Ordering::Relaxed);
-        }
-
-        sender.send(messages).await?;
-    }
 }
 
 /// The code for the terminal interface itself.
@@ -172,6 +110,9 @@ async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
     }
 }
 
+/// The mpris server additionally needs a reference to the player,
+/// since it frequently accesses the sink directly as well as
+/// the current track.
 #[cfg(feature = "mpris")]
 async fn mpris(
     player: Arc<Player>,
@@ -182,17 +123,26 @@ async fn mpris(
         .unwrap()
 }
 
+/// Represents the terminal environment, and is used to properly
+/// initialize and clean up the terminal.
 pub struct Environment {
+    /// Whether keyboard enhancements are enabled.
     enhancement: bool,
+
+    /// Whether the terminal is in an alternate screen or not.
     alternate: bool,
 }
 
 impl Environment {
+    /// This prepares the terminal, returning an [Environment] helpful
+    /// for cleaning up afterwards.
     pub fn ready(alternate: bool) -> eyre::Result<Self> {
-        crossterm::execute!(stdout(), Hide)?;
+        let mut lock = stdout().lock();
+
+        crossterm::execute!(lock, Hide)?;
 
         if alternate {
-            crossterm::execute!(stdout(), EnterAlternateScreen, MoveTo(0, 0))?;
+            crossterm::execute!(lock, EnterAlternateScreen, MoveTo(0, 0))?;
         }
 
         terminal::enable_raw_mode()?;
@@ -200,7 +150,7 @@ impl Environment {
 
         if enhancement {
             crossterm::execute!(
-                stdout(),
+                lock,
                 PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
             )?;
         }
@@ -211,15 +161,19 @@ impl Environment {
         })
     }
 
+    /// Uses the information collected from initialization to safely close down
+    /// the terminal & restore it to it's previous state.
     pub fn cleanup(&self) -> eyre::Result<()> {
+        let mut lock = stdout().lock();
+
         if self.alternate {
-            crossterm::execute!(stdout(), LeaveAlternateScreen)?;
+            crossterm::execute!(lock, LeaveAlternateScreen)?;
         }
 
-        crossterm::execute!(stdout(), Clear(ClearType::FromCursorDown), Show)?;
+        crossterm::execute!(lock, Clear(ClearType::FromCursorDown), Show)?;
 
         if self.enhancement {
-            crossterm::execute!(stdout(), PopKeyboardEnhancementFlags)?;
+            crossterm::execute!(lock, PopKeyboardEnhancementFlags)?;
         }
 
         terminal::disable_raw_mode()?;
@@ -231,6 +185,7 @@ impl Environment {
 }
 
 impl Drop for Environment {
+    /// Just a wrapper for [Environment::cleanup] which ignores any errors thrown.
     fn drop(&mut self) {
         // Well, we're dropping it, so it doesn't really matter if there's an error.
         let _ = self.cleanup();
@@ -254,7 +209,7 @@ pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) ->
 
     let interface = task::spawn(interface(Arc::clone(&player), args.minimalist));
 
-    input(sender.clone()).await?;
+    input::listen(sender.clone()).await?;
     interface.abort();
 
     environment.cleanup()?;

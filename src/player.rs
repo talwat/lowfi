@@ -71,6 +71,13 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 const BUFFER_SIZE: usize = 5;
 
 /// Main struct responsible for queuing up & playing tracks.
+// TODO: Consider refactoring [Player] from being stored in an [Arc],
+// TODO: so `Arc<Player>` into containing many smaller [Arc]s, being just
+// TODO: `Player` as the type.
+// TODO:
+// TODO: This is conflicting, since then it'd clone ~10 smaller [Arc]s
+// TODO: every single time, which could be even worse than having an
+// TODO: [Arc] of an [Arc] in some cases (Like with [Sink] & [Client]).
 pub struct Player {
     /// [rodio]'s [`Sink`] which can control playback.
     pub sink: Sink,
@@ -108,11 +115,12 @@ pub struct Player {
     _stream: OutputStream,
 }
 
-/// SAFETY: This is necessary because [OutputStream] does not implement [Send],
-/// SAFETY: even though it is perfectly possible.
+// SAFETY: This is necessary because [OutputStream] does not implement [Send],
+// due to some limitation with Android's Audio API.
+// I'm pretty sure nobody will use lowfi with android, so this is safe.
 unsafe impl Send for Player {}
 
-/// SAFETY: See implementation for [Send].
+// SAFETY: See implementation for [Send].
 unsafe impl Sync for Player {}
 
 impl Player {

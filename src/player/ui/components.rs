@@ -103,8 +103,9 @@ pub fn action(player: &Player, width: usize) -> String {
 }
 
 /// Creates the bottom controls bar, and also spaces it properly.
-pub fn controls(width: usize) -> String {
-    let controls = [["[s]", "kip"], ["[p]", "ause"], ["[q]", "uit"]];
+pub fn controls(player: &Player, width: usize) -> String {
+    let play_pause = if player.sink.is_paused() { ["[p]", "lay "] } else { ["[p]", "ause"] };
+    let controls = [["[s]", "kip"], play_pause, ["[q]", "uit"]];
     let len: usize = controls.concat().iter().map(|x| x.len()).sum();
     let controls = controls.map(|x| format!("{}{}", x[0].bold(), x[1]));
 

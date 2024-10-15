@@ -113,6 +113,8 @@ async fn input(sender: Sender<Messages>) -> eyre::Result<()> {
 /// `volume_timer` is a bit strange, but it tracks how long the `volume` bar
 /// has been displayed for, so that it's only displayed for a certain amount of frames.
 async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
+    let mut stdout = std::io::stdout();
+
     loop {
         let action = components::action(&player, WIDTH);
 
@@ -146,7 +148,7 @@ async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
             .collect();
 
         crossterm::execute!(
-            stdout(),
+            stdout,
             Clear(ClearType::FromCursorDown),
             MoveToColumn(0),
             Print(format!("┌{}┐\r\n", "─".repeat(WIDTH + 2))),

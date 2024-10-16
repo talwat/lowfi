@@ -39,9 +39,12 @@ You'll need Rust 1.74.0+.
 
 On MacOS & Windows, no extra dependencies are needed.
 
-On Linux, you'll also need alsa and it's headers (`alsa-lib` on Arch,
-`libasound2-dev` on Ubuntu). Make sure to also install `pulseaudio-alsa`
-if you're using pulseaudio.
+On Linux, you'll also need openssl & alsa, as well as their headers.
+
+- `alsa-lib` on Arch, `libasound2-dev` on Ubuntu.
+- `openssl` on Arch, `libssl-dev` on Ubuntu.
+
+Make sure to also install `pulseaudio-alsa` if you're using pulseaudio.
 
 ### Cargo
 

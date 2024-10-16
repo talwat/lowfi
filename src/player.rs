@@ -219,15 +219,27 @@ impl Player {
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.
+    ///
+    /// This will also set `current` to the newly loaded song.
     pub async fn next(&self) -> eyre::Result<tracks::Decoded> {
         let track = match self.tracks.write().await.pop_front() {
             Some(x) => x,
             // If the queue is completely empty, then fallback to simply getting a new track.
             // This is relevant particularly at the first song.
-            None => self.list.random(&self.client).await?,
+            None => {
+                // Serves as an indicator that the queue is "loading".
+                // We're doing it here so that we don't get the "loading" display
+                // for only a frame in the other case that the buffer is not empty.
+                self.current.store(None);
+
+                self.list.random(&self.client).await?
+            }
         };
 
         let decoded = track.decode()?;
+
+        // Set the current track.
+        self.set_current(decoded.info.clone()).await?;
 
         Ok(decoded)
     }
@@ -243,9 +255,6 @@ impl Player {
         itx: Sender<()>,
         tx: Sender<Messages>,
     ) -> eyre::Result<()> {
-        // Serves as an indicator that the queue is "loading".
-        player.current.store(None);
-
         // Stop the sink.
         player.sink.stop();
 
@@ -253,12 +262,7 @@ impl Player {
 
         match track {
             Ok(track) => {
-                // Set the current track.
-                player.set_current(track.info.clone()).await?;
-
-                // Actually start playing it, this is done later so that the amount
-                // or times where "loading" appears briefly even though the track is
-                // from the buffer is minimized.
+                // Start playing the new track.
                 player.sink.append(track.data);
 
                 // Notify the background downloader that there's an empty spot

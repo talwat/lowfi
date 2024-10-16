@@ -89,7 +89,7 @@ async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
             vec![action, middle, controls]
         };
 
-        // Formats the menu properly
+        // Formats the menu properly.
         let menu: Vec<String> = menu
             .into_iter()
             .map(|x| format!("│ {} │\r\n", x.reset()).to_string())

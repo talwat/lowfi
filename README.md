@@ -72,6 +72,12 @@ If you're on Arch, you can also use the AUR:
 yay -S lowfi
 ```
 
+### openSUSE
+
+```sh
+zypper install lowfi
+```
+
 ### Manual
 
 ```sh

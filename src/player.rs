@@ -7,7 +7,6 @@ use std::{collections::VecDeque, ffi::CString, sync::Arc, time::Duration};
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
 use libc::freopen;
-use mpris_server::PlayerInterface;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
@@ -18,6 +17,9 @@ use tokio::{
     },
     task,
 };
+
+#[cfg(feature = "mpris")]
+use mpris_server::PlayerInterface;
 
 use crate::{
     play::PersistentVolume,

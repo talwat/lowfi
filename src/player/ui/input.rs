@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use crossterm::event::{self, EventStream, KeyCode, KeyModifiers};
+use crossterm::event::{self, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc::Sender;
 
@@ -16,6 +16,10 @@ pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
         let Some(Ok(event::Event::Key(event))) = reader.next().fuse().await else {
             continue;
         };
+
+        if event.kind == KeyEventKind::Release {
+            continue;
+        }
 
         let messages = match event.code {
             // Arrow key volume controls.

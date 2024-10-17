@@ -1,7 +1,7 @@
 //! The module which manages all user interface, including inputs.
 
 use std::{
-    io::stdout,
+    io::{stdout, Stdout},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -50,11 +50,71 @@ lazy_static! {
     static ref VOLUME_TIMER: AtomicUsize = AtomicUsize::new(0);
 }
 
+/// Represents an abstraction for drawing the actual lowfi window itself.
+///
+/// The main purpose of this struct is just to add the fancy border,
+/// as well as clear the screen before drawing.
+pub struct Window {
+    borders: [String; 2],
+    out: Stdout,
+}
+
+impl Window {
+    /// Initializes a new [Window].
+    pub fn new() -> Self {
+        Self {
+            borders: [
+                format!("┌{}┐\r\n", "─".repeat(WIDTH + 2)),
+                // This one doesn't have a leading \r\n to avoid extra space under the window.
+                format!("└{}┘", "─".repeat(WIDTH + 2)),
+            ],
+            out: stdout(),
+        }
+    }
+
+    /// Actually draws the window, with each element in `content` being on a new line.
+    pub fn draw(&mut self, content: Vec<String>) -> eyre::Result<()> {
+        let len = content.len() as u16;
+
+        let menu: String = content
+            .into_iter()
+            .map(|x| format!("│ {} │\r\n", x.reset()).to_string())
+            .collect();
+
+        // We're doing this because Windows is stupid and can't stand
+        // writing to the last line repeatedly. Again, it's stupid.
+        #[cfg(windows)]
+        let (rendered, height) = (
+            format!("{}{}{}\r\n", self.borders[0], menu, self.borders[1]),
+            len + 2,
+        );
+
+        // Unix has no such ridiculous limitations, so we calculate
+        // the height of the window accurately.
+        #[cfg(not(windows))]
+        let (rendered, height) = (
+            format!("{}{}{}", self.borders[0], menu, self.borders[1]),
+            len + 1,
+        );
+
+        crossterm::execute!(
+            self.out,
+            Clear(ClearType::FromCursorDown),
+            MoveToColumn(0),
+            Print(rendered),
+            MoveToColumn(0),
+            MoveUp(height),
+        )?;
+
+        Ok(())
+    }
+}
+
 /// The code for the terminal interface itself.
 ///
 /// * `minimalist` - All this does is hide the bottom control bar.
 async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
-    let mut stdout = std::io::stdout();
+    let mut window = Window::new();
 
     loop {
         // Load `current` once so that it doesn't have to be loaded over and over
@@ -89,22 +149,7 @@ async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
             vec![action, middle, controls]
         };
 
-        // Formats the menu properly.
-        let menu: Vec<String> = menu
-            .into_iter()
-            .map(|x| format!("│ {} │\r\n", x.reset()).to_string())
-            .collect();
-
-        crossterm::execute!(
-            stdout,
-            Clear(ClearType::FromCursorDown),
-            MoveToColumn(0),
-            Print(format!("┌{}┐\r\n", "─".repeat(WIDTH + 2))),
-            Print(menu.join("")),
-            Print(format!("└{}┘", "─".repeat(WIDTH + 2))),
-            MoveToColumn(0),
-            MoveUp(menu.len() as u16 + 1)
-        )?;
+        window.draw(menu)?;
 
         sleep(Duration::from_secs_f32(FRAME_DELTA)).await;
     }

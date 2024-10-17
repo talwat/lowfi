@@ -7,6 +7,7 @@ use std::{collections::VecDeque, ffi::CString, sync::Arc, time::Duration};
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
 use libc::freopen;
+use mpris_server::PlayerInterface;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
@@ -244,12 +245,32 @@ impl Player {
         Ok(decoded)
     }
 
+    /// Shorthand to emit a `PropertiesChanged` signal, like when pausing/unpausing.
+    #[cfg(feature = "mpris")]
+    async fn mpris_changed(&self, property: mpris_server::Property) -> eyre::Result<()> {
+        self.mpris
+            .get()
+            .unwrap()
+            .properties_changed(vec![property])
+            .await?;
+
+        Ok(())
+    }
+
+    /// Shorthand to get the inner mpris server object.
+    #[cfg(feature = "mpris")]
+    fn mpris_innner(&self) -> &mpris::Player {
+        self.mpris.get().unwrap().imp()
+    }
+
     /// This basically just calls [`Player::next`], and then appends the new track to the player.
     ///
     /// This also notifies the background thread to get to work, and will send `TryAgain`
     /// if it fails. This functions purpose is to be called in the background, so that
     /// when the audio server recieves a `Next` signal it will still be able to respond to other
     /// signals while it's loading.
+    ///
+    /// This also sends the `NewSong` signal to `tx` apon successful completion.
     async fn handle_next(
         player: Arc<Self>,
         itx: Sender<()>,
@@ -308,6 +329,7 @@ impl Player {
         // if there hasn't been any manual intervention.
         let mut new = false;
 
+        // TODO: Clean mpris_changed calls & streamline them somehow.
         loop {
             let clone = Arc::clone(&player);
 
@@ -347,9 +369,23 @@ impl Player {
                 }
                 Messages::Play => {
                     player.sink.play();
+
+                    #[cfg(feature = "mpris")]
+                    player
+                        .mpris_changed(mpris_server::Property::PlaybackStatus(
+                            mpris_server::PlaybackStatus::Playing,
+                        ))
+                        .await?;
                 }
                 Messages::Pause => {
                     player.sink.pause();
+
+                    #[cfg(feature = "mpris")]
+                    player
+                        .mpris_changed(mpris_server::Property::PlaybackStatus(
+                            mpris_server::PlaybackStatus::Paused,
+                        ))
+                        .await?;
                 }
                 Messages::PlayPause => {
                     if player.sink.is_paused() {
@@ -357,9 +393,21 @@ impl Player {
                     } else {
                         player.sink.pause();
                     }
+
+                    #[cfg(feature = "mpris")]
+                    player
+                        .mpris_changed(mpris_server::Property::PlaybackStatus(
+                            player.mpris_innner().playback_status().await?,
+                        ))
+                        .await?;
                 }
                 Messages::ChangeVolume(change) => {
                     player.set_volume(player.sink.volume() + change);
+
+                    #[cfg(feature = "mpris")]
+                    player
+                        .mpris_changed(mpris_server::Property::Volume(player.sink.volume().into()))
+                        .await?;
                 }
                 // This basically just continues, but more importantly, it'll re-evaluate
                 // the select macro at the beginning of the loop.
@@ -368,6 +416,13 @@ impl Player {
                     // We've recieved `NewSong`, so on the next loop iteration we'll
                     // begin waiting for the song to be over in order to autoplay.
                     new = true;
+
+                    #[cfg(feature = "mpris")]
+                    player
+                        .mpris_changed(mpris_server::Property::Metadata(
+                            player.mpris_innner().metadata().await?,
+                        ))
+                        .await?;
 
                     continue;
                 }

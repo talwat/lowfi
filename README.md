@@ -80,12 +80,18 @@ zypper install lowfi
 
 ### Manual
 
+This is good for debugging, especially in issues.
+
 ```sh
 git clone https://github.com/talwat/lowfi
 cd lowfi
 
-cargo build --release
+# If you want an actual binary
+cargo build --release --all-features
 ./target/release/lowfi
+
+# If you just want to test
+cargo run --all-features
 ```
 
 ## Usage

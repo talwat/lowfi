@@ -431,7 +431,7 @@ impl Player {
                                 player.mpris_innner().metadata().await?,
                             ),
                             mpris_server::Property::PlaybackStatus(
-                                mpris_server::PlaybackStatus::Playing,
+                                player.mpris_innner().playback_status().await?,
                             ),
                         ])
                         .await?;

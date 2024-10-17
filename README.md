@@ -137,7 +137,7 @@ where more information can be found by running `lowfi help scrape`.
 > This also means that there will be no added flexibility to these lists,
 > so you'll have to work that out on your own.
 
-lowfi also can support custom track lists, although the default one with Lofi Girl's
+lowfi also can support custom track lists, although the default one from Lofi Girl
 is embedded into the binary.
 
 To use a custom list, use the `--tracks` flag. This can either be a path to some file,
@@ -150,7 +150,7 @@ specified directory.
 
 #### The Format
 
-In List's, the first line should be the base URL, followed by the rest of the tracks.
+In Lists, the first line should be the base URL, followed by the rest of the tracks.
 
 Each track will be first appended to the base URL, and then the result use to download
 the track. All tracks should end in `.mp3` and as such must be in the MP3 format.

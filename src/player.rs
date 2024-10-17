@@ -249,11 +249,14 @@ impl Player {
 
     /// Shorthand to emit a `PropertiesChanged` signal, like when pausing/unpausing.
     #[cfg(feature = "mpris")]
-    async fn mpris_changed(&self, property: mpris_server::Property) -> eyre::Result<()> {
+    async fn mpris_changed(
+        &self,
+        properties: impl IntoIterator<Item = mpris_server::Property>,
+    ) -> eyre::Result<()> {
         self.mpris
             .get()
             .unwrap()
-            .properties_changed(vec![property])
+            .properties_changed(properties)
             .await?;
 
         Ok(())
@@ -374,9 +377,9 @@ impl Player {
 
                     #[cfg(feature = "mpris")]
                     player
-                        .mpris_changed(mpris_server::Property::PlaybackStatus(
+                        .mpris_changed(vec![mpris_server::Property::PlaybackStatus(
                             mpris_server::PlaybackStatus::Playing,
-                        ))
+                        )])
                         .await?;
                 }
                 Messages::Pause => {
@@ -384,9 +387,9 @@ impl Player {
 
                     #[cfg(feature = "mpris")]
                     player
-                        .mpris_changed(mpris_server::Property::PlaybackStatus(
+                        .mpris_changed(vec![mpris_server::Property::PlaybackStatus(
                             mpris_server::PlaybackStatus::Paused,
-                        ))
+                        )])
                         .await?;
                 }
                 Messages::PlayPause => {
@@ -398,9 +401,9 @@ impl Player {
 
                     #[cfg(feature = "mpris")]
                     player
-                        .mpris_changed(mpris_server::Property::PlaybackStatus(
+                        .mpris_changed(vec![mpris_server::Property::PlaybackStatus(
                             player.mpris_innner().playback_status().await?,
-                        ))
+                        )])
                         .await?;
                 }
                 Messages::ChangeVolume(change) => {
@@ -408,7 +411,9 @@ impl Player {
 
                     #[cfg(feature = "mpris")]
                     player
-                        .mpris_changed(mpris_server::Property::Volume(player.sink.volume().into()))
+                        .mpris_changed(vec![mpris_server::Property::Volume(
+                            player.sink.volume().into(),
+                        )])
                         .await?;
                 }
                 // This basically just continues, but more importantly, it'll re-evaluate
@@ -421,9 +426,14 @@ impl Player {
 
                     #[cfg(feature = "mpris")]
                     player
-                        .mpris_changed(mpris_server::Property::Metadata(
-                            player.mpris_innner().metadata().await?,
-                        ))
+                        .mpris_changed(vec![
+                            mpris_server::Property::Metadata(
+                                player.mpris_innner().metadata().await?,
+                            ),
+                            mpris_server::Property::PlaybackStatus(
+                                mpris_server::PlaybackStatus::Playing,
+                            ),
+                        ])
                         .await?;
 
                     continue;

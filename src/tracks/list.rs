@@ -32,7 +32,7 @@ impl List {
         // how rust vectors work, sinceslow to drain only a single element from
         // the start, so it's faster to just keep it in & work around it.
         let random = rand::thread_rng().gen_range(1..self.lines.len());
-        self.lines[random].to_owned()
+        self.lines[random].clone()
     }
 
     /// Downloads a raw track, but doesn't decode it.
@@ -59,13 +59,13 @@ impl List {
     }
 
     /// Parses text into a [List].
-    pub fn new(text: &str) -> eyre::Result<Self> {
+    pub fn new(text: &str) -> Self {
         let lines: Vec<String> = text
             .split_ascii_whitespace()
-            .map(|x| x.to_owned())
+            .map(ToOwned::to_owned)
             .collect();
 
-        Ok(Self { lines })
+        Self { lines }
     }
 
     /// Reads a [List] from the filesystem using the CLI argument provided.
@@ -84,9 +84,9 @@ impl List {
                 fs::read_to_string(arg).await?
             };
 
-            List::new(&raw)
+            Ok(Self::new(&raw))
         } else {
-            List::new(include_str!("../../data/lofigirl.txt"))
+            Ok(Self::new(include_str!("../../data/lofigirl.txt")))
         }
     }
 }

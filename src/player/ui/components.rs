@@ -1,3 +1,6 @@
+//! Various different individual components that
+//! appear in lowfi's UI, like the progress bar.
+
 use std::{ops::Deref, sync::Arc, time::Duration};
 
 use crossterm::style::Stylize;
@@ -9,7 +12,7 @@ pub fn format_duration(duration: &Duration) -> String {
     let seconds = duration.as_secs() % 60;
     let minutes = duration.as_secs() / 60;
 
-    format!("{:02}:{:02}", minutes, seconds)
+    format!("{minutes:02}:{seconds:02}")
 }
 
 /// Creates the progress bar, as well as all the padding needed.
@@ -55,8 +58,13 @@ pub fn audio_bar(volume: f32, percentage: &str, width: usize) -> String {
 
 /// This represents the main "action" bars state.
 enum ActionBar {
+    /// When the app is currently displaying "paused".
     Paused(Info),
+
+    /// When the app is currently displaying "playing".
     Playing(Info),
+
+    /// When the app is currently displaying "loading".
     Loading,
 }
 
@@ -72,12 +80,7 @@ impl ActionBar {
 
         subject.map_or_else(
             || (word.to_owned(), word.len()),
-            |(subject, len)| {
-                (
-                    format!("{} {}", word, subject.clone().bold()),
-                    word.len() + 1 + len,
-                )
-            },
+            |(subject, len)| (format!("{} {}", word, subject.bold()), word.len() + 1 + len),
         )
     }
 }
@@ -97,6 +100,8 @@ pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> Str
         })
         .format();
 
+    // TODO: Deal with dangerous string slicing.
+    #[allow(clippy::string_slice)]
     if len > width {
         format!("{}...", &main[..=width])
     } else {

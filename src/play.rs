@@ -34,11 +34,11 @@ impl PersistentVolume {
     }
 
     /// Returns the volume as a float from 0 to 1.
-    pub fn float(&self) -> f32 {
+    pub fn float(self) -> f32 {
         self.inner as f32 / 100.0
     }
 
-    /// Loads the [PersistentVolume] from [dirs::config_dir()].
+    /// Loads the [`PersistentVolume`] from [`dirs::config_dir()`].
     pub async fn load() -> eyre::Result<Self> {
         let config = Self::config().await?;
         let volume = config.join(PathBuf::from("volume.txt"));
@@ -47,16 +47,16 @@ impl PersistentVolume {
         let volume = if volume.exists() {
             let contents = fs::read_to_string(volume).await?;
             let trimmed = contents.trim();
-            let stripped = trimmed.strip_suffix("%").unwrap_or(&trimmed);
+            let stripped = trimmed.strip_suffix("%").unwrap_or(trimmed);
             stripped
                 .parse()
-                .map_err(|_| eyre!("volume.txt file is invalid"))?
+                .map_err(|_error| eyre!("volume.txt file is invalid"))?
         } else {
             fs::write(&volume, "100").await?;
             100u16
         };
 
-        Ok(PersistentVolume { inner: volume })
+        Ok(Self { inner: volume })
     }
 
     /// Saves `volume` to `volume.txt`.

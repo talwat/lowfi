@@ -15,11 +15,11 @@ pub mod list;
 /// Just a shorthand for a decoded [Bytes].
 pub type DecodedData = Decoder<Cursor<Bytes>>;
 
-/// The TrackInfo struct, which has the name and duration of a track.
+/// The [`Info`] struct, which has the name and duration of a track.
 ///
 /// This is not included in [Track] as the duration has to be acquired
 /// from the decoded data and not from the raw data.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Info {
     /// This is a formatted name, so it doesn't include the full path.
     pub name: String,
@@ -46,7 +46,7 @@ impl Info {
     /// usually present on most lofi tracks.
     fn format_name(name: &str) -> String {
         let formatted = Self::decode_url(
-            name.split("/")
+            name.split('/')
                 .last()
                 .unwrap()
                 .strip_suffix(".mp3")
@@ -76,12 +76,13 @@ impl Info {
             }
         }
 
+        #[allow(clippy::string_slice, /* We've already checked before that the bound is at an ASCII digit. */)]
         String::from(&formatted[skip..])
     }
 
     /// Creates a new [`TrackInfo`] from a raw name & decoded track data.
-    pub fn new(name: String, decoded: &DecodedData) -> Self {
-        let name = Self::format_name(&name);
+    pub fn new(name: &str, decoded: &DecodedData) -> Self {
+        let name = Self::format_name(name);
 
         Self {
             duration: decoded.total_duration(),
@@ -103,10 +104,10 @@ pub struct Decoded {
 
 impl Decoded {
     /// Creates a new track.
-    /// This is equivalent to [Track::decode].
+    /// This is equivalent to [`Track::decode`].
     pub fn new(track: Track) -> eyre::Result<Self> {
         let data = Decoder::new(Cursor::new(track.data))?;
-        let info = Info::new(track.name, &data);
+        let info = Info::new(&track.name, &data);
 
         Ok(Self { info, data })
     }

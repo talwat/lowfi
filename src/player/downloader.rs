@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::{
     sync::mpsc::{self, Receiver, Sender},
     task::{self, JoinHandle},
+    time::sleep,
 };
 
 use super::{Player, BUFFER_SIZE, TIMEOUT};
@@ -42,7 +43,7 @@ impl Downloader {
     }
 
     /// Actually starts & consumes the [Downloader].
-    pub async fn start(mut self) -> (Sender<()>, JoinHandle<()>) {
+    pub fn start(mut self) -> (Sender<()>, JoinHandle<()>) {
         (
             self.tx,
             task::spawn(async move {
@@ -54,7 +55,7 @@ impl Downloader {
                             Ok(track) => self.player.tracks.write().await.push_back(track),
                             Err(error) => {
                                 if !error.is_timeout() {
-                                    tokio::time::sleep(TIMEOUT).await;
+                                    sleep(TIMEOUT).await;
                                 }
                             }
                         }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use mpris_server::{
-    zbus::{fdo, Result},
+    zbus::{self, fdo, Result},
     LoopStatus, Metadata, PlaybackRate, PlaybackStatus, PlayerInterface, RootInterface, Time,
     TrackId, Volume,
 };
@@ -11,7 +11,7 @@ use super::Messages;
 
 const ERROR: fdo::Error = fdo::Error::Failed(String::new());
 
-/// The actual MPRIS server.
+/// The actual MPRIS player.
 pub struct Player {
     pub player: Arc<super::Player>,
     pub sender: Sender<Messages>,
@@ -207,5 +207,44 @@ impl PlayerInterface for Player {
 
     async fn can_control(&self) -> fdo::Result<bool> {
         Ok(true)
+    }
+}
+
+/// A struct which contains the MPRIS [Server], and has some helper functions
+/// to make it easier to work with.
+pub struct Server {
+    inner: mpris_server::Server<Player>,
+}
+
+impl Server {
+    /// Shorthand to emit a `PropertiesChanged` signal, like when pausing/unpausing.
+    pub async fn changed(
+        &self,
+        properties: impl IntoIterator<Item = mpris_server::Property>,
+    ) -> eyre::Result<()> {
+        self.inner.properties_changed(properties).await?;
+
+        Ok(())
+    }
+
+    /// Shorthand to emit a `PropertiesChanged` signal, specifically about playback.
+    pub async fn playback(&self, new: PlaybackStatus) -> zbus::Result<()> {
+        self.inner
+            .properties_changed(vec![mpris_server::Property::PlaybackStatus(new)])
+            .await
+    }
+
+    /// Shorthand to get the inner mpris player object.
+    pub fn player(&self) -> &Player {
+        self.inner.imp()
+    }
+
+    pub async fn new(player: Arc<super::Player>, sender: Sender<Messages>) -> eyre::Result<Self> {
+        let server =
+            mpris_server::Server::new("lowfi", crate::player::mpris::Player { player, sender })
+                .await
+                .unwrap();
+
+        Ok(Self { inner: server })
     }
 }

@@ -1,6 +1,7 @@
 //! The module which manages all user interface, including inputs.
 
 use std::{
+    fmt::Write,
     io::{stdout, Stdout},
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -55,7 +56,11 @@ lazy_static! {
 /// The main purpose of this struct is just to add the fancy border,
 /// as well as clear the screen before drawing.
 pub struct Window {
+    /// The top & bottom borders, which are here since they can be
+    /// prerendered, as they don't change from window to window.
     borders: [String; 2],
+
+    /// The output, currently just an [`Stdout`].
     out: Stdout,
 }
 
@@ -76,10 +81,11 @@ impl Window {
     pub fn draw(&mut self, content: Vec<String>) -> eyre::Result<()> {
         let len = content.len() as u16;
 
-        let menu: String = content
-            .into_iter()
-            .map(|x| format!("│ {} │\r\n", x.reset()).to_string())
-            .collect();
+        let menu: String = content.into_iter().fold(String::new(), |mut output, x| {
+            write!(output, "│ {} │\r\n", x.reset()).unwrap();
+
+            output
+        });
 
         // We're doing this because Windows is stupid and can't stand
         // writing to the last line repeatedly. Again, it's stupid.
@@ -155,19 +161,6 @@ async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
     }
 }
 
-/// The mpris server additionally needs a reference to the player,
-/// since it frequently accesses the sink directly as well as
-/// the current track.
-#[cfg(feature = "mpris")]
-async fn mpris(
-    player: Arc<Player>,
-    sender: Sender<Messages>,
-) -> mpris_server::Server<crate::player::mpris::Player> {
-    mpris_server::Server::new("lowfi", crate::player::mpris::Player { player, sender })
-        .await
-        .unwrap()
-}
-
 /// Represents the terminal environment, and is used to properly
 /// initialize and clean up the terminal.
 pub struct Environment {
@@ -230,7 +223,7 @@ impl Environment {
 }
 
 impl Drop for Environment {
-    /// Just a wrapper for [Environment::cleanup] which ignores any errors thrown.
+    /// Just a wrapper for [`Environment::cleanup`] which ignores any errors thrown.
     fn drop(&mut self) {
         // Well, we're dropping it, so it doesn't really matter if there's an error.
         let _ = self.cleanup();
@@ -239,19 +232,10 @@ impl Drop for Environment {
 
 /// Initializes the UI, this will also start taking input from the user.
 ///
-/// `alternate` controls whether to use [EnterAlternateScreen] in order to hide
+/// `alternate` controls whether to use [`EnterAlternateScreen`] in order to hide
 /// previous terminal history.
 pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) -> eyre::Result<()> {
     let environment = Environment::ready(args.alternate)?;
-
-    #[cfg(feature = "mpris")]
-    {
-        player
-            .mpris
-            .get_or_init(|| mpris(player.clone(), sender.clone()))
-            .await;
-    }
-
     let interface = task::spawn(interface(Arc::clone(&player), args.minimalist));
 
     input::listen(sender.clone()).await?;

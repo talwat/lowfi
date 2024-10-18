@@ -1,3 +1,6 @@
+//! Responsible for specifically recieving terminal input
+//! using [`crossterm`].
+
 use std::sync::atomic::Ordering;
 
 use crossterm::event::{self, EventStream, KeyCode, KeyEventKind, KeyModifiers};
@@ -48,9 +51,9 @@ pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
             },
             // Media keys
             KeyCode::Media(media) => match media {
-                event::MediaKeyCode::Play => Messages::PlayPause,
-                event::MediaKeyCode::Pause => Messages::PlayPause,
-                event::MediaKeyCode::PlayPause => Messages::PlayPause,
+                event::MediaKeyCode::Pause
+                | event::MediaKeyCode::Play
+                | event::MediaKeyCode::PlayPause => Messages::PlayPause,
                 event::MediaKeyCode::Stop => Messages::Pause,
                 event::MediaKeyCode::TrackNext => Messages::Next,
                 event::MediaKeyCode::LowerVolume => Messages::ChangeVolume(-0.1),

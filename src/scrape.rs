@@ -82,7 +82,7 @@ async fn scan(extension: &str, include_full: bool) -> eyre::Result<Vec<String>> 
 pub async fn scrape(extension: String, include_full: bool) -> eyre::Result<()> {
     let files = scan(&extension, include_full).await?;
     for file in files {
-        println!("{}", file);
+        println!("{file}");
     }
 
     Ok(())

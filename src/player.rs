@@ -16,10 +16,11 @@ use tokio::{
         RwLock,
     },
     task,
+    time::sleep,
 };
 
 #[cfg(feature = "mpris")]
-use mpris_server::PlayerInterface;
+use mpris_server::{PlaybackStatus, PlayerInterface};
 
 use crate::{
     play::PersistentVolume,
@@ -89,13 +90,10 @@ pub struct Player {
     /// This is [`None`] when lowfi is buffering/loading.
     current: ArcSwapOption<tracks::Info>,
 
-    /// This is the MPRIS server, which is initialized later on in the
-    /// user interface.
-    #[cfg(feature = "mpris")]
-    mpris: tokio::sync::OnceCell<mpris_server::Server<mpris::Player>>,
-
-    /// The tracks, which is a [VecDeque] that holds
+    /// The tracks, which is a [`VecDeque`] that holds
     /// *undecoded* [Track]s.
+    ///
+    /// This is populated specifically by the [Downloader].
     tracks: RwLock<VecDeque<tracks::Track>>,
 
     /// The actual list of tracks to be played.
@@ -104,16 +102,16 @@ pub struct Player {
     /// The initial volume level.
     volume: PersistentVolume,
 
-    /// The web client, which can contain a UserAgent & some
+    /// The web client, which can contain a `UserAgent` & some
     /// settings that help lowfi work more effectively.
     client: Client,
 
-    /// The [OutputStreamHandle], which also can control some
+    /// The [`OutputStreamHandle`], which also can control some
     /// playback, is for now unused and is here just to keep it
     /// alive so the playback can function properly.
     _handle: OutputStreamHandle,
 
-    /// The [OutputStream], which is just here to keep the playback
+    /// The [`OutputStream`], which is just here to keep the playback
     /// alive and functioning.
     _stream: OutputStream,
 }
@@ -143,7 +141,9 @@ impl Player {
         // First redirect to /dev/null, which basically silences alsa.
         let null = CString::new("/dev/null")?.as_ptr();
         // SAFETY: Simple enough to be impossible to fail. Hopefully.
-        unsafe { freopen(null, mode, stderr) };
+        unsafe {
+            freopen(null, mode, stderr);
+        }
 
         // Make the OutputStream while stderr is still redirected to /dev/null.
         let (stream, handle) = OutputStream::try_default()?;
@@ -151,16 +151,16 @@ impl Player {
         // Redirect back to the current terminal, so that other output isn't silenced.
         let tty = CString::new("/dev/tty")?.as_ptr();
         // SAFETY: See the first call to `freopen`.
-        unsafe { freopen(tty, mode, stderr) };
+        unsafe {
+            freopen(tty, mode, stderr);
+        }
 
         Ok((stream, handle))
     }
 
     /// Just a shorthand for setting `current`.
-    async fn set_current(&self, info: tracks::Info) -> eyre::Result<()> {
+    fn set_current(&self, info: tracks::Info) {
         self.current.store(Some(Arc::new(info)));
-
-        Ok(())
     }
 
     /// A shorthand for checking if `self.current` is [Some].
@@ -170,7 +170,7 @@ impl Player {
 
     /// Sets the volume of the sink, and also clamps the value to avoid negative/over 100% values.
     pub fn set_volume(&self, volume: f32) {
-        self.sink.set_volume(volume.clamp(0.0, 1.0))
+        self.sink.set_volume(volume.clamp(0.0, 1.0));
     }
 
     /// Initializes the entire player, including audio devices & sink.
@@ -213,9 +213,6 @@ impl Player {
             list,
             _handle: handle,
             _stream,
-
-            #[cfg(feature = "mpris")]
-            mpris: tokio::sync::OnceCell::new(),
         };
 
         Ok(player)
@@ -225,47 +222,26 @@ impl Player {
     ///
     /// This will also set `current` to the newly loaded song.
     pub async fn next(&self) -> eyre::Result<tracks::Decoded> {
-        let track = match self.tracks.write().await.pop_front() {
-            Some(x) => x,
+        let track = if let Some(track) = self.tracks.write().await.pop_front() {
+            track
+        } else {
             // If the queue is completely empty, then fallback to simply getting a new track.
             // This is relevant particularly at the first song.
-            None => {
-                // Serves as an indicator that the queue is "loading".
-                // We're doing it here so that we don't get the "loading" display
-                // for only a frame in the other case that the buffer is not empty.
-                self.current.store(None);
 
-                self.list.random(&self.client).await?
-            }
+            // Serves as an indicator that the queue is "loading".
+            // We're doing it here so that we don't get the "loading" display
+            // for only a frame in the other case that the buffer is not empty.
+            self.current.store(None);
+
+            self.list.random(&self.client).await?
         };
 
         let decoded = track.decode()?;
 
         // Set the current track.
-        self.set_current(decoded.info.clone()).await?;
+        self.set_current(decoded.info.clone());
 
         Ok(decoded)
-    }
-
-    /// Shorthand to emit a `PropertiesChanged` signal, like when pausing/unpausing.
-    #[cfg(feature = "mpris")]
-    async fn mpris_changed(
-        &self,
-        properties: impl IntoIterator<Item = mpris_server::Property>,
-    ) -> eyre::Result<()> {
-        self.mpris
-            .get()
-            .unwrap()
-            .properties_changed(properties)
-            .await?;
-
-        Ok(())
-    }
-
-    /// Shorthand to get the inner mpris server object.
-    #[cfg(feature = "mpris")]
-    fn mpris_innner(&self) -> &mpris::Player {
-        self.mpris.get().unwrap().imp()
     }
 
     /// This basically just calls [`Player::next`], and then appends the new track to the player.
@@ -296,14 +272,14 @@ impl Player {
                 Downloader::notify(&itx).await?;
 
                 // Notify the audio server that the next song has actually been downloaded.
-                tx.send(Messages::NewSong).await?
+                tx.send(Messages::NewSong).await?;
             }
             Err(error) => {
                 if !error.downcast::<reqwest::Error>()?.is_timeout() {
-                    tokio::time::sleep(TIMEOUT).await;
+                    sleep(TIMEOUT).await;
                 }
 
-                tx.send(Messages::TryAgain).await?
+                tx.send(Messages::TryAgain).await?;
             }
         };
 
@@ -319,9 +295,18 @@ impl Player {
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
     ) -> eyre::Result<()> {
+        // Initialize the mpris player.
+        //
+        // We're initializing here, despite MPRIS being a "user interface",
+        // since we need to be able to *actively* write new information to MPRIS
+        // specifically when it occurs, unlike the UI which passively reads the
+        // information each frame. Blame MPRIS, not me.
+        #[cfg(feature = "mpris")]
+        let mpris = mpris::Server::new(Arc::clone(&player), tx.clone()).await?;
+
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
-        let downloader = Downloader::new(player.clone());
-        let (itx, downloader) = downloader.start().await;
+        let downloader = Downloader::new(Arc::clone(&player));
+        let (itx, downloader) = downloader.start();
 
         // Start buffering tracks immediately.
         Downloader::notify(&itx).await?;
@@ -329,12 +314,13 @@ impl Player {
         // Set the initial sink volume to the one specified.
         player.set_volume(player.volume.float());
 
-        // Whether the last signal was a `NewSong`.
-        // This is helpful, since we only want to autoplay
-        // if there hasn't been any manual intervention.
+        // Whether the last signal was a `NewSong`. This is helpful, since we
+        // only want to autoplay if there hasn't been any manual intervention.
+        //
+        // In other words, this will be `true` after a new track has been fully
+        // loaded  and it'll be `false` if a track is still currently loading.
         let mut new = false;
 
-        // TODO: Clean mpris_changed calls & streamline them somehow.
         loop {
             let clone = Arc::clone(&player);
 
@@ -353,7 +339,7 @@ impl Player {
                 //
                 // It's also important to note that the condition is only checked at the
                 // beginning of the loop, not throughout.
-                Ok(_) = task::spawn_blocking(move || clone.sink.sleep_until_end()),
+                Ok(()) = task::spawn_blocking(move || clone.sink.sleep_until_end()),
                         if new => Messages::Next,
             };
 
@@ -370,27 +356,23 @@ impl Player {
 
                     // Handle the rest of the signal in the background,
                     // as to not block the main audio thread.
-                    task::spawn(Self::handle_next(player.clone(), itx.clone(), tx.clone()));
+                    task::spawn(Self::handle_next(
+                        Arc::clone(&player),
+                        itx.clone(),
+                        tx.clone(),
+                    ));
                 }
                 Messages::Play => {
                     player.sink.play();
 
                     #[cfg(feature = "mpris")]
-                    player
-                        .mpris_changed(vec![mpris_server::Property::PlaybackStatus(
-                            mpris_server::PlaybackStatus::Playing,
-                        )])
-                        .await?;
+                    mpris.playback(PlaybackStatus::Playing).await?;
                 }
                 Messages::Pause => {
                     player.sink.pause();
 
                     #[cfg(feature = "mpris")]
-                    player
-                        .mpris_changed(vec![mpris_server::Property::PlaybackStatus(
-                            mpris_server::PlaybackStatus::Paused,
-                        )])
-                        .await?;
+                    mpris.playback(PlaybackStatus::Paused).await?;
                 }
                 Messages::PlayPause => {
                     if player.sink.is_paused() {
@@ -400,18 +382,16 @@ impl Player {
                     }
 
                     #[cfg(feature = "mpris")]
-                    player
-                        .mpris_changed(vec![mpris_server::Property::PlaybackStatus(
-                            player.mpris_innner().playback_status().await?,
-                        )])
+                    mpris
+                        .playback(mpris.player().playback_status().await?)
                         .await?;
                 }
                 Messages::ChangeVolume(change) => {
                     player.set_volume(player.sink.volume() + change);
 
                     #[cfg(feature = "mpris")]
-                    player
-                        .mpris_changed(vec![mpris_server::Property::Volume(
+                    mpris
+                        .changed(vec![mpris_server::Property::Volume(
                             player.sink.volume().into(),
                         )])
                         .await?;
@@ -425,13 +405,11 @@ impl Player {
                     new = true;
 
                     #[cfg(feature = "mpris")]
-                    player
-                        .mpris_changed(vec![
-                            mpris_server::Property::Metadata(
-                                player.mpris_innner().metadata().await?,
-                            ),
+                    mpris
+                        .changed(vec![
+                            mpris_server::Property::Metadata(mpris.player().metadata().await?),
                             mpris_server::Property::PlaybackStatus(
-                                player.mpris_innner().playback_status().await?,
+                                mpris.player().playback_status().await?,
                             ),
                         ])
                         .await?;

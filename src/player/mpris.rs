@@ -1,9 +1,11 @@
+//! Contains the code for the MPRIS server & other helper functions.
+
 use std::sync::Arc;
 
 use mpris_server::{
     zbus::{self, fdo, Result},
-    LoopStatus, Metadata, PlaybackRate, PlaybackStatus, PlayerInterface, RootInterface, Time,
-    TrackId, Volume,
+    LoopStatus, Metadata, PlaybackRate, PlaybackStatus, PlayerInterface, Property, RootInterface,
+    Time, TrackId, Volume,
 };
 use tokio::sync::mpsc::Sender;
 
@@ -13,7 +15,11 @@ const ERROR: fdo::Error = fdo::Error::Failed(String::new());
 
 /// The actual MPRIS player.
 pub struct Player {
+    /// A reference to the [`super::Player`] itself.
     pub player: Arc<super::Player>,
+
+    /// The audio server sender, which is used to communicate with
+    /// the audio sender for skips and a few other inputs.
     pub sender: Sender<Messages>,
 }
 
@@ -23,7 +29,10 @@ impl RootInterface for Player {
     }
 
     async fn quit(&self) -> fdo::Result<()> {
-        self.sender.send(Messages::Quit).await.map_err(|_| ERROR)
+        self.sender
+            .send(Messages::Quit)
+            .await
+            .map_err(|_error| ERROR)
     }
 
     async fn can_quit(&self) -> fdo::Result<bool> {
@@ -51,25 +60,28 @@ impl RootInterface for Player {
     }
 
     async fn identity(&self) -> fdo::Result<String> {
-        Ok("lowfi".to_string())
+        Ok("lowfi".to_owned())
     }
 
     async fn desktop_entry(&self) -> fdo::Result<String> {
-        Ok("dev.talwat.lowfi".to_string())
+        Ok("dev.talwat.lowfi".to_owned())
     }
 
     async fn supported_uri_schemes(&self) -> fdo::Result<Vec<String>> {
-        Ok(vec!["https".to_string()])
+        Ok(vec!["https".to_owned()])
     }
 
     async fn supported_mime_types(&self) -> fdo::Result<Vec<String>> {
-        Ok(vec!["audio/mpeg".to_string()])
+        Ok(vec!["audio/mpeg".to_owned()])
     }
 }
 
 impl PlayerInterface for Player {
     async fn next(&self) -> fdo::Result<()> {
-        self.sender.send(Messages::Next).await.map_err(|_| ERROR)
+        self.sender
+            .send(Messages::Next)
+            .await
+            .map_err(|_error| ERROR)
     }
 
     async fn previous(&self) -> fdo::Result<()> {
@@ -77,14 +89,17 @@ impl PlayerInterface for Player {
     }
 
     async fn pause(&self) -> fdo::Result<()> {
-        self.sender.send(Messages::Pause).await.map_err(|_| ERROR)
+        self.sender
+            .send(Messages::Pause)
+            .await
+            .map_err(|_error| ERROR)
     }
 
     async fn play_pause(&self) -> fdo::Result<()> {
         self.sender
             .send(Messages::PlayPause)
             .await
-            .map_err(|_| ERROR)
+            .map_err(|_error| ERROR)
     }
 
     async fn stop(&self) -> fdo::Result<()> {
@@ -92,7 +107,10 @@ impl PlayerInterface for Player {
     }
 
     async fn play(&self) -> fdo::Result<()> {
-        self.sender.send(Messages::Play).await.map_err(|_| ERROR)
+        self.sender
+            .send(Messages::Play)
+            .await
+            .map_err(|_error| ERROR)
     }
 
     async fn seek(&self, _offset: Time) -> fdo::Result<()> {
@@ -143,20 +161,22 @@ impl PlayerInterface for Player {
     }
 
     async fn metadata(&self) -> fdo::Result<Metadata> {
-        let metadata = match self.player.current.load().as_ref() {
-            Some(track) => {
+        let metadata = self
+            .player
+            .current
+            .load()
+            .as_ref()
+            .map_or_else(Metadata::new, |track| {
                 let mut metadata = Metadata::builder().title(track.name.clone()).build();
 
                 metadata.set_length(
                     track
                         .duration
-                        .and_then(|x| Some(Time::from_micros(x.as_micros() as i64))),
+                        .map(|x| Time::from_micros(x.as_micros() as i64)),
                 );
 
                 metadata
-            }
-            None => Metadata::new(),
-        };
+            });
 
         Ok(metadata)
     }
@@ -178,11 +198,11 @@ impl PlayerInterface for Player {
     }
 
     async fn minimum_rate(&self) -> fdo::Result<PlaybackRate> {
-        Ok(0.2)
+        Ok(0.2f64)
     }
 
     async fn maximum_rate(&self) -> fdo::Result<PlaybackRate> {
-        Ok(3.0)
+        Ok(3.0f64)
     }
 
     async fn can_go_next(&self) -> fdo::Result<bool> {
@@ -213,6 +233,7 @@ impl PlayerInterface for Player {
 /// A struct which contains the MPRIS [Server], and has some helper functions
 /// to make it easier to work with.
 pub struct Server {
+    /// The inner MPRIS server.
     inner: mpris_server::Server<Player>,
 }
 
@@ -220,7 +241,7 @@ impl Server {
     /// Shorthand to emit a `PropertiesChanged` signal, like when pausing/unpausing.
     pub async fn changed(
         &self,
-        properties: impl IntoIterator<Item = mpris_server::Property>,
+        properties: impl IntoIterator<Item = mpris_server::Property> + Send + Sync,
     ) -> eyre::Result<()> {
         self.inner.properties_changed(properties).await?;
 
@@ -230,7 +251,7 @@ impl Server {
     /// Shorthand to emit a `PropertiesChanged` signal, specifically about playback.
     pub async fn playback(&self, new: PlaybackStatus) -> zbus::Result<()> {
         self.inner
-            .properties_changed(vec![mpris_server::Property::PlaybackStatus(new)])
+            .properties_changed(vec![Property::PlaybackStatus(new)])
             .await
     }
 
@@ -239,11 +260,11 @@ impl Server {
         self.inner.imp()
     }
 
+    /// Creates a new MPRIS server.
     pub async fn new(player: Arc<super::Player>, sender: Sender<Messages>) -> eyre::Result<Self> {
-        let server =
-            mpris_server::Server::new("lowfi", crate::player::mpris::Player { player, sender })
-                .await
-                .unwrap();
+        let server = mpris_server::Server::new("lowfi", Player { player, sender })
+            .await
+            .unwrap();
 
         Ok(Self { inner: server })
     }

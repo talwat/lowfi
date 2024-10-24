@@ -20,7 +20,7 @@ use tokio::{
 };
 
 #[cfg(feature = "mpris")]
-use mpris_server::{PlaybackStatus, PlayerInterface};
+use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 
 use crate::{
     play::PersistentVolume,
@@ -391,9 +391,7 @@ impl Player {
 
                     #[cfg(feature = "mpris")]
                     mpris
-                        .changed(vec![mpris_server::Property::Volume(
-                            player.sink.volume().into(),
-                        )])
+                        .changed(vec![Property::Volume(player.sink.volume().into())])
                         .await?;
                 }
                 // This basically just continues, but more importantly, it'll re-evaluate
@@ -407,10 +405,8 @@ impl Player {
                     #[cfg(feature = "mpris")]
                     mpris
                         .changed(vec![
-                            mpris_server::Property::Metadata(mpris.player().metadata().await?),
-                            mpris_server::Property::PlaybackStatus(
-                                mpris.player().playback_status().await?,
-                            ),
+                            Property::Metadata(mpris.player().metadata().await?),
+                            Property::PlaybackStatus(mpris.player().playback_status().await?),
                         ])
                         .await?;
 

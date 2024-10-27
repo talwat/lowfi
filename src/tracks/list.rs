@@ -75,8 +75,7 @@ impl List {
             let name = dirs::data_dir()
                 .unwrap()
                 .join("lowfi")
-                .join(arg)
-                .join(".txt");
+                .join(format!("{}.txt", arg));
 
             let raw = if name.exists() {
                 fs::read_to_string(name).await?

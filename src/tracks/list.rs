@@ -2,6 +2,7 @@
 //! as well as obtaining track names & downloading the raw mp3 data.
 
 use bytes::Bytes;
+use eyre::OptionExt;
 use rand::Rng;
 use reqwest::Client;
 use tokio::fs;
@@ -13,6 +14,9 @@ use super::Track;
 /// See the [README](https://github.com/talwat/lowfi?tab=readme-ov-file#the-format) for more details about the format.
 #[derive(Clone)]
 pub struct List {
+    /// The "name" of the list, usually derived from a filename.
+    pub name: String,
+
     /// Just the raw file, but seperated by `/n` (newlines).
     /// `lines[0]` is the base, with the rest being tracks.
     lines: Vec<String>,
@@ -59,13 +63,16 @@ impl List {
     }
 
     /// Parses text into a [List].
-    pub fn new(text: &str) -> Self {
+    pub fn new(name: &str, text: &str) -> Self {
         let lines: Vec<String> = text
             .split_ascii_whitespace()
             .map(ToOwned::to_owned)
             .collect();
 
-        Self { lines }
+        Self {
+            lines,
+            name: name.to_owned(),
+        }
     }
 
     /// Reads a [List] from the filesystem using the CLI argument provided.
@@ -77,15 +84,21 @@ impl List {
                 .join("lowfi")
                 .join(format!("{}.txt", arg));
 
-            let raw = if name.exists() {
-                fs::read_to_string(name).await?
-            } else {
-                fs::read_to_string(arg).await?
-            };
+            let name = if name.exists() { name } else { arg.into() };
 
-            Ok(Self::new(&raw))
+            let raw = fs::read_to_string(name.clone()).await?;
+
+            let name = name
+                .file_stem()
+                .and_then(|x| x.to_str())
+                .ok_or_eyre("invalid track path")?;
+
+            Ok(Self::new(name, &raw))
         } else {
-            Ok(Self::new(include_str!("../../data/lofigirl.txt")))
+            Ok(Self::new(
+                "lofigirl",
+                include_str!("../../data/lofigirl.txt"),
+            ))
         }
     }
 }

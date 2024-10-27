@@ -290,6 +290,8 @@ impl Player {
     ///
     /// `rx` & `tx` are used to communicate with it, for example when to
     /// skip tracks or pause.
+    ///
+    /// This will also initialize a [Downloader] as well as an MPRIS server if enabled.
     pub async fn play(
         player: Arc<Self>,
         tx: Sender<Messages>,
@@ -302,7 +304,11 @@ impl Player {
         // specifically when it occurs, unlike the UI which passively reads the
         // information each frame. Blame MPRIS, not me.
         #[cfg(feature = "mpris")]
-        let mpris = mpris::Server::new(Arc::clone(&player), tx.clone()).await?;
+        let mpris = mpris::Server::new(Arc::clone(&player), tx.clone())
+            .await
+            .inspect_err(|x| {
+                dbg!(x);
+            })?;
 
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
         let downloader = Downloader::new(Arc::clone(&player));

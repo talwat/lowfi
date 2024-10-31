@@ -262,7 +262,7 @@ impl Server {
 
     /// Creates a new MPRIS server.
     pub async fn new(player: Arc<super::Player>, sender: Sender<Messages>) -> eyre::Result<Self> {
-        let suffix = format!("lowfi.{}.instance{}", player.list.name, process::id());
+        let suffix = format!("lowfi_{}.instance{}", player.list.name, process::id());
 
         let server = mpris_server::Server::new(&suffix, Player { player, sender }).await?;
 

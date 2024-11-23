@@ -27,8 +27,8 @@ use super::{Messages, Player};
 mod components;
 mod input;
 
-/// The total width of the UI.
-const WIDTH: usize = 27;
+/// The default total width of the UI.
+const DEFAULT_WIDTH: usize = 27;
 
 /// Self explanitory.
 const FPS: usize = 12;
@@ -66,12 +66,12 @@ pub struct Window {
 
 impl Window {
     /// Initializes a new [Window].
-    pub fn new() -> Self {
+    pub fn new(width: usize) -> Self {
         Self {
             borders: [
-                format!("┌{}┐\r\n", "─".repeat(WIDTH + 2)),
+                format!("┌{}┐\r\n", "─".repeat(width + 2)),
                 // This one doesn't have a leading \r\n to avoid extra space under the window.
-                format!("└{}┘", "─".repeat(WIDTH + 2)),
+                format!("└{}┘", "─".repeat(width + 2)),
             ],
             out: stdout(),
         }
@@ -119,8 +119,9 @@ impl Window {
 /// The code for the terminal interface itself.
 ///
 /// * `minimalist` - All this does is hide the bottom control bar.
-async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
-    let mut window = Window::new();
+/// * `width` - The width of player
+async fn interface(player: Arc<Player>, minimalist: bool, width: usize) -> eyre::Result<()> {
+    let mut window = Window::new(width);
 
     loop {
         // Load `current` once so that it doesn't have to be loaded over and over
@@ -128,15 +129,15 @@ async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
         let current = player.current.load();
         let current = current.as_ref();
 
-        let action = components::action(&player, current, WIDTH);
+        let action = components::action(&player, current, width);
 
         let volume = player.sink.volume();
         let percentage = format!("{}%", (volume * 100.0).round().abs());
 
         let timer = VOLUME_TIMER.load(Ordering::Relaxed);
         let middle = match timer {
-            0 => components::progress_bar(&player, current, WIDTH - 16),
-            _ => components::audio_bar(volume, &percentage, WIDTH - 17),
+            0 => components::progress_bar(&player, current, width - 16),
+            _ => components::audio_bar(volume, &percentage, width - 17),
         };
 
         if timer > 0 && timer <= AUDIO_BAR_DURATION {
@@ -147,7 +148,7 @@ async fn interface(player: Arc<Player>, minimalist: bool) -> eyre::Result<()> {
             VOLUME_TIMER.store(0, Ordering::Relaxed);
         }
 
-        let controls = components::controls(WIDTH);
+        let controls = components::controls(width);
 
         let menu = if minimalist {
             vec![action, middle]
@@ -236,7 +237,11 @@ impl Drop for Environment {
 /// previous terminal history.
 pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) -> eyre::Result<()> {
     let environment = Environment::ready(args.alternate)?;
-    let interface = task::spawn(interface(Arc::clone(&player), args.minimalist));
+    let interface = task::spawn(interface(
+        Arc::clone(&player),
+        args.minimalist,
+        args.width.unwrap_or(DEFAULT_WIDTH).max(21),
+    ));
 
     input::listen(sender.clone()).await?;
     interface.abort();

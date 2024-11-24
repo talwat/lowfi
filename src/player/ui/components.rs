@@ -117,6 +117,8 @@ pub fn controls(width: usize) -> String {
     let controls = controls.map(|x| format!("{}{}", x[0].bold(), x[1]));
 
     let mut controls = controls.join(&" ".repeat((width - len) / (controls.len() - 1)));
+    // This is needed because changing the above line
+    // only works for when the width is even
     controls.push_str(match width % 2 {
         0 => " ",
         _ => "",

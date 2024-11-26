@@ -67,9 +67,9 @@ struct Args {
     #[clap(long, short)]
     debug: bool,
 
-    /// The width of the player
-    #[clap(long, short)]
-    width: Option<usize>,
+    /// The width of the player, from 0 to 32.
+    #[clap(long, short, default_value_t = 3)]
+    width: usize,
 
     /// This is either a path, or a name of a file in the data directory (eg. ~/.local/share/lowfi).
     #[clap(long, short, alias = "list", short_alias = 'l')]

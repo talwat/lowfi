@@ -27,9 +27,6 @@ use super::{Messages, Player};
 mod components;
 mod input;
 
-/// The default total width of the UI.
-const DEFAULT_WIDTH: usize = 27;
-
 /// Self explanitory.
 const FPS: usize = 12;
 
@@ -240,7 +237,7 @@ pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) ->
     let interface = task::spawn(interface(
         Arc::clone(&player),
         args.minimalist,
-        args.width.unwrap_or(DEFAULT_WIDTH).max(21),
+        21 + args.width.min(32) * 2,
     ));
 
     input::listen(sender.clone()).await?;

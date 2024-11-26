@@ -3,7 +3,7 @@
 //! This command is completely optional, and as such isn't subject to the same
 //! quality standards as the rest of the codebase.
 
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{stream::FuturesOrdered, StreamExt};
 use lazy_static::lazy_static;
 use scraper::{Html, Selector};
 
@@ -34,7 +34,7 @@ async fn scan(extension: &str, include_full: bool) -> eyre::Result<Vec<String>> 
 
     let items = parse("").await?;
 
-    let years: Vec<u32> = items
+    let mut years: Vec<u32> = items
         .iter()
         .filter_map(|x| {
             let year = x.strip_suffix("/")?;
@@ -42,14 +42,16 @@ async fn scan(extension: &str, include_full: bool) -> eyre::Result<Vec<String>> 
         })
         .collect();
 
+    years.sort();
+
     // A little bit of async to run all of the months concurrently.
-    let mut futures = FuturesUnordered::new();
+    let mut futures = FuturesOrdered::new();
 
     for year in years {
         let months = parse(&year.to_string()).await?;
 
         for month in months {
-            futures.push(async move {
+            futures.push_back(async move {
                 let path = format!("{}/{}", year, month);
 
                 let items = parse(&path).await.unwrap();

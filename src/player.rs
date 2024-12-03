@@ -361,7 +361,7 @@ impl Player {
                     }
 
                     // Handle the rest of the signal in the background,
-                    // as to not block the main audio thread.
+                    // as to not block the main audio server thread.
                     task::spawn(Self::handle_next(
                         Arc::clone(&player),
                         itx.clone(),

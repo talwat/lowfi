@@ -137,7 +137,7 @@ where more information can be found by running `lowfi help scrape`.
 > This also means that there will be no added flexibility to these lists,
 > so you'll have to work that out on your own.
 
-lowfi also can support custom track lists, although the default one from Lofi Girl
+lowfi also supports custom track lists, although the default one from Lofi Girl
 is embedded into the binary.
 
 To use a custom list, use the `--tracks` flag. This can either be a path to some file,

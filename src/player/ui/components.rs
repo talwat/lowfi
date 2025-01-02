@@ -4,6 +4,7 @@
 use std::{ops::Deref, sync::Arc, time::Duration};
 
 use crossterm::style::Stylize;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{player::Player, tracks::Info};
 
@@ -100,10 +101,10 @@ pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> Str
         })
         .format();
 
-    // TODO: Deal with dangerous string slicing.
-    #[allow(clippy::string_slice)]
     if len > width {
-        format!("{}...", &main[..=width])
+        let chopped: String = main.graphemes(true).take(width + 1).collect();
+
+        format!("{}...", chopped)
     } else {
         format!("{}{}", main, " ".repeat(width - len))
     }

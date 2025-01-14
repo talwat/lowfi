@@ -75,9 +75,8 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 const BUFFER_SIZE: usize = 5;
 
 /// Main struct responsible for queuing up & playing tracks.
-// TODO: Consider refactoring [Player] from being stored in an [Arc],
-// TODO: so `Arc<Player>` into containing many smaller [Arc]s, being just
-// TODO: `Player` as the type.
+// TODO: Consider refactoring [Player] from being stored in an [Arc], into containing many smaller [Arc]s.
+// TODO: In other words, this would change the type from `Arc<Player>` to just `Player`.
 // TODO:
 // TODO: This is conflicting, since then it'd clone ~10 smaller [Arc]s
 // TODO: every single time, which could be even worse than having an
@@ -136,23 +135,25 @@ impl Player {
         // output to `/dev/null` so that it wont be shoved down our throats.
 
         // The mode which to redirect terminal output with.
-        let mode = CString::new("w")?.as_ptr();
+        let mode = CString::new("w")?;
 
         // First redirect to /dev/null, which basically silences alsa.
-        let null = CString::new("/dev/null")?.as_ptr();
+        let null = CString::new("/dev/null")?;
+
         // SAFETY: Simple enough to be impossible to fail. Hopefully.
         unsafe {
-            freopen(null, mode, stderr);
+            freopen(null.as_ptr(), mode.as_ptr(), stderr);
         }
 
         // Make the OutputStream while stderr is still redirected to /dev/null.
         let (stream, handle) = OutputStream::try_default()?;
 
         // Redirect back to the current terminal, so that other output isn't silenced.
-        let tty = CString::new("/dev/tty")?.as_ptr();
+        let tty = CString::new("/dev/tty")?;
+
         // SAFETY: See the first call to `freopen`.
         unsafe {
-            freopen(tty, mode, stderr);
+            freopen(tty.as_ptr(), mode.as_ptr(), stderr);
         }
 
         Ok((stream, handle))

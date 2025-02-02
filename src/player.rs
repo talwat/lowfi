@@ -151,11 +151,19 @@ fn output_stream_manager(
     commands: std::sync::mpsc::Receiver<Infallible>,
 ) {
     // We should only shut up alsa forcefully if we really have to.
-    let maybe_stream = if cfg!(target_os = "linux") && create_silently {
-        silent_get_output_stream()
-    } else {
-        OutputStream::try_default().map_err(eyre::ErrReport::from)
-    };
+    let maybe_stream;
+    #[cfg(target_os = "linux")]
+    {
+        if create_silently {
+            maybe_stream = silent_get_output_stream();
+        } else {
+            maybe_stream = OutputStream::try_default().map_err(eyre::ErrReport::from);
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        maybe_stream = OutputStream::try_default().map_err(eyre::ErrReport::from);
+    }
 
     let (_stream, handle) = match maybe_stream {
         Ok(items) => items,

@@ -108,20 +108,10 @@ pub struct Player {
     /// The [`OutputStreamHandle`], which also can control some
     /// playback, is for now unused and is here just to keep it
     /// alive so the playback can function properly.
+    /// The [`OutputStream`] associated with it has been leaked in the [`Player::new`] function,
+    /// so if the [`OutputStreamHandle`] is dropped, we will never get at the [`OutputStream`].
     _handle: OutputStreamHandle,
-
-    /// The [`OutputStream`], which is just here to keep the playback
-    /// alive and functioning.
-    _stream: OutputStream,
 }
-
-// SAFETY: This is necessary because [OutputStream] does not implement [Send],
-// due to some limitation with Android's Audio API.
-// I'm pretty sure nobody will use lowfi with android, so this is safe.
-unsafe impl Send for Player {}
-
-// SAFETY: See implementation for [Send].
-unsafe impl Sync for Player {}
 
 impl Player {
     /// This gets the output stream while also shutting up alsa with [libc].
@@ -191,6 +181,23 @@ impl Player {
             OutputStream::try_default()?
         };
 
+        // Leak the OutputStream so it lives forever.
+        // We only need the OutputStreamHandle to control playback.
+        //
+        // The OutputStream is not Sync or Send, because on Android it would be unsound
+        // to use it across threads
+        // (see https://github.com/RustAudio/cpal/issues/793).
+        //
+        // Previously, we used to `unsafe impl` Send & Sync for Player,
+        // essentially lying about that it's safe to share an OutputStream across threads.
+        // Because leaking resources is a Safe Rust operation,
+        // the audio library must tolerate this.
+        //
+        // Because the Player struct is meant to live for the entire life of the program,
+        // only one OutputStream is ever meant to be created.
+        // This will get cleaned up when the program exits.
+        std::mem::forget(_stream);
+
         let sink = Sink::try_new(&handle)?;
         if args.paused {
             sink.pause();
@@ -213,7 +220,6 @@ impl Player {
             volume,
             list,
             _handle: handle,
-            _stream,
         };
 
         Ok(player)

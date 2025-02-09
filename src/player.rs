@@ -2,7 +2,7 @@
 //! This also has the code for the underlying
 //! audio server which adds new tracks.
 
-use std::{collections::VecDeque, ffi::CString, sync::Arc, time::Duration};
+use std::{collections::VecDeque, convert::Infallible, ffi::CString, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
@@ -110,55 +110,124 @@ pub struct Player {
     /// alive so the playback can function properly.
     _handle: OutputStreamHandle,
 
-    /// The [`OutputStream`], which is just here to keep the playback
-    /// alive and functioning.
-    _stream: OutputStream,
+    /// This channel is used to send commands to the [`output_stream_manager`] function.
+    /// Right now there aren't any, so the channel sends [`Infallible`];
+    /// its main purpose is to be dropped when the [`Player`] is dropped,
+    /// to signal that the [`output_stream_manager`] should exit,
+    /// dropping the [`OutputStream`] that it contains.
+    _output_stream_manager_cmd: std::sync::mpsc::Sender<Infallible>,
 }
 
-// SAFETY: This is necessary because [OutputStream] does not implement [Send],
-// due to some limitation with Android's Audio API.
-// I'm pretty sure nobody will use lowfi with android, so this is safe.
-unsafe impl Send for Player {}
-
-// SAFETY: See implementation for [Send].
-unsafe impl Sync for Player {}
-
-impl Player {
-    /// This gets the output stream while also shutting up alsa with [libc].
-    fn silent_get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
-        // Get the file descriptor to stderr from libc.
-        extern "C" {
-            static stderr: *mut libc::FILE;
+/// This function's purpose is to run in its own thread and hold
+/// an [`OutputStream`].
+///
+/// [`OutputStream`] is not Sync or Send
+/// because of compatibility issues on Android,
+/// and we need to handle these even though we do not intend to run on Android
+/// (see https://github.com/RustAudio/cpal/issues/793).
+///
+/// This function will:
+/// 1. Attempt to create an [`OutputStream`] and its associated [`OutputStreamHandle`].
+/// 2. Send the [`OutputStreamHandle`] to the provided output channel, and close it.
+/// 3. Loop and wait for commands (of which there are currently none) from the input channel.
+/// 4. Once the input channel is dropped, this will exit.
+///
+/// This provides an interface to talk with the [`OutputStream`] directly, if needed.
+/// Its lifetime depends on the lifetime of the command channel,
+/// so be sure to keep the sender for that channel alive for as long as you want to use the [`OutputStream`].
+///
+/// If `create_silently`, then this will use [`silent_get_output_stream`], which will
+/// temporarily redirect stdout to /dev/null
+/// while the [`OutputStream`] is created,
+/// to shut up alsa.
+///
+/// If there is an error while creating the stream, then the receiver channel
+/// will receive the error,
+/// and this function will exit immediately
+/// (without polling the commands channel).
+fn output_stream_manager(
+    create_silently: bool,
+    handle_send: std::sync::mpsc::SyncSender<eyre::Result<OutputStreamHandle>>,
+    commands: std::sync::mpsc::Receiver<Infallible>,
+) {
+    // We should only shut up alsa forcefully if we really have to.
+    let maybe_stream;
+    #[cfg(target_os = "linux")]
+    {
+        if create_silently {
+            maybe_stream = silent_get_output_stream();
+        } else {
+            maybe_stream = OutputStream::try_default().map_err(eyre::ErrReport::from);
         }
-
-        // This is a bit of an ugly hack that basically just uses `libc` to redirect alsa's
-        // output to `/dev/null` so that it wont be shoved down our throats.
-
-        // The mode which to redirect terminal output with.
-        let mode = CString::new("w")?;
-
-        // First redirect to /dev/null, which basically silences alsa.
-        let null = CString::new("/dev/null")?;
-
-        // SAFETY: Simple enough to be impossible to fail. Hopefully.
-        unsafe {
-            freopen(null.as_ptr(), mode.as_ptr(), stderr);
-        }
-
-        // Make the OutputStream while stderr is still redirected to /dev/null.
-        let (stream, handle) = OutputStream::try_default()?;
-
-        // Redirect back to the current terminal, so that other output isn't silenced.
-        let tty = CString::new("/dev/tty")?;
-
-        // SAFETY: See the first call to `freopen`.
-        unsafe {
-            freopen(tty.as_ptr(), mode.as_ptr(), stderr);
-        }
-
-        Ok((stream, handle))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        maybe_stream = OutputStream::try_default().map_err(eyre::ErrReport::from);
     }
 
+    let (_stream, handle) = match maybe_stream {
+        Ok(items) => items,
+        Err(error) => {
+            handle_send.send(Err(error)).unwrap();
+            return;
+        }
+    };
+
+    // Send the handle back to the main thread,
+    // then close this channel.
+    handle_send.send(Ok(handle)).unwrap();
+    drop(handle_send);
+
+    // Loop and wait for commands.
+    for cmd in commands {
+        // Ignored: no commands are currently implemented.
+        // The `match` statement is needed to error out the compilation
+        // if new commands are added.
+        match cmd {}
+    }
+
+    // At this point, the commands channel is closed,
+    // so the stream gets dropped.
+}
+
+/// This gets the output stream while also shutting up alsa with [libc].
+/// Only works on Linux because it uses raw Unix calls.
+#[cfg(target_os = "linux")]
+fn silent_get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
+    // Get the file descriptor to stderr from libc.
+    extern "C" {
+        static stderr: *mut libc::FILE;
+    }
+
+    // This is a bit of an ugly hack that basically just uses `libc` to redirect alsa's
+    // output to `/dev/null` so that it wont be shoved down our throats.
+
+    // The mode which to redirect terminal output with.
+    let mode = CString::new("w")?;
+
+    // First redirect to /dev/null, which basically silences alsa.
+    let null = CString::new("/dev/null")?;
+
+    // SAFETY: Simple enough to be impossible to fail. Hopefully.
+    unsafe {
+        freopen(null.as_ptr(), mode.as_ptr(), stderr);
+    }
+
+    // Make the OutputStream while stderr is still redirected to /dev/null.
+    let (stream, handle) = OutputStream::try_default()?;
+
+    // Redirect back to the current terminal, so that other output isn't silenced.
+    let tty = CString::new("/dev/tty")?;
+
+    // SAFETY: See the first call to `freopen`.
+    unsafe {
+        freopen(tty.as_ptr(), mode.as_ptr(), stderr);
+    }
+
+    Ok((stream, handle))
+}
+
+impl Player {
     /// Just a shorthand for setting `current`.
     fn set_current(&self, info: tracks::Info) {
         self.current.store(Some(Arc::new(info)));
@@ -184,12 +253,25 @@ impl Player {
         // Load the track list.
         let list = List::load(&args.tracks).await?;
 
-        // We should only shut up alsa forcefully if we really have to.
-        let (_stream, handle) = if cfg!(target_os = "linux") && !args.alternate && !args.debug {
-            Self::silent_get_output_stream()?
-        } else {
-            OutputStream::try_default()?
-        };
+        // The OutputStream is created in a separate thread,
+        // where it will live until the Player is dropped.
+        // We only need the OutputStreamHandle to control playback,
+        // and even that (at time of writing) is unused.
+        //
+        // The OutputStream is not Sync or Send, because on Android it would be unsound
+        // to use it across threads.
+        // Previously, we used to `unsafe impl` Send & Sync for Player,
+        // essentially lying about that it's safe to share an OutputStream.
+
+        let create_stream_silently = !args.alternate && !args.debug;
+        let (handle_send, handle_recv) = std::sync::mpsc::sync_channel(0);
+        let (commands_send, commands_recv) = std::sync::mpsc::channel();
+
+        std::thread::spawn(move || {
+            output_stream_manager(create_stream_silently, handle_send, commands_recv);
+        });
+
+        let handle = handle_recv.recv()??;
 
         let sink = Sink::try_new(&handle)?;
         if args.paused {
@@ -213,7 +295,7 @@ impl Player {
             volume,
             list,
             _handle: handle,
-            _stream,
+            _output_stream_manager_cmd: commands_send,
         };
 
         Ok(player)

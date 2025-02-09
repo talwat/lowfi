@@ -102,6 +102,9 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
+    #[cfg(target_os = "android")]
+    compile_error!("Android Audio API not supported due to threading shenanigans");
+
     let cli = Args::parse();
 
     if let Some(command) = cli.command {

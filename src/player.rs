@@ -125,6 +125,11 @@ unsafe impl Sync for Player {}
 
 impl Player {
     /// This gets the output stream while also shutting up alsa with [libc].
+    /// Uses raw libc calls, and therefore is functional only on Linux.
+    ///
+    /// In other words, for the younger generation, we're telling alsa
+    /// to simply just the audio in the bag, lil api.
+    #[cfg(target_os = "linux")]
     fn silent_get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
         // Get the file descriptor to stderr from libc.
         extern "C" {
@@ -184,12 +189,17 @@ impl Player {
         // Load the track list.
         let list = List::load(&args.tracks).await?;
 
-        // We should only shut up alsa forcefully if we really have to.
-        let (_stream, handle) = if cfg!(target_os = "linux") && !args.alternate && !args.debug {
+        // We should only shut up alsa forcefully on Linux if we really have to.
+        #[cfg(target_os = "linux")]
+        let (_stream, handle) = if !args.alternate && !args.debug {
             Self::silent_get_output_stream()?
         } else {
             OutputStream::try_default()?
         };
+
+        // If we're not on Linux, then there's no problem.
+        #[cfg(not(target_os = "linux"))]
+        let (_stream, handle) = OutputStream::try_default()?;
 
         let sink = Sink::try_new(&handle)?;
         if args.paused {

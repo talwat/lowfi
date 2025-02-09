@@ -82,7 +82,7 @@ impl List {
             let name = dirs::data_dir()
                 .unwrap()
                 .join("lowfi")
-                .join(format!("{}.txt", arg));
+                .join(format!("{arg}.txt"));
 
             let name = if name.exists() { name } else { arg.into() };
 

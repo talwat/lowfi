@@ -104,7 +104,7 @@ pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> Str
     if len > width {
         let chopped: String = main.graphemes(true).take(width + 1).collect();
 
-        format!("{}...", chopped)
+        format!("{chopped}...")
     } else {
         format!("{}{}", main, " ".repeat(width - len))
     }

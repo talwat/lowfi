@@ -59,6 +59,10 @@ struct Args {
     #[clap(long, short)]
     minimalist: bool,
 
+    /// Whether to not include borders in the UI.
+    #[clap(long, short)]
+    no_borders: bool,
+
     /// Whether to start lowfi paused.
     #[clap(long, short)]
     paused: bool,

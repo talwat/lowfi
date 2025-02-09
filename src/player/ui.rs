@@ -55,7 +55,9 @@ lazy_static! {
 pub struct Window {
     /// The top & bottom borders, which are here since they can be
     /// prerendered, as they don't change from window to window.
-    borders: [String; 2],
+    ///
+    /// [None] if the option to not include windows is set.
+    borders: Option<[String; 2]>,
 
     /// The output, currently just an [`Stdout`].
     out: Stdout,
@@ -63,13 +65,20 @@ pub struct Window {
 
 impl Window {
     /// Initializes a new [Window].
-    pub fn new(width: usize) -> Self {
-        Self {
-            borders: [
+    ///
+    /// * `width` - Width of the windows.
+    /// * `borders` - Whether to include borders in the window, or not.
+    pub fn new(width: usize, borders: bool) -> Self {
+        let borders = borders.then(|| {
+            [
                 format!("┌{}┐\r\n", "─".repeat(width + 2)),
                 // This one doesn't have a leading \r\n to avoid extra space under the window.
                 format!("└{}┘", "─".repeat(width + 2)),
-            ],
+            ]
+        });
+
+        Self {
+            borders,
             out: stdout(),
         }
     }
@@ -79,26 +88,35 @@ impl Window {
         let len = content.len() as u16;
 
         let menu: String = content.into_iter().fold(String::new(), |mut output, x| {
-            write!(output, "│ {} │\r\n", x.reset()).unwrap();
+            if self.borders.is_some() {
+                write!(output, "│ {} │\r\n", x.reset()).unwrap();
+            } else {
+                write!(output, "{}\r\n", x.reset()).unwrap();
+            }
 
             output
         });
 
         // We're doing this because Windows is stupid and can't stand
-        // writing to the last line repeatedly. Again, it's stupid.
+        // writing to the last line repeatedly.
         #[cfg(windows)]
-        let (rendered, height) = (
-            format!("{}{}{}\r\n", self.borders[0], menu, self.borders[1]),
-            len + 2,
+        let output_len = len;
+        #[cfg(not(windows))]
+        let output_len = len - 1;
+
+        let (mut rendered, height) = self.borders.as_ref().map_or_else(
+            || (menu.trim().to_owned(), output_len),
+            |borders| {
+                (
+                    format!("{}{}{}", borders[0], menu, borders[1]),
+                    output_len + 2,
+                )
+            },
         );
 
-        // Unix has no such ridiculous limitations, so we calculate
-        // the height of the window accurately.
-        #[cfg(not(windows))]
-        let (rendered, height) = (
-            format!("{}{}{}", self.borders[0], menu, self.borders[1]),
-            len + 1,
-        );
+        // Similar reasoning to the previous comment defining `output_len`.
+        #[cfg(windows)]
+        rendered.push_str("\r\n");
 
         crossterm::execute!(
             self.out,
@@ -116,9 +134,15 @@ impl Window {
 /// The code for the terminal interface itself.
 ///
 /// * `minimalist` - All this does is hide the bottom control bar.
+/// * `borders` - Whether to include borders or not.
 /// * `width` - The width of player
-async fn interface(player: Arc<Player>, minimalist: bool, width: usize) -> eyre::Result<()> {
-    let mut window = Window::new(width);
+async fn interface(
+    player: Arc<Player>,
+    minimalist: bool,
+    borders: bool,
+    width: usize,
+) -> eyre::Result<()> {
+    let mut window = Window::new(width, borders);
 
     loop {
         // Load `current` once so that it doesn't have to be loaded over and over
@@ -140,7 +164,7 @@ async fn interface(player: Arc<Player>, minimalist: bool, width: usize) -> eyre:
         if timer > 0 && timer <= AUDIO_BAR_DURATION {
             // We'll keep increasing the timer until it eventually hits `AUDIO_BAR_DURATION`.
             VOLUME_TIMER.fetch_add(1, Ordering::Relaxed);
-        } else if timer > AUDIO_BAR_DURATION {
+        } else {
             // If enough time has passed, we'll reset it back to 0.
             VOLUME_TIMER.store(0, Ordering::Relaxed);
         }
@@ -237,6 +261,7 @@ pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) ->
     let interface = task::spawn(interface(
         Arc::clone(&player),
         args.minimalist,
+        !args.no_borders,
         21 + args.width.min(32) * 2,
     ));
 

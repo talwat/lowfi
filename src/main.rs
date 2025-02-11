@@ -61,7 +61,7 @@ struct Args {
 
     /// Whether to not include borders in the UI.
     #[clap(long, short)]
-    no_borders: bool,
+    borderless: bool,
 
     /// Whether to start lowfi paused.
     #[clap(long, short)]

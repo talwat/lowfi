@@ -53,11 +53,14 @@ lazy_static! {
 /// The main purpose of this struct is just to add the fancy border,
 /// as well as clear the screen before drawing.
 pub struct Window {
+    // Whether or not to include borders in the output.
+    borderless: bool,
+
     /// The top & bottom borders, which are here since they can be
     /// prerendered, as they don't change from window to window.
     ///
-    /// [None] if the option to not include windows is set.
-    borders: Option<[String; 2]>,
+    /// If the option to not include borders is set, these will just be empty [String]s.
+    borders: [String; 2],
 
     /// The output, currently just an [`Stdout`].
     out: Stdout,
@@ -67,18 +70,19 @@ impl Window {
     /// Initializes a new [Window].
     ///
     /// * `width` - Width of the windows.
-    /// * `borders` - Whether to include borders in the window, or not.
-    pub fn new(width: usize, borders: bool) -> Self {
-        let borders = borders.then(|| {
-            [
-                format!("┌{}┐\r\n", "─".repeat(width + 2)),
-                // This one doesn't have a leading \r\n to avoid extra space under the window.
-                format!("└{}┘", "─".repeat(width + 2)),
-            ]
-        });
+    /// * `borderless` - Whether to include borders in the window, or not.
+    pub fn new(width: usize, borderless: bool) -> Self {
+        let borders = if !borderless {
+            let middle = "─".repeat(width + 2);
+
+            [format!("┌{middle}┐"), format!("└{middle}┘")]
+        } else {
+            [String::new(), String::new()]
+        };
 
         Self {
             borders,
+            borderless,
             out: stdout(),
         }
     }
@@ -87,12 +91,11 @@ impl Window {
     pub fn draw(&mut self, content: Vec<String>) -> eyre::Result<()> {
         let len = content.len() as u16;
 
+        // Note that this will have a trailing newline, which we use later.
         let menu: String = content.into_iter().fold(String::new(), |mut output, x| {
-            if self.borders.is_some() {
-                write!(output, "│ {} │\r\n", x.reset()).unwrap();
-            } else {
-                write!(output, "{}\r\n", x.reset()).unwrap();
-            }
+            // Horizontal Padding & Border
+            let padding = if !self.borderless { "│" } else { " " };
+            write!(output, "{padding} {} {padding}\r\n", x.reset()).unwrap();
 
             output
         });
@@ -100,23 +103,12 @@ impl Window {
         // We're doing this because Windows is stupid and can't stand
         // writing to the last line repeatedly.
         #[cfg(windows)]
-        let output_len = len;
+        let (height, suffix) = (len + 2, "\r\n");
         #[cfg(not(windows))]
-        let output_len = len - 1;
+        let (height, suffix) = (len + 1, "");
 
-        let (mut rendered, height) = self.borders.as_ref().map_or_else(
-            || (menu.trim().to_owned(), output_len),
-            |borders| {
-                (
-                    format!("{}{}{}", borders[0], menu, borders[1]),
-                    output_len + 2,
-                )
-            },
-        );
-
-        // Similar reasoning to the previous comment defining `output_len`.
-        #[cfg(windows)]
-        rendered.push_str("\r\n");
+        // There's no need for another newline after the main menu content, because it already has one.
+        let rendered = format!("{}\r\n{menu}{}{suffix}", self.borders[0], self.borders[1]);
 
         crossterm::execute!(
             self.out,
@@ -134,15 +126,15 @@ impl Window {
 /// The code for the terminal interface itself.
 ///
 /// * `minimalist` - All this does is hide the bottom control bar.
-/// * `borders` - Whether to include borders or not.
+/// * `borderless` - Whether to include borders or not.
 /// * `width` - The width of player
 async fn interface(
     player: Arc<Player>,
     minimalist: bool,
-    borders: bool,
+    borderless: bool,
     width: usize,
 ) -> eyre::Result<()> {
-    let mut window = Window::new(width, borders);
+    let mut window = Window::new(width, borderless);
 
     loop {
         // Load `current` once so that it doesn't have to be loaded over and over
@@ -261,7 +253,7 @@ pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) ->
     let interface = task::spawn(interface(
         Arc::clone(&player),
         args.minimalist,
-        !args.no_borders,
+        args.borderless,
         21 + args.width.min(32) * 2,
     ));
 

@@ -45,25 +45,23 @@ impl Info {
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks.
     fn format_name(name: &str) -> String {
-        let formatted = Self::decode_url(
-            name.split('/')
-                .last()
-                .unwrap()
-                .strip_suffix(".mp3")
-                .unwrap(),
-        )
-        .to_lowercase()
-        .to_title_case()
-        // Inflector doesn't like contractions...
-        // Replaces a few very common ones.
-        // TODO: Properly handle these.
-        .replace(" S ", "'s ")
-        .replace(" T ", "'t ")
-        .replace(" D ", "'d ")
-        .replace(" Ve ", "'ve ")
-        .replace(" Ll ", "'ll ")
-        .replace(" Re ", "'re ")
-        .replace(" M ", "'m ");
+        let split = name.split('/').last().unwrap();
+
+        let stripped = split.strip_suffix(".mp3").unwrap_or(split);
+
+        let formatted = Self::decode_url(stripped)
+            .to_lowercase()
+            .to_title_case()
+            // Inflector doesn't like contractions...
+            // Replaces a few very common ones.
+            // TODO: Properly handle these.
+            .replace(" S ", "'s ")
+            .replace(" T ", "'t ")
+            .replace(" D ", "'d ")
+            .replace(" Ve ", "'ve ")
+            .replace(" Ll ", "'ll ")
+            .replace(" Re ", "'re ")
+            .replace(" M ", "'m ");
 
         // This is incremented for each digit in front of the song name.
         let mut skip = 0;
@@ -76,13 +74,21 @@ impl Info {
             }
         }
 
-        #[allow(clippy::string_slice, /* We've already checked before that the bound is at an ASCII digit. */)]
-        String::from(&formatted[skip..])
+        // If the entire name of the track is a number, then just return it.
+        if skip == formatted.len() {
+            formatted
+        } else {
+            #[allow(clippy::string_slice, /* We've already checked before that the bound is at an ASCII digit. */)]
+            String::from(&formatted[skip..])
+        }
     }
 
-    /// Creates a new [`TrackInfo`] from a raw name & decoded track data.
-    pub fn new(name: &str, decoded: &DecodedData) -> Self {
-        let name = Self::format_name(name);
+    /// Creates a new [`TrackInfo`] from a possibly raw name & decoded track data.
+    pub fn new(name: TrackName, decoded: &DecodedData) -> Self {
+        let name = match name {
+            TrackName::Raw(raw) => Self::format_name(&raw),
+            TrackName::Formatted(formatted) => formatted,
+        };
 
         Self {
             duration: decoded.total_duration(),
@@ -107,16 +113,30 @@ impl Decoded {
     /// This is equivalent to [`Track::decode`].
     pub fn new(track: Track) -> eyre::Result<Self> {
         let data = Decoder::new(Cursor::new(track.data))?;
-        let info = Info::new(&track.name, &data);
+        let info = Info::new(track.name, &data);
 
         Ok(Self { info, data })
     }
 }
 
+/// Specifies a track's name, and specifically,
+/// whether it has already been formatted or if it
+/// is still in it's raw form.
+#[derive(Debug, Clone)]
+pub enum TrackName {
+    /// Pulled straight from the list,
+    /// with no splitting done at all.
+    Raw(String),
+
+    /// If a track has a custom specified name
+    /// in the list, then it should be defined with this variant.
+    Formatted(String),
+}
+
 /// The main track struct, which only includes data & the track name.
 pub struct Track {
-    /// This name is not formatted, and also includes the month & year of the track.
-    pub name: String,
+    /// Name of the track.
+    pub name: TrackName,
 
     /// The raw data of the track, which is not decoded and
     /// therefore much more memory efficient.

@@ -173,3 +173,12 @@ lowfi would download these three URLs:
 - `https://lofigirl.com/wp-content/uploads/2023/06/Foudroie-Finding-The-Edge-V2.mp3`
 - `https://file-examples.com/storage/fea570b16e6703ef79e65b4/2017/11/file_example_MP3_5MG.mp3`
 - `https://lofigirl.com/wp-content/uploads/2023/04/2-In-Front-Of-Me.mp3`
+
+Additionally, you may also specify a custom display name for the track which is indicated by a `!`.
+For example, if you had an entry like this:
+
+```
+2023/04/2-In-Front-Of-Me.mp3!custom name
+```
+
+Then lowfi would download from the first section, and display the second.

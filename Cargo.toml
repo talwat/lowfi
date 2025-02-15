@@ -1,6 +1,6 @@
 [package]
 name = "lowfi"
-version = "1.5.7"
+version = "1.6.0"
 edition = "2021"
 description = "An extremely simple lofi player."
 license = "MIT"

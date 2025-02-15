@@ -76,6 +76,7 @@ pub async fn play(args: Args) -> eyre::Result<()> {
     // Actually initializes the player.
     let player = Arc::new(Player::new(&args).await?);
 
+    // Initialize the UI, as well as the internal communication channel.
     let (tx, rx) = mpsc::channel(8);
     let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args));
 

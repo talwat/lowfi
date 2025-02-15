@@ -53,7 +53,7 @@ lazy_static! {
 /// The main purpose of this struct is just to add the fancy border,
 /// as well as clear the screen before drawing.
 pub struct Window {
-    // Whether or not to include borders in the output.
+    /// Whether or not to include borders in the output.
     borderless: bool,
 
     /// The top & bottom borders, which are here since they can be
@@ -72,12 +72,12 @@ impl Window {
     /// * `width` - Width of the windows.
     /// * `borderless` - Whether to include borders in the window, or not.
     pub fn new(width: usize, borderless: bool) -> Self {
-        let borders = if !borderless {
+        let borders = if borderless {
+            [String::new(), String::new()]
+        } else {
             let middle = "─".repeat(width + 2);
 
             [format!("┌{middle}┐"), format!("└{middle}┘")]
-        } else {
-            [String::new(), String::new()]
         };
 
         Self {
@@ -94,7 +94,7 @@ impl Window {
         // Note that this will have a trailing newline, which we use later.
         let menu: String = content.into_iter().fold(String::new(), |mut output, x| {
             // Horizontal Padding & Border
-            let padding = if !self.borderless { "│" } else { " " };
+            let padding = if self.borderless { " " } else { "│" };
             write!(output, "{padding} {} {padding}\r\n", x.reset()).unwrap();
 
             output

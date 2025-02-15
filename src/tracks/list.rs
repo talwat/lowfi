@@ -28,15 +28,25 @@ impl List {
         self.lines[0].trim()
     }
 
-    /// Gets the name of a random track.
-    fn random_name(&self) -> String {
+    /// Gets the path of a random track.
+    ///
+    /// The second value in the tuple specifies whether the
+    /// track has a custom display name.
+    fn random_path(&self) -> (String, Option<String>) {
         // We're getting from 1 here, since the base is at `self.lines[0]`.
         //
         // We're also not pre-trimming `self.lines` into `base` & `tracks` due to
-        // how rust vectors work, sinceslow to drain only a single element from
+        // how rust vectors work, since it is slower to drain only a single element from
         // the start, so it's faster to just keep it in & work around it.
         let random = rand::thread_rng().gen_range(1..self.lines.len());
-        self.lines[random].clone()
+        let line = self.lines[random].clone();
+
+        let split: Vec<&str> = line.split('!').collect();
+        if split.len() == 1 {
+            (line, None)
+        } else {
+            (split[0].to_owned(), Some(split[1].to_owned()))
+        }
     }
 
     /// Downloads a raw track, but doesn't decode it.
@@ -56,18 +66,19 @@ impl List {
 
     /// Fetches and downloads a random track from the [List].
     pub async fn random(&self, client: &Client) -> reqwest::Result<Track> {
-        let name = self.random_name();
-        let data = self.download(&name, client).await?;
+        let (path, custom_name) = self.random_path();
+        let data = self.download(&path, client).await?;
+
+        let name = custom_name.map_or(super::TrackName::Raw(path), |formatted| {
+            super::TrackName::Formatted(formatted)
+        });
 
         Ok(Track { name, data })
     }
 
     /// Parses text into a [List].
     pub fn new(name: &str, text: &str) -> Self {
-        let lines: Vec<String> = text
-            .split_ascii_whitespace()
-            .map(ToOwned::to_owned)
-            .collect();
+        let lines: Vec<String> = text.trim().lines().map(|x| x.trim().to_owned()).collect();
 
         Self {
             lines,

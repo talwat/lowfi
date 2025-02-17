@@ -38,14 +38,14 @@ pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
                 'q' => Messages::Quit,
 
                 // Skip/Next
-                's' | 'n' => Messages::Next,
+                's' | 'n' | 'l' => Messages::Next,
 
                 // Pause
-                'p' => Messages::PlayPause,
+                'p' | ' ' => Messages::PlayPause,
 
                 // Volume up & down
-                '+' | '=' => Messages::ChangeVolume(0.1),
-                '-' | '_' => Messages::ChangeVolume(-0.1),
+                '+' | '=' | 'k' => Messages::ChangeVolume(0.1),
+                '-' | '_' | 'j' => Messages::ChangeVolume(-0.1),
 
                 _ => continue,
             },

@@ -102,12 +102,17 @@ Yeah, that's it.
 
 ### Controls
 
-| Key   | Function       |
-|-------|----------------|
-|  `s`  | Skip song      |
-|  `p`  | Play/Pause     |
-| `+/-` | Volume Up/Down |
-|  `q`  | Quit           |
+| Key          | Function        |
+|--------------|-----------------|
+| `s\|n\|l`    | Skip song       |
+| `p\| `       | Play/Pause      |
+| `+\|=\|k\|↑` | Volume Up 10%   |
+| `→`          | 1%              |
+| `-\|_\|j\|↓` | Volume Down 10% |
+| `←`          | 1%              |
+| `q\|ctrl+c`  | Quit            |
+
+Besides its regular controls, lowfi offers compatibility with Media Keys and [MPRIS](https://wiki.archlinux.org/title/MPRIS) (with tools like `playerctl`)
 
 ### Extra Flags
 

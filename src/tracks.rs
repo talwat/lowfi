@@ -78,7 +78,10 @@ impl Info {
         if skip == formatted.len() {
             formatted
         } else {
-            #[allow(clippy::string_slice, /* We've already checked before that the bound is at an ASCII digit. */)]
+            #[expect(
+                clippy::string_slice,
+                reason = "We've already checked before that the bound is at an ASCII digit."
+            )]
             String::from(&formatted[skip..])
         }
     }

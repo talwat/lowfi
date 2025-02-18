@@ -187,7 +187,7 @@ impl Player {
         let volume = PersistentVolume::load().await?;
 
         // Load the track list.
-        let list = List::load(&args.tracks).await?;
+        let list = List::load(args.tracks.as_ref()).await?;
 
         // We should only shut up alsa forcefully on Linux if we really have to.
         #[cfg(target_os = "linux")]
@@ -233,7 +233,9 @@ impl Player {
     ///
     /// This will also set `current` to the newly loaded song.
     pub async fn next(&self) -> eyre::Result<tracks::Decoded> {
-        let track = if let Some(track) = self.tracks.write().await.pop_front() {
+        // TODO: Consider replacing this with `unwrap_or_else` when async closures are stablized.
+        let track = self.tracks.write().await.pop_front();
+        let track = if let Some(track) = track {
             track
         } else {
             // If the queue is completely empty, then fallback to simply getting a new track.

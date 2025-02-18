@@ -41,11 +41,10 @@ impl List {
         let random = rand::thread_rng().gen_range(1..self.lines.len());
         let line = self.lines[random].clone();
 
-        let split: Vec<&str> = line.split('!').collect();
-        if split.len() == 1 {
-            (line, None)
+        if let Some((first, second)) = line.split_once('!') {
+            (first.to_owned(), Some(second.to_owned()))
         } else {
-            (split[0].to_owned(), Some(split[1].to_owned()))
+            (line, None)
         }
     }
 
@@ -87,7 +86,7 @@ impl List {
     }
 
     /// Reads a [List] from the filesystem using the CLI argument provided.
-    pub async fn load(tracks: &Option<String>) -> eyre::Result<Self> {
+    pub async fn load(tracks: Option<&String>) -> eyre::Result<Self> {
         if let Some(arg) = tracks {
             // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
             let name = dirs::data_dir()

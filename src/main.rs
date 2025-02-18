@@ -36,6 +36,8 @@
     clippy::integer_division,
     clippy::cast_sign_loss,
     clippy::cast_lossless,
+    clippy::arbitrary_source_item_ordering,
+    clippy::unused_trait_names
 )]
 
 use clap::{Parser, Subcommand};

@@ -102,17 +102,23 @@ Yeah, that's it.
 
 ### Controls
 
-| Key          | Function        |
-|--------------|-----------------|
-| `s\|n\|l`    | Skip song       |
-| `p\| `       | Play/Pause      |
-| `+\|=\|k\|↑` | Volume Up 10%   |
-| `→`          | 1%              |
-| `-\|_\|j\|↓` | Volume Down 10% |
-| `←`          | 1%              |
-| `q\|ctrl+c`  | Quit            |
+| Key                | Function        |
+| ------------------ | --------------- |
+| `s`, `n`, `l`      | Skip Song       |
+| `p`                | Play/Pause      |
+| `+`, `=`, `k`, `↑` | Volume Up 10%   |
+| `→`                | Volume Up 1%    |
+| `-`, `_`, `j`, `↓` | Volume Down 10% |
+| `←`                | Volume Down 1%  |
+| `q`, CTRL+C        | Quit            |
 
-Besides its regular controls, lowfi offers compatibility with Media Keys and [MPRIS](https://wiki.archlinux.org/title/MPRIS) (with tools like `playerctl`)
+> [!NOTE]
+> Besides its regular controls, lowfi offers compatibility with Media Keys
+> and [MPRIS](https://wiki.archlinux.org/title/MPRIS) (with tools like `playerctl`)
+>
+> MPRIS is currently optional feature in cargo (enabled with `--features mpris`)
+> due to it being only for Linux, as well as the fact that the main point of
+> lowfi is it's unique & minimal interface.
 
 ### Extra Flags
 
@@ -182,7 +188,7 @@ lowfi would download these three URLs:
 Additionally, you may also specify a custom display name for the track which is indicated by a `!`.
 For example, if you had an entry like this:
 
-```
+```txt
 2023/04/2-In-Front-Of-Me.mp3!custom name
 ```
 

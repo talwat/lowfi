@@ -11,6 +11,8 @@ use tokio::sync::mpsc::Sender;
 
 use super::Messages;
 
+use super::ui::audio_bar_flash;
+
 const ERROR: fdo::Error = fdo::Error::Failed(String::new());
 
 /// The actual MPRIS player.
@@ -187,6 +189,8 @@ impl PlayerInterface for Player {
 
     async fn set_volume(&self, volume: Volume) -> Result<()> {
         self.player.set_volume(volume as f32);
+
+        audio_bar_flash();
 
         Ok(())
     }

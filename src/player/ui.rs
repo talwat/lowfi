@@ -48,6 +48,10 @@ lazy_static! {
     static ref VOLUME_TIMER: AtomicUsize = AtomicUsize::new(0);
 }
 
+pub fn audio_bar_flash() {
+    VOLUME_TIMER.store(1, Ordering::Relaxed);
+}
+
 /// Represents an abstraction for drawing the actual lowfi window itself.
 ///
 /// The main purpose of this struct is just to add the fancy border,

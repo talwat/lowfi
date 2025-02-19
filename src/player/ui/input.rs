@@ -1,15 +1,13 @@
 //! Responsible for specifically recieving terminal input
 //! using [`crossterm`].
 
-use std::sync::atomic::Ordering;
-
 use crossterm::event::{self, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc::Sender;
 
 use crate::player::Messages;
 
-use super::VOLUME_TIMER;
+use super::audio_bar_flash;
 
 /// Starts the listener to recieve input from the terminal for various events.
 pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
@@ -64,10 +62,10 @@ pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
             _ => continue,
         };
 
-        // If it's modifying the volume, then we'll set the `VOLUME_TIMER` to 1
+        // If it's modifying the volume, then we'll call audio_bar_flash func
         // so that the UI thread will know that it should show the audio bar.
         if let Messages::ChangeVolume(_) = messages {
-            VOLUME_TIMER.store(1, Ordering::Relaxed);
+            audio_bar_flash();
         }
 
         sender.send(messages).await?;

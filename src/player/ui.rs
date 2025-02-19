@@ -48,7 +48,10 @@ lazy_static! {
     static ref VOLUME_TIMER: AtomicUsize = AtomicUsize::new(0);
 }
 
-pub fn audio_bar_flash() {
+/// Sets the volume timer to one, effectively flashing the audio display in lowfi's UI.
+///
+/// The amount of frames the audio display is visible for is determined by [AUDIO_BAR_DURATION].
+pub fn flash_audio() {
     VOLUME_TIMER.store(1, Ordering::Relaxed);
 }
 

@@ -5,9 +5,7 @@ use crossterm::event::{self, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc::Sender;
 
-use crate::player::Messages;
-
-use super::audio_bar_flash;
+use crate::player::{ui, Messages};
 
 /// Starts the listener to recieve input from the terminal for various events.
 pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
@@ -62,10 +60,8 @@ pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
             _ => continue,
         };
 
-        // If it's modifying the volume, then we'll call audio_bar_flash func
-        // so that the UI thread will know that it should show the audio bar.
         if let Messages::ChangeVolume(_) = messages {
-            audio_bar_flash();
+            ui::flash_audio();
         }
 
         sender.send(messages).await?;

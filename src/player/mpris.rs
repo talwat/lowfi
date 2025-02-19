@@ -9,9 +9,8 @@ use mpris_server::{
 };
 use tokio::sync::mpsc::Sender;
 
+use super::ui;
 use super::Messages;
-
-use super::ui::audio_bar_flash;
 
 const ERROR: fdo::Error = fdo::Error::Failed(String::new());
 
@@ -169,7 +168,10 @@ impl PlayerInterface for Player {
             .load()
             .as_ref()
             .map_or_else(Metadata::new, |track| {
-                let mut metadata = Metadata::builder().title(track.name.clone()).album(self.player.list.name.clone()).build();
+                let mut metadata = Metadata::builder()
+                    .title(track.name.clone())
+                    .album(self.player.list.name.clone())
+                    .build();
 
                 metadata.set_length(
                     track
@@ -189,8 +191,7 @@ impl PlayerInterface for Player {
 
     async fn set_volume(&self, volume: Volume) -> Result<()> {
         self.player.set_volume(volume as f32);
-
-        audio_bar_flash();
+        ui::flash_audio();
 
         Ok(())
     }

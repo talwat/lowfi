@@ -105,7 +105,7 @@ Yeah, that's it.
 | Key                | Function        |
 | ------------------ | --------------- |
 | `s`, `n`, `l`      | Skip Song       |
-| `p`                | Play/Pause      |
+| `p`, Space         | Play/Pause      |
 | `+`, `=`, `k`, `↑` | Volume Up 10%   |
 | `→`                | Volume Up 1%    |
 | `-`, `_`, `j`, `↓` | Volume Down 10% |

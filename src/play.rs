@@ -86,7 +86,10 @@ pub struct SendableOutputStream(pub rodio::OutputStream);
 // SAFETY: This is necessary because [OutputStream] does not implement [Send],
 // due to some limitation with Android's Audio API.
 // I'm pretty sure nobody will use lowfi with android, so this is safe.
-#[expect(clippy::non_send_fields_in_send_ty, reason = "this is expected because of the nature of the struct")]
+#[expect(
+    clippy::non_send_fields_in_send_ty,
+    reason = "this is expected because of the nature of the struct"
+)]
 unsafe impl Send for SendableOutputStream {}
 
 /// Initializes the audio server, and then safely stops

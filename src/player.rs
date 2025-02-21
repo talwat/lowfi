@@ -119,6 +119,9 @@ impl Player {
     /// to simply just the audio in the bag, lil api.
     #[cfg(target_os = "linux")]
     fn silent_get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
+        use libc::freopen;
+        use std::ffi::CString;
+
         // Get the file descriptor to stderr from libc.
         extern "C" {
             static stderr: *mut libc::FILE;

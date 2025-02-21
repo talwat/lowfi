@@ -109,9 +109,9 @@ pub async fn play(args: Args) -> eyre::Result<()> {
 
     // Save the volume.txt file for the next session.
     PersistentVolume::save(player.sink.volume()).await?;
+    drop(stream.0);
     player.sink.stop();
     ui.abort();
-    drop(stream.0);
 
     Ok(())
 }

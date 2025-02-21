@@ -1,7 +1,15 @@
 //! The module which manages all user interface, including inputs.
 
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "the ui is full of these because of various layout & positioning aspects, and for a simple music player making all casts safe is not worth the effort"
+)]
+
 use std::{
-    fmt::Write,
+    fmt::Write as _,
     io::{stdout, Stdout},
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -15,7 +23,7 @@ use crate::Args;
 use crossterm::{
     cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
     event::{KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags},
-    style::{Print, Stylize},
+    style::{Print, Stylize as _},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
@@ -50,7 +58,7 @@ lazy_static! {
 
 /// Sets the volume timer to one, effectively flashing the audio display in lowfi's UI.
 ///
-/// The amount of frames the audio display is visible for is determined by [AUDIO_BAR_DURATION].
+/// The amount of frames the audio display is visible for is determined by [`AUDIO_BAR_DURATION`].
 pub fn flash_audio() {
     VOLUME_TIMER.store(1, Ordering::Relaxed);
 }
@@ -96,7 +104,7 @@ impl Window {
 
     /// Actually draws the window, with each element in `content` being on a new line.
     pub fn draw(&mut self, content: Vec<String>) -> eyre::Result<()> {
-        let len = content.len() as u16;
+        let len: u16 = content.len().try_into()?;
 
         // Note that this will have a trailing newline, which we use later.
         let menu: String = content.into_iter().fold(String::new(), |mut output, x| {

@@ -5,9 +5,10 @@
 use std::{io::Cursor, time::Duration};
 
 use bytes::Bytes;
-use inflector::Inflector;
-use rodio::{Decoder, Source};
-use unicode_width::UnicodeWidthStr;
+use eyre::OptionExt as _;
+use inflector::Inflector as _;
+use rodio::{Decoder, Source as _};
+use unicode_width::UnicodeWidthStr as _;
 use url::form_urlencoded;
 
 pub mod list;
@@ -36,6 +37,10 @@ pub struct Info {
 impl Info {
     /// Decodes a URL string into normal UTF-8.
     fn decode_url(text: &str) -> String {
+        #[expect(
+            clippy::tuple_array_conversions,
+            reason = "the tuple contains smart pointers, so it's not really practical to use `into()`"
+        )]
         form_urlencoded::parse(text.as_bytes())
             .map(|(key, val)| [key, val].concat())
             .collect()
@@ -44,11 +49,13 @@ impl Info {
     /// Formats a name with [Inflector].
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks.
-    fn format_name(name: &str) -> String {
-        let split = name.split('/').last().unwrap();
+    fn format_name(name: &str) -> eyre::Result<String> {
+        let split = name
+            .split('/')
+            .last()
+            .ok_or_eyre("split is never supposed to return nothing")?;
 
         let stripped = split.strip_suffix(".mp3").unwrap_or(split);
-
         let formatted = Self::decode_url(stripped)
             .to_lowercase()
             .to_title_case()
@@ -76,28 +83,28 @@ impl Info {
 
         // If the entire name of the track is a number, then just return it.
         if skip == formatted.len() {
-            formatted
+            Ok(formatted)
         } else {
             #[expect(
                 clippy::string_slice,
                 reason = "We've already checked before that the bound is at an ASCII digit."
             )]
-            String::from(&formatted[skip..])
+            Ok(String::from(&formatted[skip..]))
         }
     }
 
     /// Creates a new [`TrackInfo`] from a possibly raw name & decoded track data.
-    pub fn new(name: TrackName, decoded: &DecodedData) -> Self {
+    pub fn new(name: TrackName, decoded: &DecodedData) -> eyre::Result<Self> {
         let name = match name {
-            TrackName::Raw(raw) => Self::format_name(&raw),
+            TrackName::Raw(raw) => Self::format_name(&raw)?,
             TrackName::Formatted(formatted) => formatted,
         };
 
-        Self {
+        Ok(Self {
             duration: decoded.total_duration(),
             width: name.width(),
             name,
-        }
+        })
     }
 }
 
@@ -116,7 +123,7 @@ impl Decoded {
     /// This is equivalent to [`Track::decode`].
     pub fn new(track: Track) -> eyre::Result<Self> {
         let data = Decoder::new(Cursor::new(track.data))?;
-        let info = Info::new(track.name, &data);
+        let info = Info::new(track.name, &data)?;
 
         Ok(Self { info, data })
     }

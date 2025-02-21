@@ -2,7 +2,7 @@
 //! using [`crossterm`].
 
 use crossterm::event::{self, EventStream, KeyCode, KeyEventKind, KeyModifiers};
-use futures::{FutureExt, StreamExt};
+use futures::{FutureExt as _, StreamExt as _};
 use tokio::sync::mpsc::Sender;
 
 use crate::player::{ui, Messages};

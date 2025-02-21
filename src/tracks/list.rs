@@ -2,8 +2,8 @@
 //! as well as obtaining track names & downloading the raw mp3 data.
 
 use bytes::Bytes;
-use eyre::OptionExt;
-use rand::Rng;
+use eyre::OptionExt as _;
+use rand::Rng as _;
 use reqwest::Client;
 use tokio::fs;
 
@@ -15,6 +15,7 @@ use super::Track;
 #[derive(Clone)]
 pub struct List {
     /// The "name" of the list, usually derived from a filename.
+    #[allow(dead_code, reason = "this code may not be dead depending on features")]
     pub name: String,
 
     /// Just the raw file, but seperated by `/n` (newlines).
@@ -90,7 +91,7 @@ impl List {
         if let Some(arg) = tracks {
             // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
             let name = dirs::data_dir()
-                .unwrap()
+                .ok_or_eyre("data directory not found, are you *really* running this on wasm?")?
                 .join("lowfi")
                 .join(format!("{arg}.txt"));
 

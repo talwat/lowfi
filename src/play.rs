@@ -23,7 +23,7 @@ impl PersistentVolume {
     /// Retrieves the config directory.
     async fn config() -> eyre::Result<PathBuf> {
         let config = dirs::config_dir()
-            .ok_or(eyre!("Couldn't find config directory"))?
+            .ok_or_else(|| eyre!("Couldn't find config directory"))?
             .join(PathBuf::from("lowfi"));
 
         if !config.exists() {
@@ -35,7 +35,7 @@ impl PersistentVolume {
 
     /// Returns the volume as a float from 0 to 1.
     pub fn float(self) -> f32 {
-        self.inner as f32 / 100.0
+        f32::from(self.inner) / 100.0
     }
 
     /// Loads the [`PersistentVolume`] from [`dirs::config_dir()`].
@@ -64,17 +64,38 @@ impl PersistentVolume {
         let config = Self::config().await?;
         let path = config.join(PathBuf::from("volume.txt"));
 
-        fs::write(path, ((volume * 100.0).abs().round() as u16).to_string()).await?;
+        #[expect(
+            clippy::as_conversions,
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation,
+            reason = "already rounded & absolute, therefore this should be safe"
+        )]
+        let percentage = (volume * 100.0).abs().round() as u16;
+
+        fs::write(path, percentage.to_string()).await?;
 
         Ok(())
     }
 }
 
+/// Wrapper around [`rodio::OutputStream`] to implement [Send], currently unsafely.
+///
+/// This is more of a temporary solution until cpal implements [Send] on it's output stream.
+pub struct SendableOutputStream(pub rodio::OutputStream);
+
+// SAFETY: This is necessary because [OutputStream] does not implement [Send],
+// due to some limitation with Android's Audio API.
+// I'm pretty sure nobody will use lowfi with android, so this is safe.
+#[expect(clippy::non_send_fields_in_send_ty, reason = "yes")]
+unsafe impl Send for SendableOutputStream {}
+
 /// Initializes the audio server, and then safely stops
 /// it when the frontend quits.
 pub async fn play(args: Args) -> eyre::Result<()> {
     // Actually initializes the player.
-    let player = Arc::new(Player::new(&args).await?);
+    // Stream kept here in the master thread to keep it alive.
+    let (player, stream) = Player::new(&args).await?;
+    let player = Arc::new(player);
 
     // Initialize the UI, as well as the internal communication channel.
     let (tx, rx) = mpsc::channel(8);
@@ -90,6 +111,7 @@ pub async fn play(args: Args) -> eyre::Result<()> {
     PersistentVolume::save(player.sink.volume()).await?;
     player.sink.stop();
     ui.abort();
+    drop(stream.0);
 
     Ok(())
 }

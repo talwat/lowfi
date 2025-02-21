@@ -1,10 +1,10 @@
 //! Various different individual components that
 //! appear in lowfi's UI, like the progress bar.
 
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{ops::Deref as _, sync::Arc, time::Duration};
 
-use crossterm::style::Stylize;
-use unicode_segmentation::UnicodeSegmentation;
+use crossterm::style::Stylize as _;
+use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::{player::Player, tracks::Info};
 

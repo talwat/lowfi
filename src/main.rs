@@ -1,44 +1,6 @@
 //! An extremely simple lofi player.
 
-#![warn(clippy::all, clippy::restriction, clippy::pedantic, clippy::nursery)]
-#![allow(
-    clippy::single_call_fn,
-    clippy::struct_excessive_bools,
-    clippy::implicit_return,
-    clippy::question_mark_used,
-    clippy::shadow_reuse,
-    clippy::indexing_slicing,
-    clippy::arithmetic_side_effects,
-    clippy::std_instead_of_core,
-    clippy::print_stdout,
-    clippy::float_arithmetic,
-    clippy::integer_division_remainder_used,
-    clippy::used_underscore_binding,
-    clippy::print_stderr,
-    clippy::semicolon_outside_block,
-    clippy::non_send_fields_in_send_ty,
-    clippy::non_ascii_literal,
-    clippy::let_underscore_untyped,
-    clippy::let_underscore_must_use,
-    clippy::shadow_unrelated,
-    clippy::std_instead_of_alloc,
-    clippy::partial_pub_fields,
-    clippy::unseparated_literal_suffix,
-    clippy::self_named_module_files,
-    // TODO: Disallow these lints later.
-    clippy::unwrap_used,
-    clippy::pattern_type_mismatch,
-    clippy::tuple_array_conversions,
-    clippy::as_conversions,
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::wildcard_enum_match_arm,
-    clippy::integer_division,
-    clippy::cast_sign_loss,
-    clippy::cast_lossless,
-    clippy::arbitrary_source_item_ordering,
-    clippy::unused_trait_names
-)]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
 use clap::{Parser, Subcommand};
 
@@ -52,6 +14,10 @@ mod scrape;
 /// An extremely simple lofi player.
 #[derive(Parser)]
 #[command(about, version)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "señor clippy, i assure you this is not a state machine"
+)]
 struct Args {
     /// Whether to use an alternate terminal screen.
     #[clap(long, short)]

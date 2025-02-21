@@ -2,11 +2,10 @@
 //! This also has the code for the underlying
 //! audio server which adds new tracks.
 
-use std::{collections::VecDeque, ffi::CString, sync::Arc, time::Duration};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
-use libc::freopen;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use tokio::{
@@ -23,7 +22,7 @@ use tokio::{
 use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 
 use crate::{
-    play::PersistentVolume,
+    play::{PersistentVolume, SendableOutputStream},
     tracks::{self, list::List},
     Args,
 };
@@ -53,6 +52,7 @@ pub enum Messages {
     Init,
 
     /// Unpause the [Sink].
+    #[allow(dead_code, reason = "this code may not be dead depending on features")]
     Play,
 
     /// Pauses the [Sink].
@@ -109,19 +109,7 @@ pub struct Player {
     /// playback, is for now unused and is here just to keep it
     /// alive so the playback can function properly.
     _handle: OutputStreamHandle,
-
-    /// The [`OutputStream`], which is just here to keep the playback
-    /// alive and functioning.
-    _stream: OutputStream,
 }
-
-// SAFETY: This is necessary because [OutputStream] does not implement [Send],
-// due to some limitation with Android's Audio API.
-// I'm pretty sure nobody will use lowfi with android, so this is safe.
-unsafe impl Send for Player {}
-
-// SAFETY: See implementation for [Send].
-unsafe impl Sync for Player {}
 
 impl Player {
     /// This gets the output stream while also shutting up alsa with [libc].
@@ -182,7 +170,7 @@ impl Player {
     /// Initializes the entire player, including audio devices & sink.
     ///
     /// This also will load the track list & persistent volume.
-    pub async fn new(args: &Args) -> eyre::Result<Self> {
+    pub async fn new(args: &Args) -> eyre::Result<(Self, SendableOutputStream)> {
         // Load the volume file.
         let volume = PersistentVolume::load().await?;
 
@@ -199,7 +187,7 @@ impl Player {
 
         // If we're not on Linux, then there's no problem.
         #[cfg(not(target_os = "linux"))]
-        let (_stream, handle) = OutputStream::try_default()?;
+        let (stream, handle) = OutputStream::try_default()?;
 
         let sink = Sink::try_new(&handle)?;
         if args.paused {
@@ -223,10 +211,9 @@ impl Player {
             volume,
             list,
             _handle: handle,
-            _stream,
         };
 
-        Ok(player)
+        Ok((player, SendableOutputStream(stream)))
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.

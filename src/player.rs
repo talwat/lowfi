@@ -182,7 +182,7 @@ impl Player {
 
         // We should only shut up alsa forcefully on Linux if we really have to.
         #[cfg(target_os = "linux")]
-        let (_stream, handle) = if !args.alternate && !args.debug {
+        let (stream, handle) = if !args.alternate && !args.debug {
             Self::silent_get_output_stream()?
         } else {
             OutputStream::try_default()?

@@ -178,7 +178,7 @@ impl Player {
         let volume = PersistentVolume::load().await?;
 
         // Load the track list.
-        let list = List::load(args.tracks.as_ref()).await?;
+        let list = List::load(args.tracklist.as_ref()).await?;
 
         // We should only shut up alsa forcefully on Linux if we really have to.
         #[cfg(target_os = "linux")]

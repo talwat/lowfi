@@ -19,33 +19,33 @@ mod scrape;
     reason = "señor clippy, i assure you this is not a state machine"
 )]
 struct Args {
-    /// Whether to use an alternate terminal screen.
+    /// Use an alternate terminal screen.
     #[clap(long, short)]
     alternate: bool,
 
-    /// Whether to hide the bottom control bar.
+    /// Hide the bottom control bar.
     #[clap(long, short)]
     minimalist: bool,
 
-    /// Whether to not include borders in the UI.
+    /// Exclude borders in UI.
     #[clap(long, short)]
     borderless: bool,
 
-    /// Whether to start lowfi paused.
+    /// Start lowfi paused.
     #[clap(long, short)]
     paused: bool,
 
-    /// Whether to include ALSA & other logs.
+    /// Include ALSA & other logs.
     #[clap(long, short)]
     debug: bool,
 
-    /// The width of the player, from 0 to 32.
+    /// Width of the player, from 0 to 32.
     #[clap(long, short, default_value_t = 3)]
     width: usize,
 
-    /// This is either a path, or a name of a file in the data directory (eg. ~/.local/share/lowfi).
+    /// Use a custom track list
     #[clap(long, short, alias = "list", short_alias = 'l')]
-    tracks: Option<String>,
+    tracklist: Option<String>,
 
     /// The command that was ran.
     /// This is [None] if no command was specified.

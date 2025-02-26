@@ -16,11 +16,10 @@ follow their rules.
 ## Why?
 
 I really hate modern music platforms, and I wanted a small, "suckless"
-app that would literally just play lofi without video so I could use it
-whenever.
+app that would just play random lofi without video.
 
-I also wanted it to be fairly resiliant to inconsistent networks,
-so it buffers 5 whole songs at a time instead of parts of the same song.
+It was also designed to be fairly resiliant to inconsistent networks,
+and as such it buffers 5 whole songs at a time instead of parts of the same song.
 
 Although, lowfi is yet to be properly tested in difficult conditions,
 so don't rely on it too much until I do that. See [Scraping](#scraping) if
@@ -156,19 +155,21 @@ or it could also be the name of a file (without the `.txt` extension) in the dat
 directory, so on Linux it's `~/.local/share/lowfi`.
 
 For example, `lowfi --tracks minipop` would load `~/.local/share/lowfi/minipop.txt`.
-Whereas if you did `lowfi --tracks /home/user/Music/minipop.txt` it would load from that
+Whereas if you did `lowfi --tracks ~/Music/minipop.txt` it would load from that
 specified directory.
 
 #### The Format
 
-In Lists, the first line should be the base URL, followed by the rest of the tracks.
+In lists, the first line should be the base URL, followed by the rest of the tracks.ç
+This is also known as the "header", because it comes first.
 
 Each track will be first appended to the base URL, and then the result use to download
-the track. All tracks should end in `.mp3` and as such must be in the MP3 format.
+the track. All tracks must be in the MP3 format, as lowfi doesn't support any others currently.
 
-lowfi won't put a `/` between the base & track for added flexibility, so for most cases you
-should have a trailing `/` in your base url. The exception to this is if the track name begins
-with something like `https://`, where in that case the base will not be prepended to it.
+Additionally, lowfi *won't* put a `/` between the base & track for added flexibility,
+so for most cases you should have a trailing `/` in your base url.
+The exception to this is if the track name begins with something like `https://`,
+where in that case the base will not be prepended to it.
 
 For example, in this list:
 
@@ -192,4 +193,4 @@ For example, if you had an entry like this:
 2023/04/2-In-Front-Of-Me.mp3!custom name
 ```
 
-Then lowfi would download from the first section, and display the second.
+Then lowfi would download from the first section, and display the second as the track name.

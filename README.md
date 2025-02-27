@@ -18,7 +18,7 @@ follow their rules.
 I really hate modern music platforms, and I wanted a small, "suckless"
 app that would just play random lofi without video.
 
-It was also designed to be fairly resiliant to inconsistent networks,
+It was also designed to be fairly resilient to inconsistent networks,
 and as such it buffers 5 whole songs at a time instead of parts of the same song.
 
 Although, lowfi is yet to be properly tested in difficult conditions,
@@ -43,7 +43,7 @@ On Linux, you'll also need openssl & alsa, as well as their headers.
 - `alsa-lib` on Arch, `libasound2-dev` on Ubuntu.
 - `openssl` on Arch, `libssl-dev` on Ubuntu.
 
-Make sure to also install `pulseaudio-alsa` if you're using pulseaudio.
+Make sure to also install `pulseaudio-alsa` if you're using PulseAudio.
 
 ### Cargo
 
@@ -160,7 +160,7 @@ specified directory.
 
 #### The Format
 
-In lists, the first line should be the base URL, followed by the rest of the tracks.ç
+In lists, the first line should be the base URL, followed by the rest of the tracks.
 This is also known as the "header", because it comes first.
 
 Each track will be first appended to the base URL, and then the result use to download

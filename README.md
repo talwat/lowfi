@@ -160,7 +160,7 @@ specified directory.
 
 #### The Format
 
-In lists, the first line should be the base URL, followed by the rest of the tracks.ç
+In lists, the first line should be the base URL, followed by the rest of the tracks.
 This is also known as the "header", because it comes first.
 
 Each track will be first appended to the base URL, and then the result use to download

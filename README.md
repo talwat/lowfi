@@ -121,8 +121,18 @@ Yeah, that's it.
 
 ### Extra Flags
 
-If you have something you'd like to tweak about lowfi, you can run `lowfi help`
-to view the available options.
+If you have something you'd like to tweak about lowfi, you use additional flags which
+slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lowfi help`.
+
+| Flag                            | Function                                       |
+| ------------------------------- | ---------------------------------------------- |
+| `-a`, `--alternate`             | Use an alternate terminal screen               |
+| `-m`, `--minimalist`            | Hide the bottom control bar                    |
+| `-b`, `--borderless`            | Exclude borders in UI                          |
+| `-p`, `--paused`                | Start lowfi paused                             |
+| `-d`, `--debug`                 | Include ALSA & other logs                      |
+| `-w`, `--width <WIDTH>`         | Width of the player, from 0 to 32 [default: 3] |
+| `-t`, `--tracklist <TRACKLIST>` | Use a [custom track list](#custom-track-lists) |
 
 ### Scraping
 
@@ -166,7 +176,7 @@ This is also known as the "header", because it comes first.
 Each track will be first appended to the base URL, and then the result use to download
 the track. All tracks must be in the MP3 format, as lowfi doesn't support any others currently.
 
-Additionally, lowfi *won't* put a `/` between the base & track for added flexibility,
+Additionally, lowfi _won't_ put a `/` between the base & track for added flexibility,
 so for most cases you should have a trailing `/` in your base url.
 The exception to this is if the track name begins with something like `https://`,
 where in that case the base will not be prepended to it.

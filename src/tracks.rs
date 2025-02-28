@@ -8,7 +8,7 @@ use bytes::Bytes;
 use eyre::OptionExt as _;
 use inflector::Inflector as _;
 use rodio::{Decoder, Source as _};
-use unicode_width::UnicodeWidthStr as _;
+use unicode_segmentation::UnicodeSegmentation;
 use url::form_urlencoded;
 
 pub mod list;
@@ -102,7 +102,7 @@ impl Info {
 
         Ok(Self {
             duration: decoded.total_duration(),
-            width: name.width(),
+            width: name.graphemes(true).count(),
             name,
         })
     }

@@ -236,7 +236,7 @@ impl Player {
             // for only a frame in the other case that the buffer is not empty.
             self.current.store(None);
 
-            self.list.random(&self.client).await?
+            self.list.random(&self.client).await.0?
         };
 
         let decoded = track.decode()?;

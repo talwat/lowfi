@@ -50,7 +50,7 @@ impl List {
     }
 
     /// Downloads a raw track, but doesn't decode it.
-    async fn download(&self, track: &str, client: &Client) -> reqwest::Result<Bytes> {
+    async fn download(&self, track: &str, client: &Client) -> (eyre::Result<Bytes>, bool) {
         // If the track has a protocol, then we should ignore the base for it.
         let url = if track.contains("://") {
             track.to_owned()
@@ -58,22 +58,36 @@ impl List {
             format!("{}{}", self.base(), track)
         };
 
-        let response = client.get(url).send().await?;
-        let data = response.bytes().await?;
+        let (timeout, data) = if let Some(x) = url.strip_prefix("file://") {
+            let result = tokio::fs::read(x).await.unwrap();
+            (false, Ok(result.into()))
+        } else {
+            let response = client.get(url).send().await;
 
-        Ok(data)
+            match response {
+                Ok(x) => (false, x.bytes().await),
+                Err(x) => (x.is_timeout(), Err(x)),
+            }
+        };
+
+        (data.map_err(|x| eyre::eyre!(x)), timeout)
     }
 
     /// Fetches and downloads a random track from the [List].
-    pub async fn random(&self, client: &Client) -> reqwest::Result<Track> {
+    pub async fn random(&self, client: &Client) -> (eyre::Result<Track>, bool) {
         let (path, custom_name) = self.random_path();
-        let data = self.download(&path, client).await?;
+        let (data, timeout) = self.download(&path, client).await;
 
         let name = custom_name.map_or(super::TrackName::Raw(path), |formatted| {
             super::TrackName::Formatted(formatted)
         });
 
-        Ok(Track { name, data })
+        let track = match data {
+            Ok(x) => Ok(Track { name, data: x }),
+            Err(x) => Err(x),
+        };
+
+        (track, timeout)
     }
 
     /// Parses text into a [List].

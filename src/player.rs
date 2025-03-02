@@ -108,6 +108,8 @@ pub struct Player {
     /// The [`OutputStreamHandle`], which also can control some
     /// playback, is for now unused and is here just to keep it
     /// alive so the playback can function properly.
+    /// The [`OutputStream`] associated with it has been leaked in the [`Player::new`] function,
+    /// so if the [`OutputStreamHandle`] is dropped, we will never get at the [`OutputStream`].
     _handle: OutputStreamHandle,
 }
 

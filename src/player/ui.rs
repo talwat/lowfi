@@ -29,6 +29,7 @@ use crossterm::{
 
 use lazy_static::lazy_static;
 use tokio::{sync::mpsc::Sender, task, time::sleep};
+use unicode_segmentation::UnicodeSegmentation;
 
 use super::{Messages, Player};
 
@@ -77,6 +78,9 @@ pub struct Window {
     /// If the option to not include borders is set, these will just be empty [String]s.
     borders: [String; 2],
 
+    /// The width of the window.
+    width: usize,
+
     /// The output, currently just an [`Stdout`].
     out: Stdout,
 }
@@ -98,19 +102,25 @@ impl Window {
         Self {
             borders,
             borderless,
+            width,
             out: stdout(),
         }
     }
 
     /// Actually draws the window, with each element in `content` being on a new line.
-    pub fn draw(&mut self, content: Vec<String>) -> eyre::Result<()> {
+    pub fn draw(&mut self, content: Vec<String>, space: bool) -> eyre::Result<()> {
         let len: u16 = content.len().try_into()?;
 
         // Note that this will have a trailing newline, which we use later.
         let menu: String = content.into_iter().fold(String::new(), |mut output, x| {
             // Horizontal Padding & Border
             let padding = if self.borderless { " " } else { "│" };
-            write!(output, "{padding} {} {padding}\r\n", x.reset()).unwrap();
+            let space = if space {
+                " ".repeat(self.width.saturating_sub(x.graphemes(true).count()))
+            } else {
+                String::new()
+            };
+            write!(output, "{padding} {}{space} {padding}\r\n", x.reset()).unwrap();
 
             output
         });
@@ -184,7 +194,7 @@ async fn interface(
             vec![action, middle, controls]
         };
 
-        window.draw(menu)?;
+        window.draw(menu, false)?;
 
         sleep(Duration::from_secs_f32(FRAME_DELTA)).await;
     }

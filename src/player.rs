@@ -69,7 +69,7 @@ pub enum Messages {
 }
 
 /// The time to wait in between errors.
-const TIMEOUT: Duration = Duration::from_secs(1);
+const TIMEOUT: Duration = Duration::from_secs(3);
 
 /// The amount of songs to buffer up.
 const BUFFER_SIZE: usize = 5;

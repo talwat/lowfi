@@ -65,8 +65,6 @@ precompiled binaries from the [latest release](https://github.com/talwat/lowfi/r
 
 ### AUR
 
-If you're on Arch, you can also use the AUR:
-
 ```sh
 yay -S lowfi
 ```
@@ -79,7 +77,8 @@ zypper install lowfi
 
 ### Debian
 
-Via an unofficial Debian repository maintained by (Dario Griffo)[https://github.com/dariogriffo]
+> [!NOTE]
+> This uses an unofficial Debian repository maintained by [Dario Griffo](https://github.com/dariogriffo).
 
 ```sh
 curl -sS https://debian.griffo.io/3B9335DF576D3D58059C6AA50B56A1A69762E9FF.asc | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/debian.griffo.io.gpg

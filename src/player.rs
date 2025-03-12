@@ -69,7 +69,7 @@ pub enum Messages {
 }
 
 /// The time to wait in between errors.
-const TIMEOUT: Duration = Duration::from_secs(5);
+const TIMEOUT: Duration = Duration::from_secs(1);
 
 /// The amount of songs to buffer up.
 const BUFFER_SIZE: usize = 5;
@@ -222,7 +222,7 @@ impl Player {
     /// This will play the next track, as well as refilling the buffer in the background.
     ///
     /// This will also set `current` to the newly loaded song.
-    pub async fn next(&self) -> eyre::Result<tracks::Decoded> {
+    pub async fn next(&self) -> Result<tracks::Decoded, bool> {
         // TODO: Consider replacing this with `unwrap_or_else` when async closures are stablized.
         let track = self.tracks.write().await.pop_front();
         let track = if let Some(track) = track {
@@ -235,11 +235,12 @@ impl Player {
             // We're doing it here so that we don't get the "loading" display
             // for only a frame in the other case that the buffer is not empty.
             self.current.store(None);
-
-            self.list.random(&self.client).await.0?
+            self.list
+                .random(&self.client)
+                .await?
         };
 
-        let decoded = track.decode()?;
+        let decoded = track.decode().map_err(|_| false)?;
 
         // Set the current track.
         self.set_current(decoded.info.clone());
@@ -277,8 +278,8 @@ impl Player {
                 // Notify the audio server that the next song has actually been downloaded.
                 tx.send(Messages::NewSong).await?;
             }
-            Err(error) => {
-                if !error.downcast::<reqwest::Error>()?.is_timeout() {
+            Err(timeout) => {
+                if !timeout {
                     sleep(TIMEOUT).await;
                 }
 

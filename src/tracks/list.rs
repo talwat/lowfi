@@ -50,7 +50,7 @@ impl List {
     }
 
     /// Downloads a raw track, but doesn't decode it.
-    async fn download(&self, track: &str, client: &Client) -> (eyre::Result<Bytes>, bool) {
+    async fn download(&self, track: &str, client: &Client) -> Result<Bytes, bool> {
         // If the track has a protocol, then we should ignore the base for it.
         let url = if track.contains("://") {
             track.to_owned()
@@ -58,36 +58,39 @@ impl List {
             format!("{}{}", self.base(), track)
         };
 
-        let (timeout, data) = if let Some(x) = url.strip_prefix("file://") {
-            let result = tokio::fs::read(x).await.unwrap();
-            (false, Ok(result.into()))
-        } else {
-            let response = client.get(url).send().await;
+        let data: Bytes = if let Some(x) = url.strip_prefix("file://") {
+            let path = if x.starts_with("~") {
+                let home_path = dirs::home_dir().ok_or(false)?;
+                let home = home_path.to_str().ok_or(false)?;
 
-            match response {
-                Ok(x) => (false, x.bytes().await),
-                Err(x) => (x.is_timeout(), Err(x)),
-            }
+                x.replace("~", home)
+            } else {
+                x.to_owned()
+            };
+
+            let result = tokio::fs::read(path).await.map_err(|_| false)?;
+            result.into()
+        } else {
+            let response = client.get(url).send().await.map_err(|x| x.is_timeout())?;
+            response.bytes().await.map_err(|_| false)?
         };
 
-        (data.map_err(|x| eyre::eyre!(x)), timeout)
+        Ok(data)
     }
 
     /// Fetches and downloads a random track from the [List].
-    pub async fn random(&self, client: &Client) -> (eyre::Result<Track>, bool) {
+    ///
+    /// The Result's error is a bool, which is true if a timeout error occured,
+    /// and false otherwise. This tells lowfi if it shouldn't wait to try again.
+    pub async fn random(&self, client: &Client) -> Result<Track, bool> {
         let (path, custom_name) = self.random_path();
-        let (data, timeout) = self.download(&path, client).await;
+        let data = self.download(&path, client).await?;
 
         let name = custom_name.map_or(super::TrackName::Raw(path), |formatted| {
             super::TrackName::Formatted(formatted)
         });
 
-        let track = match data {
-            Ok(x) => Ok(Track { name, data: x }),
-            Err(x) => Err(x),
-        };
-
-        (track, timeout)
+        Ok(Track { name, data: data })
     }
 
     /// Parses text into a [List].

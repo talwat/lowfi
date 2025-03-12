@@ -235,9 +235,7 @@ impl Player {
             // We're doing it here so that we don't get the "loading" display
             // for only a frame in the other case that the buffer is not empty.
             self.current.store(None);
-            self.list
-                .random(&self.client)
-                .await?
+            self.list.random(&self.client).await?
         };
 
         let decoded = track.decode().map_err(|_| false)?;

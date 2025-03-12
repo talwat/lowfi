@@ -79,7 +79,7 @@ zypper install lowfi
 
 ### Debian
 
-Via an unofficial Debian repository maintained by (Dario Griffo)[https://github.com/dariogriffo]
+Via an unofficial Debian repository maintained by [Dario Griffo](https://github.com/dariogriffo)
 
 ```sh
 curl -sS https://debian.griffo.io/3B9335DF576D3D58059C6AA50B56A1A69762E9FF.asc | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/debian.griffo.io.gpg

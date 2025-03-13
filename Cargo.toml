@@ -24,6 +24,7 @@ mpris = ["dep:mpris-server"]
 clap = { version = "4.5.21", features = ["derive", "cargo"] }
 eyre = { version = "0.6.12" }
 rand = "0.8.5"
+strip-ansi-escapes = "0.1"
 
 # Async
 tokio = { version = "1.41.1", features = [

@@ -5,18 +5,26 @@ use std::{ops::Deref as _, sync::Arc, time::Duration};
 
 use crossterm::style::Stylize as _;
 use unicode_segmentation::UnicodeSegmentation as _;
+use strip_ansi_escapes::strip as strip_ansi;
 
 use crate::{player::Player, tracks::Info};
 
-/// Small helper function to format durations.
+/// Petite fonction utilitaire pour formater un `Duration` en mm:ss.
 pub fn format_duration(duration: &Duration) -> String {
     let seconds = duration.as_secs() % 60;
     let minutes = duration.as_secs() / 60;
-
     format!("{minutes:02}:{seconds:02}")
 }
 
-/// Creates the progress bar, as well as all the padding needed.
+/// Calcule la « vraie » largeur visible d'une chaîne, en enlevant les codes ANSI.
+fn visible_width(styled: &str) -> usize {
+    match strip_ansi(styled.as_bytes()) {
+        Ok(bytes) => bytes.len(),
+        Err(_) => styled.len(),
+    }
+}
+
+/// Crée la barre de progression, ainsi que tous les espacements nécessaires.
 pub fn progress_bar(player: &Player, current: Option<&Arc<Info>>, width: usize) -> String {
     let mut duration = Duration::new(0, 0);
     let elapsed = if current.is_some() {
@@ -29,9 +37,8 @@ pub fn progress_bar(player: &Player, current: Option<&Arc<Info>>, width: usize) 
     if let Some(current) = current {
         if let Some(x) = current.duration {
             duration = x;
-
-            let elapsed = elapsed.as_secs() as f32 / duration.as_secs() as f32;
-            filled = (elapsed * width as f32).round() as usize;
+            let ratio = elapsed.as_secs() as f32 / duration.as_secs() as f32;
+            filled = (ratio * width as f32).round() as usize;
         }
     };
 
@@ -44,7 +51,7 @@ pub fn progress_bar(player: &Player, current: Option<&Arc<Info>>, width: usize) 
     )
 }
 
-/// Creates the audio bar, as well as all the padding needed.
+/// Crée la barre de volume, avec l'affichage du pourcentage et le padding nécessaire.
 pub fn audio_bar(volume: f32, percentage: &str, width: usize) -> String {
     let audio = (volume * width as f32).round() as usize;
 
@@ -57,21 +64,18 @@ pub fn audio_bar(volume: f32, percentage: &str, width: usize) -> String {
     )
 }
 
-/// This represents the main "action" bars state.
+/// Représente l'état de la barre d'action en haut de l'UI.
 enum ActionBar {
-    /// When the app is currently displaying "paused".
+    /// L'application est en pause.
     Paused(Info),
-
-    /// When the app is currently displaying "playing".
+    /// L'application est en lecture.
     Playing(Info),
-
-    /// When the app is currently displaying "loading".
+    /// L'application est en chargement.
     Loading,
 }
 
 impl ActionBar {
-    /// Formats the action bar to be displayed.
-    /// The second value is the character length of the result.
+    /// Retourne (la_chaîne_à_afficher, longueur_visible_de_cette_chaîne).
     fn format(&self) -> (String, usize) {
         let (word, subject) = match self {
             Self::Playing(x) => ("playing", Some((x.name.clone(), x.width))),
@@ -80,19 +84,27 @@ impl ActionBar {
         };
 
         subject.map_or_else(
-            || (word.to_owned(), word.len()),
-            |(subject, len)| (format!("{} {}", word, subject.bold()), word.len() + 1 + len),
+            || {
+                // Cas : "loading"
+                (word.to_owned(), visible_width(word))
+            },
+            |(subject, raw_len)| {
+                // Cas : "playing [titre]" ou "paused [titre]"
+                // `raw_len` = longueur "réelle" du titre sans style (stockée dans Info)
+                let styled = format!("{} {}", word, subject.bold());
+                // On calcule la longueur comme : longueur(word) + 1 (espace) + raw_len
+                (styled, visible_width(word) + 1 + raw_len)
+            },
         )
     }
 }
 
-/// Creates the top/action bar, which has the name of the track and it's status.
-/// This also creates all the needed padding.
+/// Crée la barre d'action du haut, avec le nom du morceau et son statut.
+/// Gère aussi l'espace pour atteindre `width`.
 pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> String {
     let (main, len) = current
         .map_or(ActionBar::Loading, |info| {
             let info = info.deref().clone();
-
             if player.sink.is_paused() {
                 ActionBar::Paused(info)
             } else {
@@ -102,27 +114,45 @@ pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> Str
         .format();
 
     if len > width {
+        // On tronque si la longueur dépasse la largeur voulue
         let chopped: String = main.graphemes(true).take(width + 1).collect();
-
         format!("{chopped}...")
     } else {
-        format!("{}{}", main, " ".repeat(width - len))
+        // Sinon on complète avec des espaces
+        format!("{}{}", main, " ".repeat(width.saturating_sub(len)))
     }
 }
 
-/// Creates the bottom controls bar, and also spaces it properly.
+/// Crée la barre de contrôles du bas, et espace correctement chaque contrôle.
 pub fn controls(width: usize) -> String {
-    let controls = [["[s]", "kip"], ["[p]", "ause"], ["[q]", "uit"]];
+    // Les textes bruts
+    let controls_raw = [
+        ["[s]", "kip"],
+        ["[b]", "ack"],
+        ["[p]", "ause"],
+        ["[q]", "uit"],
+    ];
 
-    let len: usize = controls.concat().iter().map(|x| x.len()).sum();
-    let controls = controls.map(|x| format!("{}{}", x[0].bold(), x[1]));
+    // Version stylisée (avec codes ANSI pour le gras)
+    let controls_styled: Vec<String> = controls_raw
+        .iter()
+        .map(|x| format!("{}{}", x[0].bold(), x[1]))
+        .collect();
 
-    let mut controls = controls.join(&" ".repeat((width - len) / (controls.len() - 1)));
-    // This is needed because changing the above line
-    // only works for when the width is even
-    controls.push_str(match width % 2 {
-        0 => " ",
-        _ => "",
-    });
-    controls
+    // Version « brute » (pas de gras) pour mesurer la longueur réelle
+    let controls_plain: Vec<String> = controls_raw
+        .iter()
+        .map(|x| format!("{}{}", x[0], x[1]))
+        .collect();
+
+    // On joint les contrôles avec 5 espaces entre chacun
+    let with_spacing_styled = controls_styled.join("     ");
+    let with_spacing_plain  = controls_plain.join("     ");
+
+    // On calcule la longueur visible, +1 pour la marge de gauche
+    let total_len = visible_width(&with_spacing_plain) + 1;
+    let padding   = width.saturating_sub(total_len);
+
+    // On affiche la version stylisée, en paddant en fonction de la longueur réelle
+    format!(" {}{}", with_spacing_styled, " ".repeat(padding))
 }

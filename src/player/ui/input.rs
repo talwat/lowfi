@@ -36,6 +36,9 @@ pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
                 // Skip/Next
                 's' | 'n' | 'l' => Messages::Next,
 
+                // Previous track
+                'b' => Messages::Previous,
+
                 // Pause
                 'p' | ' ' => Messages::PlayPause,
 

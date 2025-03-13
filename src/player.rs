@@ -39,6 +39,9 @@ pub enum Messages {
     /// Notifies the audio server that it should update the track.
     Next,
 
+    /// Notifies the audio server that it should go to the previous track.
+    Previous,
+
     /// Special in that this isn't sent in a "client to server" sort of way,
     /// but rather is sent by a child of the server when a song has not only
     /// been requested but also downloaded aswell.
@@ -89,11 +92,17 @@ pub struct Player {
     /// This is [`None`] when lowfi is buffering/loading.
     current: ArcSwapOption<tracks::Info>,
 
+    /// The current track data, needed for history management
+    current_track: RwLock<Option<tracks::Track>>,
+
     /// The tracks, which is a [`VecDeque`] that holds
     /// *undecoded* [Track]s.
     ///
     /// This is populated specifically by the [Downloader].
     tracks: RwLock<VecDeque<tracks::Track>>,
+
+    /// The history of previously played tracks
+    history: RwLock<VecDeque<tracks::Track>>,
 
     /// The actual list of tracks to be played.
     list: List,
@@ -208,7 +217,9 @@ impl Player {
 
         let player = Self {
             tracks: RwLock::new(VecDeque::with_capacity(5)),
+            history: RwLock::new(VecDeque::with_capacity(10)),
             current: ArcSwapOption::new(None),
+            current_track: RwLock::new(None),
             client,
             sink,
             volume,
@@ -220,29 +231,63 @@ impl Player {
     }
 
     /// This will play the next track, as well as refilling the buffer in the background.
+    /// The current track will be added to history.
     ///
     /// This will also set `current` to the newly loaded song.
-    pub async fn next(&self) -> Result<tracks::Decoded, bool> {
-        // TODO: Consider replacing this with `unwrap_or_else` when async closures are stablized.
-        let track = self.tracks.write().await.pop_front();
+    /// This will play the previous track from history if available,
+    /// otherwise it will play a random track.
+    pub async fn previous(&self) -> Result<tracks::Decoded, bool> {
+        // Get previous track from history without modifying current track yet
+        let track = {
+            let mut history = self.history.write().await;
+            if !history.is_empty() {
+                // Get the previous track (which is at the end of history)
+                history.pop_back()
+            } else {
+                None
+            }
+        };
+
+        // If we found a track in history, use it
         let track = if let Some(track) = track {
             track
         } else {
-            // If the queue is completely empty, then fallback to simply getting a new track.
-            // This is relevant particularly at the first song.
-
-            // Serves as an indicator that the queue is "loading".
-            // We're doing it here so that we don't get the "loading" display
-            // for only a frame in the other case that the buffer is not empty.
+            // If no history, fallback to a random track
             self.current.store(None);
             self.list.random(&self.client).await?
         };
 
-        let decoded = track.decode().map_err(|_| false)?;
-
-        // Set the current track.
+        let decoded = track.clone().decode().map_err(|_| false)?;
+        *self.current_track.write().await = Some(track);
         self.set_current(decoded.info.clone());
+        Ok(decoded)
+    }
 
+    pub async fn next(&self) -> Result<tracks::Decoded, bool> {
+        // First save current track to history if it exists
+        if let Some(current) = self.current_track.read().await.as_ref() {
+            let mut history = self.history.write().await;
+            history.push_back(current.clone());
+            // Keep history size limited but large enough for back navigation
+            while history.len() > 20 {
+                history.pop_front();
+            }
+        }
+
+        // Get next track from queue or random
+        let track = {
+            let mut tracks = self.tracks.write().await;
+            if let Some(track) = tracks.pop_front() {
+                track
+            } else {
+                self.current.store(None);
+                self.list.random(&self.client).await?
+            }
+        };
+
+        let decoded = track.clone().decode().map_err(|_| false)?;
+        *self.current_track.write().await = Some(track);
+        self.set_current(decoded.info.clone());
         Ok(decoded)
     }
 
@@ -254,6 +299,38 @@ impl Player {
     /// signals while it's loading.
     ///
     /// This also sends the `NewSong` signal to `tx` apon successful completion.
+    /// Similar to handle_next, but for handling previous track requests
+    async fn handle_previous(
+        player: Arc<Self>,
+        _itx: Sender<()>,
+        tx: Sender<Messages>,
+    ) -> eyre::Result<()> {
+        // Stop the sink
+        player.sink.stop();
+
+        let track = player.previous().await;
+
+        match track {
+            Ok(track) => {
+                // Start playing the previous track
+                player.sink.append(track.data);
+
+                // No need to notify downloader since we're using history
+                
+                // Notify that the previous song has been loaded
+                tx.send(Messages::NewSong).await?;
+            }
+            Err(timeout) => {
+                if !timeout {
+                    sleep(TIMEOUT).await;
+                }
+                tx.send(Messages::TryAgain).await?;
+            }
+        };
+
+        Ok(())
+    }
+
     async fn handle_next(
         player: Arc<Self>,
         itx: Sender<()>,
@@ -419,6 +496,22 @@ impl Player {
                         .await?;
 
                     continue;
+                }
+                Messages::Previous => {
+                    // We manually went back, so we shouldn't wait for the song to be over
+                    new = false;
+
+                    // This prevents Previous while a song is still loading
+                    if !player.current_exists() {
+                        continue;
+                    }
+
+                    // Handle the previous track in the background
+                    task::spawn(Self::handle_previous(
+                        Arc::clone(&player),
+                        itx.clone(),
+                        tx.clone(),
+                    ));
                 }
                 Messages::Quit => break,
             }

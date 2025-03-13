@@ -144,6 +144,7 @@ pub enum TrackName {
 }
 
 /// The main track struct, which only includes data & the track name.
+#[derive(Clone)]
 pub struct Track {
     /// Name of the track.
     pub name: TrackName,

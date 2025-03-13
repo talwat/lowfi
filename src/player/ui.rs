@@ -125,15 +125,10 @@ impl Window {
             output
         });
 
-        // We're doing this because Windows is stupid and can't stand
-        // writing to the last line repeatedly.
-        #[cfg(windows)]
-        let (height, suffix) = (len + 2, "\r\n");
-        #[cfg(not(windows))]
-        let (height, suffix) = (len + 1, "");
+        let height = len + 1;
 
-        // There's no need for another newline after the main menu content, because it already has one.
-        let rendered = format!("{}\r\n{menu}{}{suffix}", self.borders[0], self.borders[1]);
+        // Format without extra newlines to avoid spacing issues
+        let rendered = format!("{}\r\n{menu}{}", self.borders[0], self.borders[1]);
 
         crossterm::execute!(
             self.out,
@@ -279,7 +274,7 @@ pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) ->
         Arc::clone(&player),
         args.minimalist,
         args.borderless,
-        21 + args.width.min(32) * 2,
+        50 + args.width.min(64) * 2,
     ));
 
     input::listen(sender.clone()).await?;

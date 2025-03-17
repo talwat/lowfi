@@ -224,3 +224,5 @@ For example, if you had an entry like this:
 ```
 
 Then lowfi would download from the first section, and display the second as the track name.
+
+Further examples can be found in the [data](https://github.com/talwat/lowfi/tree/main/data) folder.

@@ -7,10 +7,10 @@ It'll do this as simply as it can: no albums, no ads, just lofi.
 
 ## Disclaimer
 
-**All** of the audio files played in lowfi are from [Lofi Girl's](https://lofigirl.com/) website,
+**All** of the audio files embedded into in lowfi by default are from [Lofi Girl's](https://lofigirl.com/) website,
 under their [licensing guidelines](https://form.lofigirl.com/CommercialLicense).
 
-If god forbid you're planning to use this in a commercial setting, please
+If, god forbid, you're planning to use lowfi in a commercial setting, please
 follow their rules.
 
 ## Why?
@@ -132,7 +132,7 @@ Yeah, that's it.
 
 > [!NOTE]
 > Besides its regular controls, lowfi offers compatibility with Media Keys
-> and [MPRIS](https://wiki.archlinux.org/title/MPRIS) (with tools like `playerctl`)
+> and [MPRIS](https://wiki.archlinux.org/title/MPRIS) (with tools like `playerctl`).
 >
 > MPRIS is currently optional feature in cargo (enabled with `--features mpris`)
 > due to it being only for Linux, as well as the fact that the main point of
@@ -143,16 +143,16 @@ Yeah, that's it.
 If you have something you'd like to tweak about lowfi, you use additional flags which
 slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lowfi help`.
 
-| Flag                               | Function                                       |
-| ---------------------------------- | ---------------------------------------------- |
-| `-a`, `--alternate`                | Use an alternate terminal screen               |
-| `-m`, `--minimalist`               | Hide the bottom control bar                    |
-| `-b`, `--borderless`               | Exclude borders in UI                          |
-| `-p`, `--paused`                   | Start lowfi paused                             |
-| `-d`, `--debug`                    | Include ALSA & other logs                      |
-| `-w`, `--width <WIDTH>`            | Width of the player, from 0 to 32 [default: 3] |
-| `-t`, `--track-list <TRACK_LIST>`  | Use a [custom track list](#custom-track-lists) |
-| `-s`, `--buffer-size <BUFFER_SIZE` | Internal song buffer size [default: 5]         |
+| Flag                                | Function                                       |
+| ----------------------------------- | ---------------------------------------------- |
+| `-a`, `--alternate`                 | Use an alternate terminal screen               |
+| `-m`, `--minimalist`                | Hide the bottom control bar                    |
+| `-b`, `--borderless`                | Exclude borders in UI                          |
+| `-p`, `--paused`                    | Start lowfi paused                             |
+| `-d`, `--debug`                     | Include ALSA & other logs                      |
+| `-w`, `--width <WIDTH>`             | Width of the player, from 0 to 32 [default: 3] |
+| `-t`, `--track-list <TRACK_LIST>`   | Use a [custom track list](#custom-track-lists) |
+| `-s`, `--buffer-size <BUFFER_SIZE>` | Internal song buffer size [default: 5]         |
 
 ### Scraping
 

@@ -86,6 +86,16 @@ echo "deb https://debian.griffo.io//apt $(lsb_release -sc 2>/dev/null) main" | s
 sudo apt install -y lowfi
 ```
 
+### Fedora (COPR)
+
+> [!NOTE]
+> This uses an unofficial COPR repository by [FurqanHun](https://github.com/FurqanHun).
+
+```sh
+sudo dnf copr enable furqanhun/lowfi
+sudo dnf install lowfi
+```
+
 ### Manual
 
 This is good for debugging, especially in issues.

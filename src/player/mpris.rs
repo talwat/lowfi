@@ -1,6 +1,6 @@
 //! Contains the code for the MPRIS server & other helper functions.
 
-use std::{process, sync::Arc};
+use std::{env, process, sync::Arc};
 
 use mpris_server::{
     zbus::{self, fdo, Result},
@@ -267,7 +267,11 @@ impl Server {
 
     /// Creates a new MPRIS server.
     pub async fn new(player: Arc<super::Player>, sender: Sender<Messages>) -> eyre::Result<Self> {
-        let suffix = format!("lowfi.{}.instance{}", player.list.name, process::id());
+        let suffix = if env::var("LOWFI_FIXED_MPRIS_NAME").is_ok_and(|x| x == "1") {
+            String::from("lowfi")
+        } else {
+            format!("lowfi.{}.instance{}", player.list.name, process::id())
+        };
 
         let server = mpris_server::Server::new(&suffix, Player { player, sender }).await?;
 

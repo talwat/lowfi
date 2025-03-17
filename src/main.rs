@@ -47,7 +47,7 @@ struct Args {
     #[clap(long, short, alias = "list", short_alias = 'l')]
     track_list: Option<String>,
 
-    /// Song buffer size.
+    /// Internal song buffer size.
     #[clap(long, short = 's', alias = "buffer", default_value_t = 5)]
     buffer_size: usize,
 

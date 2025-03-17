@@ -143,15 +143,16 @@ Yeah, that's it.
 If you have something you'd like to tweak about lowfi, you use additional flags which
 slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lowfi help`.
 
-| Flag                            | Function                                       |
-| ------------------------------- | ---------------------------------------------- |
-| `-a`, `--alternate`             | Use an alternate terminal screen               |
-| `-m`, `--minimalist`            | Hide the bottom control bar                    |
-| `-b`, `--borderless`            | Exclude borders in UI                          |
-| `-p`, `--paused`                | Start lowfi paused                             |
-| `-d`, `--debug`                 | Include ALSA & other logs                      |
-| `-w`, `--width <WIDTH>`         | Width of the player, from 0 to 32 [default: 3] |
-| `-t`, `--tracklist <TRACKLIST>` | Use a [custom track list](#custom-track-lists) |
+| Flag                               | Function                                       |
+| ---------------------------------- | ---------------------------------------------- |
+| `-a`, `--alternate`                | Use an alternate terminal screen               |
+| `-m`, `--minimalist`               | Hide the bottom control bar                    |
+| `-b`, `--borderless`               | Exclude borders in UI                          |
+| `-p`, `--paused`                   | Start lowfi paused                             |
+| `-d`, `--debug`                    | Include ALSA & other logs                      |
+| `-w`, `--width <WIDTH>`            | Width of the player, from 0 to 32 [default: 3] |
+| `-t`, `--track-list <TRACK_LIST>`  | Use a [custom track list](#custom-track-lists) |
+| `-s`, `--buffer-size <BUFFER_SIZE` | Internal song buffer size [default: 5]         |
 
 ### Scraping
 

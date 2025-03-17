@@ -8,7 +8,7 @@ use tokio::{
     time::sleep,
 };
 
-use super::{Player, BUFFER_SIZE, TIMEOUT};
+use super::{Player, TIMEOUT};
 
 /// This struct is responsible for downloading tracks in the background.
 ///
@@ -24,6 +24,9 @@ pub struct Downloader {
     /// A copy of the internal sender, which can be useful for keeping
     /// track of it.
     tx: Sender<()>,
+
+    /// The size of the internal download buffer.
+    buf_size: usize,
 }
 
 impl Downloader {
@@ -37,9 +40,14 @@ impl Downloader {
     ///
     /// This also sends a [`Sender`] which can be used to notify
     /// when the downloader needs to begin downloading more tracks.
-    pub fn new(player: Arc<Player>) -> Self {
+    pub fn new(player: Arc<Player>, buf_size: usize) -> Self {
         let (tx, rx) = mpsc::channel(8);
-        Self { player, rx, tx }
+        Self {
+            player,
+            rx,
+            tx,
+            buf_size,
+        }
     }
 
     /// Actually starts & consumes the [Downloader].
@@ -50,7 +58,7 @@ impl Downloader {
                 // Loop through each update notification.
                 while self.rx.recv().await == Some(()) {
                     //  For each update notification, we'll push tracks until the buffer is completely full.
-                    while self.player.tracks.read().await.len() < BUFFER_SIZE {
+                    while self.player.tracks.read().await.len() < self.buf_size {
                         let data = self.player.list.random(&self.player.client).await;
                         match data {
                             Ok(track) => self.player.tracks.write().await.push_back(track),

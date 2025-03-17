@@ -12,7 +12,7 @@ mod tracks;
 mod scrape;
 
 /// An extremely simple lofi player.
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(about, version)]
 #[allow(
     clippy::struct_excessive_bools,
@@ -45,7 +45,11 @@ struct Args {
 
     /// Use a custom track list
     #[clap(long, short, alias = "list", short_alias = 'l')]
-    tracklist: Option<String>,
+    track_list: Option<String>,
+
+    /// Song buffer size.
+    #[clap(long, short = 's', alias = "buffer", default_value_t = 5)]
+    buffer_size: usize,
 
     /// The command that was ran.
     /// This is [None] if no command was specified.
@@ -54,7 +58,7 @@ struct Args {
 }
 
 /// Defines all of the extra commands lowfi can run.
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum Commands {
     /// Scrapes the lofi girl website file server for files.
     Scrape {

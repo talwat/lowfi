@@ -71,9 +71,6 @@ pub enum Messages {
 /// The time to wait in between errors.
 const TIMEOUT: Duration = Duration::from_secs(3);
 
-/// The amount of songs to buffer up.
-const BUFFER_SIZE: usize = 5;
-
 /// Main struct responsible for queuing up & playing tracks.
 // TODO: Consider refactoring [Player] from being stored in an [Arc], into containing many smaller [Arc]s.
 // TODO: In other words, this would change the type from `Arc<Player>` to just `Player`.
@@ -178,7 +175,7 @@ impl Player {
         let volume = PersistentVolume::load().await?;
 
         // Load the track list.
-        let list = List::load(args.tracklist.as_ref()).await?;
+        let list = List::load(args.track_list.as_ref()).await?;
 
         // We should only shut up alsa forcefully on Linux if we really have to.
         #[cfg(target_os = "linux")]
@@ -207,7 +204,7 @@ impl Player {
             .build()?;
 
         let player = Self {
-            tracks: RwLock::new(VecDeque::with_capacity(5)),
+            tracks: RwLock::new(VecDeque::with_capacity(args.buffer_size)),
             current: ArcSwapOption::new(None),
             client,
             sink,
@@ -294,10 +291,12 @@ impl Player {
     /// skip tracks or pause.
     ///
     /// This will also initialize a [Downloader] as well as an MPRIS server if enabled.
+    /// The [Downloader]s internal buffer size is determined by `buf_size`.
     pub async fn play(
         player: Arc<Self>,
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
+        buf_size: usize,
     ) -> eyre::Result<()> {
         // Initialize the mpris player.
         //
@@ -313,7 +312,7 @@ impl Player {
             })?;
 
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
-        let downloader = Downloader::new(Arc::clone(&player));
+        let downloader = Downloader::new(Arc::clone(&player), buf_size);
         let (itx, downloader) = downloader.start();
 
         // Start buffering tracks immediately.

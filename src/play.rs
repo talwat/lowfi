@@ -102,13 +102,13 @@ pub async fn play(args: Args) -> eyre::Result<()> {
 
     // Initialize the UI, as well as the internal communication channel.
     let (tx, rx) = mpsc::channel(8);
-    let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args));
+    let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args.clone()));
 
     // Sends the player an "init" signal telling it to start playing a song straight away.
     tx.send(Messages::Init).await?;
 
     // Actually starts the player.
-    Player::play(Arc::clone(&player), tx.clone(), rx).await?;
+    Player::play(Arc::clone(&player), tx.clone(), rx, args.buffer_size).await?;
 
     // Save the volume.txt file for the next session.
     PersistentVolume::save(player.sink.volume()).await?;

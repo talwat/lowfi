@@ -111,9 +111,6 @@ pub struct Player {
 impl Player {
     /// This gets the output stream while also shutting up alsa with [libc].
     /// Uses raw libc calls, and therefore is functional only on Linux.
-    ///
-    /// In other words, for the younger generation, we're telling alsa
-    /// to simply just the audio in the bag, lil api.
     #[cfg(target_os = "linux")]
     fn silent_get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
         use libc::freopen;

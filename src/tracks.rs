@@ -1,6 +1,19 @@
 //! Has all of the structs for managing the state
-//! of tracks, as well as downloading them &
-//! finding new ones.
+//! of tracks, as well as downloading them & finding new ones.
+//!
+//! There are several structs which represent the different stages
+//! that go on in downloading and playing tracks. The proccess for fetching tracks,
+//! and what structs are relevant in each step, are as follows.
+//!
+//! First Stage, when a track is initially fetched.
+//! 1. Raw entry selected from track list.
+//! 2. Raw entry split into path & display name.
+//! 3. Track data fetched, and [`Track`] is created which includes a [`TrackName`] that may be raw.
+//!
+//! Second Stage, when a track is played.
+//! 1. Track data is decoded.
+//! 2. [`Info`] created from decoded data.
+//! 3. [`Decoded`] made from [`Info`] and the original decoded data.
 
 use std::{io::Cursor, time::Duration};
 
@@ -11,10 +24,47 @@ use rodio::{Decoder, Source as _};
 use unicode_segmentation::UnicodeSegmentation;
 use url::form_urlencoded;
 
+pub mod bookmark;
 pub mod list;
 
 /// Just a shorthand for a decoded [Bytes].
 pub type DecodedData = Decoder<Cursor<Bytes>>;
+
+/// Specifies a track's name, and specifically,
+/// whether it has already been formatted or if it
+/// is still in it's raw path form.
+#[derive(Debug, Clone)]
+pub enum TrackName {
+    /// Pulled straight from the list,
+    /// with no splitting done at all.
+    Raw(String),
+
+    /// If a track has a custom specified name
+    /// in the list, then it should be defined with this variant.
+    Formatted(String),
+}
+
+/// The main track struct, which only includes data & the track name.
+pub struct Track {
+    /// Name of the track, which may be raw.
+    pub name: TrackName,
+
+    /// Full downloadable path/url of the track.
+    pub full_path: String,
+
+    /// The raw data of the track, which is not decoded and
+    /// therefore much more memory efficient.
+    pub data: Bytes,
+}
+
+impl Track {
+    /// This will actually decode and format the track,
+    /// returning a [`DecodedTrack`] which can be played
+    /// and also has a duration & formatted name.
+    pub fn decode(self) -> eyre::Result<Decoded> {
+        Decoded::new(self)
+    }
+}
 
 /// The [`Info`] struct, which has the name and duration of a track.
 ///
@@ -22,8 +72,14 @@ pub type DecodedData = Decoder<Cursor<Bytes>>;
 /// from the decoded data and not from the raw data.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Info {
+    /// The full downloadable path/url of the track.
+    pub full_path: String,
+
+    /// Whether the track entry included a custom name, or not.
+    pub custom_name: bool,
+
     /// This is a formatted name, so it doesn't include the full path.
-    pub name: String,
+    pub display_name: String,
 
     /// This is the *actual* terminal width of the track name, used to make
     /// the UI consistent.
@@ -93,17 +149,19 @@ impl Info {
         }
     }
 
-    /// Creates a new [`TrackInfo`] from a possibly raw name & decoded track data.
-    pub fn new(name: TrackName, decoded: &DecodedData) -> eyre::Result<Self> {
-        let name = match name {
-            TrackName::Raw(raw) => Self::format_name(&raw)?,
-            TrackName::Formatted(formatted) => formatted,
+    /// Creates a new [`TrackInfo`] from a possibly raw name & decoded data.
+    pub fn new(name: TrackName, full_path: String, decoded: &DecodedData) -> eyre::Result<Self> {
+        let (display_name, custom_name) = match name {
+            TrackName::Raw(raw) => (Self::format_name(&raw)?, false),
+            TrackName::Formatted(custom) => (custom, true),
         };
 
         Ok(Self {
             duration: decoded.total_duration(),
-            width: name.graphemes(true).count(),
-            name,
+            width: display_name.graphemes(true).count(),
+            full_path,
+            custom_name,
+            display_name,
         })
     }
 }
@@ -123,41 +181,8 @@ impl Decoded {
     /// This is equivalent to [`Track::decode`].
     pub fn new(track: Track) -> eyre::Result<Self> {
         let data = Decoder::new(Cursor::new(track.data))?;
-        let info = Info::new(track.name, &data)?;
+        let info = Info::new(track.name, track.full_path, &data)?;
 
         Ok(Self { info, data })
-    }
-}
-
-/// Specifies a track's name, and specifically,
-/// whether it has already been formatted or if it
-/// is still in it's raw form.
-#[derive(Debug, Clone)]
-pub enum TrackName {
-    /// Pulled straight from the list,
-    /// with no splitting done at all.
-    Raw(String),
-
-    /// If a track has a custom specified name
-    /// in the list, then it should be defined with this variant.
-    Formatted(String),
-}
-
-/// The main track struct, which only includes data & the track name.
-pub struct Track {
-    /// Name of the track.
-    pub name: TrackName,
-
-    /// The raw data of the track, which is not decoded and
-    /// therefore much more memory efficient.
-    pub data: Bytes,
-}
-
-impl Track {
-    /// This will actually decode and format the track,
-    /// returning a [`DecodedTrack`] which can be played
-    /// and also has a duration & formatted name.
-    pub fn decode(self) -> eyre::Result<Decoded> {
-        Decoded::new(self)
     }
 }

@@ -169,7 +169,7 @@ impl PlayerInterface for Player {
             .as_ref()
             .map_or_else(Metadata::new, |track| {
                 let mut metadata = Metadata::builder()
-                    .title(track.name.clone())
+                    .title(track.display_name.clone())
                     .album(self.player.list.name.clone())
                     .build();
 

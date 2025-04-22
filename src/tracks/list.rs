@@ -7,6 +7,8 @@ use rand::Rng as _;
 use reqwest::Client;
 use tokio::fs;
 
+use crate::data_dir;
+
 use super::Track;
 
 /// Represents a list of tracks that can be played.
@@ -50,15 +52,15 @@ impl List {
     }
 
     /// Downloads a raw track, but doesn't decode it.
-    async fn download(&self, track: &str, client: &Client) -> Result<Bytes, bool> {
+    async fn download(&self, track: &str, client: &Client) -> Result<(Bytes, String), bool> {
         // If the track has a protocol, then we should ignore the base for it.
-        let url = if track.contains("://") {
+        let full_path = if track.contains("://") {
             track.to_owned()
         } else {
             format!("{}{}", self.base(), track)
         };
 
-        let data: Bytes = if let Some(x) = url.strip_prefix("file://") {
+        let data: Bytes = if let Some(x) = full_path.strip_prefix("file://") {
             let path = if x.starts_with("~") {
                 let home_path = dirs::home_dir().ok_or(false)?;
                 let home = home_path.to_str().ok_or(false)?;
@@ -71,11 +73,15 @@ impl List {
             let result = tokio::fs::read(path).await.map_err(|_| false)?;
             result.into()
         } else {
-            let response = client.get(url).send().await.map_err(|x| x.is_timeout())?;
+            let response = client
+                .get(full_path.clone())
+                .send()
+                .await
+                .map_err(|x| x.is_timeout())?;
             response.bytes().await.map_err(|_| false)?
         };
 
-        Ok(data)
+        Ok((data, full_path))
     }
 
     /// Fetches and downloads a random track from the [List].
@@ -84,13 +90,17 @@ impl List {
     /// and false otherwise. This tells lowfi if it shouldn't wait to try again.
     pub async fn random(&self, client: &Client) -> Result<Track, bool> {
         let (path, custom_name) = self.random_path();
-        let data = self.download(&path, client).await?;
+        let (data, full_path) = self.download(&path, client).await?;
 
-        let name = custom_name.map_or(super::TrackName::Raw(path), |formatted| {
+        let name = custom_name.map_or(super::TrackName::Raw(path.clone()), |formatted| {
             super::TrackName::Formatted(formatted)
         });
 
-        Ok(Track { name, data: data })
+        Ok(Track {
+            name,
+            data,
+            full_path,
+        })
     }
 
     /// Parses text into a [List].
@@ -111,10 +121,7 @@ impl List {
     pub async fn load(tracks: Option<&String>) -> eyre::Result<Self> {
         if let Some(arg) = tracks {
             // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
-            let name = dirs::data_dir()
-                .ok_or_eyre("data directory not found, are you *really* running this on wasm?")?
-                .join("lowfi")
-                .join(format!("{arg}.txt"));
+            let name = data_dir()?.join(format!("{arg}.txt"));
 
             let name = if name.exists() { name } else { arg.into() };
 

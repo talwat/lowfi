@@ -2,8 +2,12 @@
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
-use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
+use clap::{Parser, Subcommand};
+use eyre::OptionExt;
+
+mod messages;
 mod play;
 mod player;
 mod tracks;
@@ -70,6 +74,15 @@ enum Commands {
         #[clap(long, short)]
         include_full: bool,
     },
+}
+
+/// Gets lowfi's data directory.
+pub fn data_dir() -> eyre::Result<PathBuf> {
+    let dir = dirs::data_dir()
+        .ok_or_eyre("data directory not found, are you *really* running this on wasm?")?
+        .join("lowfi");
+
+    Ok(dir)
 }
 
 #[tokio::main]

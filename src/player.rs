@@ -22,8 +22,9 @@ use tokio::{
 use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 
 use crate::{
+    messages::Messages,
     play::{PersistentVolume, SendableOutputStream},
-    tracks::{self, list::List},
+    tracks::{self, bookmark, list::List},
     Args,
 };
 
@@ -32,41 +33,6 @@ pub mod ui;
 
 #[cfg(feature = "mpris")]
 pub mod mpris;
-
-/// Handles communication between the frontend & audio player.
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum Messages {
-    /// Notifies the audio server that it should update the track.
-    Next,
-
-    /// Special in that this isn't sent in a "client to server" sort of way,
-    /// but rather is sent by a child of the server when a song has not only
-    /// been requested but also downloaded aswell.
-    NewSong,
-
-    /// This signal is only sent if a track timed out. In that case,
-    /// lowfi will try again and again to retrieve the track.
-    TryAgain,
-
-    /// Similar to Next, but specific to the first track.
-    Init,
-
-    /// Unpause the [Sink].
-    #[allow(dead_code, reason = "this code may not be dead depending on features")]
-    Play,
-
-    /// Pauses the [Sink].
-    Pause,
-
-    /// Pauses the [Sink]. This will also unpause it if it is paused.
-    PlayPause,
-
-    /// Change the volume of playback.
-    ChangeVolume(f32),
-
-    /// Quits gracefully.
-    Quit,
-}
 
 /// The time to wait in between errors.
 const TIMEOUT: Duration = Duration::from_secs(3);
@@ -415,6 +381,20 @@ impl Player {
                         .await?;
 
                     continue;
+                }
+                Messages::Bookmark => {
+                    let current = player.current.load();
+                    let current = current.as_ref().unwrap();
+
+                    bookmark::bookmark(
+                        current.full_path.clone(),
+                        if current.custom_name {
+                            Some(current.display_name.clone())
+                        } else {
+                            None
+                        },
+                    )
+                    .await?;
                 }
                 Messages::Quit => break,
             }

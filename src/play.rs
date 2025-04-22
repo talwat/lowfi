@@ -7,8 +7,9 @@ use eyre::eyre;
 use tokio::fs;
 use tokio::{sync::mpsc, task};
 
+use crate::messages::Messages;
+use crate::player::ui;
 use crate::player::Player;
-use crate::player::{ui, Messages};
 use crate::Args;
 
 /// This is the representation of the persistent volume,

@@ -43,6 +43,9 @@ pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
                 '+' | '=' | 'k' => Messages::ChangeVolume(0.1),
                 '-' | '_' | 'j' => Messages::ChangeVolume(-0.1),
 
+                // Bookmark
+                'b' => Messages::Bookmark,
+
                 _ => continue,
             },
             // Media keys

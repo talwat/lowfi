@@ -1,7 +1,11 @@
 //! Various different individual components that
 //! appear in lowfi's UI, like the progress bar.
 
-use std::{ops::Deref as _, sync::Arc, time::Duration};
+use std::{
+    ops::Deref as _,
+    sync::{atomic::Ordering, Arc},
+    time::Duration,
+};
 
 use crossterm::style::Stylize as _;
 use unicode_segmentation::UnicodeSegmentation as _;
@@ -72,7 +76,7 @@ enum ActionBar {
 impl ActionBar {
     /// Formats the action bar to be displayed.
     /// The second value is the character length of the result.
-    fn format(&self) -> (String, usize) {
+    fn format(&self, star: bool) -> (String, usize) {
         let (word, subject) = match self {
             Self::Playing(x) => ("playing", Some((x.display_name.clone(), x.width))),
             Self::Paused(x) => ("paused", Some((x.display_name.clone(), x.width))),
@@ -81,7 +85,12 @@ impl ActionBar {
 
         subject.map_or_else(
             || (word.to_owned(), word.len()),
-            |(subject, len)| (format!("{} {}", word, subject.bold()), word.len() + 1 + len),
+            |(subject, len)| {
+                (
+                    format!("{} {}{}", word, if star { "*" } else { "" }, subject.bold()),
+                    word.len() + 1 + len + if star { 1 } else { 0 },
+                )
+            },
         )
     }
 }
@@ -99,7 +108,7 @@ pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> Str
                 ActionBar::Playing(info)
             }
         })
-        .format();
+        .format(player.bookmarked.load(Ordering::Relaxed));
 
     if len > width {
         let chopped: String = main.graphemes(true).take(width + 1).collect();

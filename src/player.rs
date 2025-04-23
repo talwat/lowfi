@@ -2,7 +2,14 @@
 //! This also has the code for the underlying
 //! audio server which adds new tracks.
 
-use std::{collections::VecDeque, sync::Arc, time::Duration};
+use std::{
+    collections::VecDeque,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
@@ -47,6 +54,9 @@ const TIMEOUT: Duration = Duration::from_secs(3);
 pub struct Player {
     /// [rodio]'s [`Sink`] which can control playback.
     pub sink: Sink,
+
+    /// Whether the current track has been bookmarked.
+    bookmarked: AtomicBool,
 
     /// The [`TrackInfo`] of the current track.
     /// This is [`None`] when lowfi is buffering/loading.
@@ -174,6 +184,7 @@ impl Player {
             volume,
             list,
             _handle: handle,
+            bookmarked: AtomicBool::new(false),
         };
 
         Ok((player, SendableOutputStream(stream)))
@@ -383,6 +394,11 @@ impl Player {
                     continue;
                 }
                 Messages::Bookmark => {
+                    if player.bookmarked.load(Ordering::Relaxed) {
+                        continue;
+                    }
+
+                    player.bookmarked.swap(true, Ordering::Relaxed);
                     let current = player.current.load();
                     let current = current.as_ref().unwrap();
 

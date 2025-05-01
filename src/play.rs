@@ -1,5 +1,6 @@
 //! Responsible for the basic initialization & shutdown of the audio server & frontend.
 
+use std::io::{stdout, IsTerminal};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -103,7 +104,15 @@ pub async fn play(args: Args) -> eyre::Result<()> {
 
     // Initialize the UI, as well as the internal communication channel.
     let (tx, rx) = mpsc::channel(8);
-    let ui = task::spawn(ui::start(Arc::clone(&player), tx.clone(), args.clone()));
+    let ui = if stdout().is_terminal() {
+        Some(task::spawn(ui::start(
+            Arc::clone(&player),
+            tx.clone(),
+            args.clone(),
+        )))
+    } else {
+        None
+    };
 
     // Sends the player an "init" signal telling it to start playing a song straight away.
     tx.send(Messages::Init).await?;
@@ -115,7 +124,7 @@ pub async fn play(args: Args) -> eyre::Result<()> {
     PersistentVolume::save(player.sink.volume()).await?;
     drop(stream.0);
     player.sink.stop();
-    ui.abort();
+    ui.and_then(|x| Some(x.abort()));
 
     Ok(())
 }

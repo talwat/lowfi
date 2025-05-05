@@ -36,17 +36,9 @@ use super::{Messages, Player};
 mod components;
 mod input;
 
-/// Self explanitory.
-const FPS: usize = 12;
-
 /// How long the audio bar will be visible for when audio is adjusted.
 /// This is in frames.
 const AUDIO_BAR_DURATION: usize = 10;
-
-/// How long to wait in between frames.
-/// This is fairly arbitrary, but an ideal value should be enough to feel
-/// snappy but not require too many resources.
-const FRAME_DELTA: f32 = 1.0 / FPS as f32;
 
 lazy_static! {
     /// The volume timer, which controls how long the volume display should
@@ -157,6 +149,7 @@ async fn interface(
     player: Arc<Player>,
     minimalist: bool,
     borderless: bool,
+    fps: u8,
     width: usize,
 ) -> eyre::Result<()> {
     let mut window = Window::new(width, borderless);
@@ -196,7 +189,8 @@ async fn interface(
 
         window.draw(menu, false)?;
 
-        sleep(Duration::from_secs_f32(FRAME_DELTA)).await;
+        let delta = 1.0 / (fps as f32);
+        sleep(Duration::from_secs_f32(delta)).await;
     }
 }
 
@@ -279,6 +273,7 @@ pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) ->
         Arc::clone(&player),
         args.minimalist,
         args.borderless,
+        args.fps,
         21 + args.width.min(32) * 2,
     ));
 

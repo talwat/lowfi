@@ -39,6 +39,10 @@ struct Args {
     #[clap(long, short)]
     paused: bool,
 
+    /// FPS of the UI.
+    #[clap(long, short, default_value_t = 12)]
+    fps: u8,
+
     /// Include ALSA & other logs.
     #[clap(long, short)]
     debug: bool,

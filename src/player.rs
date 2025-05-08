@@ -299,7 +299,7 @@ impl Player {
         // only want to autoplay if there hasn't been any manual intervention.
         //
         // In other words, this will be `true` after a new track has been fully
-        // loaded  and it'll be `false` if a track is still currently loading.
+        // loaded and it'll be `false` if a track is still currently loading.
         let mut new = false;
 
         loop {
@@ -326,6 +326,8 @@ impl Player {
 
             match msg {
                 Messages::Next | Messages::Init | Messages::TryAgain => {
+                    player.bookmarked.swap(false, Ordering::Relaxed);
+
                     // We manually skipped, so we shouldn't actually wait for the song
                     // to be over until we recieve the `NewSong` signal.
                     new = false;
@@ -394,15 +396,10 @@ impl Player {
                     continue;
                 }
                 Messages::Bookmark => {
-                    if player.bookmarked.load(Ordering::Relaxed) {
-                        continue;
-                    }
-
-                    player.bookmarked.swap(true, Ordering::Relaxed);
                     let current = player.current.load();
                     let current = current.as_ref().unwrap();
 
-                    bookmark::bookmark(
+                    let bookmarked = bookmark::bookmark(
                         current.full_path.clone(),
                         if current.custom_name {
                             Some(current.display_name.clone())
@@ -411,6 +408,8 @@ impl Player {
                         },
                     )
                     .await?;
+
+                    player.bookmarked.swap(bookmarked, Ordering::Relaxed);
                 }
                 Messages::Quit => break,
             }

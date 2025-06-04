@@ -1,5 +1,7 @@
+use std::io::SeekFrom;
+
 use tokio::fs::{create_dir_all, OpenOptions};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::data_dir;
 
@@ -27,17 +29,19 @@ pub async fn bookmark(path: String, custom: Option<String>) -> eyre::Result<bool
     let mut text = String::new();
     file.read_to_string(&mut text).await?;
 
-    let mut lines: Vec<&str> = text.lines().collect();
-    let previous_len = lines.len();
-    lines.retain(|line| (*line != entry));
-    let contains = lines.len() != previous_len;
+    let mut lines: Vec<&str> = text.trim().lines().filter(|x| !x.is_empty()).collect();
+    let idx = lines.iter().position(|x| **x == entry);
 
-    if !contains {
+    if let Some(idx) = idx {
+        lines.remove(idx);
+    } else {
         lines.push(&entry);
     }
 
+    let text = format!("\n{}", lines.join("\n"));
+    file.seek(SeekFrom::Start(0)).await?;
     file.set_len(0).await?;
-    file.write_all(format!("\n{}\n", lines.join("\n")).as_bytes()).await?;
+    file.write_all(text.as_bytes()).await?;
 
-    Ok(!contains)
+    Ok(idx.is_none())
 }

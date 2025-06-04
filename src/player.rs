@@ -31,7 +31,7 @@ use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 use crate::{
     messages::Messages,
     play::{PersistentVolume, SendableOutputStream},
-    tracks::{self, bookmark, list::List},
+    tracks::{self, bookmark, list::List, TrackError},
     Args,
 };
 
@@ -193,7 +193,7 @@ impl Player {
     /// This will play the next track, as well as refilling the buffer in the background.
     ///
     /// This will also set `current` to the newly loaded song.
-    pub async fn next(&self) -> Result<tracks::Decoded, bool> {
+    pub async fn next(&self) -> Result<tracks::Decoded, tracks::TrackError> {
         // TODO: Consider replacing this with `unwrap_or_else` when async closures are stablized.
         let track = self.tracks.write().await.pop_front();
         let track = if let Some(track) = track {
@@ -209,7 +209,7 @@ impl Player {
             self.list.random(&self.client).await?
         };
 
-        let decoded = track.decode().map_err(|_| false)?;
+        let decoded = track.decode().map_err(|x| TrackError::new_eyre(false, x))?;
 
         // Set the current track.
         self.set_current(decoded.info.clone());
@@ -229,6 +229,7 @@ impl Player {
         player: Arc<Self>,
         itx: Sender<()>,
         tx: Sender<Messages>,
+        debug: bool,
     ) -> eyre::Result<()> {
         // Stop the sink.
         player.sink.stop();
@@ -247,8 +248,12 @@ impl Player {
                 // Notify the audio server that the next song has actually been downloaded.
                 tx.send(Messages::NewSong).await?;
             }
-            Err(timeout) => {
-                if !timeout {
+            Err(error) => {
+                if !error.timeout {
+                    if debug {
+                        panic!("{:?}", error)
+                    }
+
                     sleep(TIMEOUT).await;
                 }
 
@@ -271,6 +276,7 @@ impl Player {
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
         buf_size: usize,
+        debug: bool,
     ) -> eyre::Result<()> {
         // Initialize the mpris player.
         //
@@ -287,7 +293,7 @@ impl Player {
 
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
         let downloader = Downloader::new(Arc::clone(&player), buf_size);
-        let (itx, downloader) = downloader.start();
+        let (itx, downloader) = downloader.start(debug);
 
         // Start buffering tracks immediately.
         Downloader::notify(&itx).await?;
@@ -343,6 +349,7 @@ impl Player {
                         Arc::clone(&player),
                         itx.clone(),
                         tx.clone(),
+                        debug,
                     ));
                 }
                 Messages::Play => {

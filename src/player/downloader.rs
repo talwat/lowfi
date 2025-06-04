@@ -51,7 +51,7 @@ impl Downloader {
     }
 
     /// Actually starts & consumes the [Downloader].
-    pub fn start(mut self) -> (Sender<()>, JoinHandle<()>) {
+    pub fn start(mut self, debug: bool) -> (Sender<()>, JoinHandle<()>) {
         (
             self.tx,
             task::spawn(async move {
@@ -62,8 +62,12 @@ impl Downloader {
                         let data = self.player.list.random(&self.player.client).await;
                         match data {
                             Ok(track) => self.player.tracks.write().await.push_back(track),
-                            Err(timeout) => {
-                                if !timeout {
+                            Err(error) => {
+                                if !error.timeout {
+                                    if debug {
+                                        panic!("{}", error)
+                                    }
+
                                     sleep(TIMEOUT).await;
                                 }
                             }

@@ -15,7 +15,7 @@
 //! 2. [`Info`] created from decoded data.
 //! 3. [`Decoded`] made from [`Info`] and the original decoded data.
 
-use std::{io::Cursor, time::Duration};
+use std::{error::Error, io::Cursor, time::Duration};
 
 use bytes::Bytes;
 use eyre::OptionExt as _;
@@ -184,5 +184,50 @@ impl Decoded {
         let info = Info::new(track.name, track.full_path, &data)?;
 
         Ok(Self { info, data })
+    }
+}
+
+#[derive(Debug)]
+pub struct TrackError {
+    pub timeout: bool,
+    inner: Option<eyre::Error>,
+}
+
+impl<'a> std::fmt::Display for TrackError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TrackError (timeout: {}): {:?}",
+            self.timeout, self.inner
+        )
+    }
+}
+
+impl<'a> std::error::Error for TrackError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.inner.as_ref().map(|e| e.as_ref())
+    }
+}
+
+impl TrackError {
+    pub fn new<T: Error + 'static + Send + Sync>(timeout: bool, inner: T) -> Self {
+        Self {
+            inner: Some(eyre::eyre!(inner)),
+            timeout,
+        }
+    }
+
+    pub fn new_eyre(timeout: bool, inner: eyre::Error) -> Self {
+        Self {
+            inner: Some(inner),
+            timeout,
+        }
+    }
+
+    pub fn empty(timeout: bool) -> Self {
+        Self {
+            inner: None,
+            timeout,
+        }
     }
 }

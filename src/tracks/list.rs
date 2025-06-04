@@ -7,7 +7,7 @@ use rand::Rng as _;
 use reqwest::Client;
 use tokio::fs;
 
-use crate::data_dir;
+use crate::{data_dir, tracks::TrackError};
 
 use super::Track;
 
@@ -52,7 +52,7 @@ impl List {
     }
 
     /// Downloads a raw track, but doesn't decode it.
-    async fn download(&self, track: &str, client: &Client) -> Result<(Bytes, String), bool> {
+    async fn download(&self, track: &str, client: &Client) -> Result<(Bytes, String), TrackError> {
         // If the track has a protocol, then we should ignore the base for it.
         let full_path = if track.contains("://") {
             track.to_owned()
@@ -62,23 +62,28 @@ impl List {
 
         let data: Bytes = if let Some(x) = full_path.strip_prefix("file://") {
             let path = if x.starts_with("~") {
-                let home_path = dirs::home_dir().ok_or(false)?;
-                let home = home_path.to_str().ok_or(false)?;
+                let home_path = dirs::home_dir().ok_or(TrackError::empty(false))?;
+                let home = home_path.to_str().ok_or(TrackError::empty(false))?;
 
                 x.replace("~", home)
             } else {
                 x.to_owned()
             };
 
-            let result = tokio::fs::read(path).await.map_err(|_| false)?;
+            let result = tokio::fs::read(path)
+                .await
+                .map_err(|x| TrackError::new(false, x))?;
             result.into()
         } else {
             let response = client
                 .get(full_path.clone())
                 .send()
                 .await
-                .map_err(|x| x.is_timeout())?;
-            response.bytes().await.map_err(|_| false)?
+                .map_err(|x| TrackError::new(x.is_timeout(), x))?;
+            response
+                .bytes()
+                .await
+                .map_err(|x| TrackError::new(false, x))?
         };
 
         Ok((data, full_path))
@@ -88,7 +93,7 @@ impl List {
     ///
     /// The Result's error is a bool, which is true if a timeout error occured,
     /// and false otherwise. This tells lowfi if it shouldn't wait to try again.
-    pub async fn random(&self, client: &Client) -> Result<Track, bool> {
+    pub async fn random(&self, client: &Client) -> Result<Track, TrackError> {
         let (path, custom_name) = self.random_path();
         let (data, full_path) = self.download(&path, client).await?;
 

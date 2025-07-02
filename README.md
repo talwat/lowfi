@@ -21,9 +21,8 @@ app that would just play random lofi without video.
 It was also designed to be fairly resilient to inconsistent networks,
 and as such it buffers 5 whole songs at a time instead of parts of the same song.
 
-Although, lowfi is yet to be properly tested in difficult conditions,
-so don't rely on it too much until I do that. See [Scraping](#scraping) if
-you're interested in downloading the tracks. Beware, there's a lot of them.
+See [Scraping](#scraping) if you're interested in downloading the tracks.
+Beware, there's a lot of them.
 
 ## Installing
 

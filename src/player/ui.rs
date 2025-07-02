@@ -28,6 +28,7 @@ use crossterm::{
 };
 
 use lazy_static::lazy_static;
+use thiserror::Error;
 use tokio::{sync::mpsc::Sender, task, time::sleep};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -35,6 +36,20 @@ use super::{Messages, Player};
 
 mod components;
 mod input;
+
+/// The error type for the UI, which is used to handle errors that occur
+/// while drawing the UI or handling input.
+#[derive(Debug, Error)]
+pub enum UIError {
+    #[error("unable to convert number")]
+    Conversion(#[from] std::num::TryFromIntError),
+
+    #[error("unable to write output")]
+    Write(#[from] std::io::Error),
+
+    #[error("sending message to backend failed")]
+    Communication(#[from] tokio::sync::mpsc::error::SendError<Messages>),
+}
 
 /// How long the audio bar will be visible for when audio is adjusted.
 /// This is in frames.
@@ -100,7 +115,7 @@ impl Window {
     }
 
     /// Actually draws the window, with each element in `content` being on a new line.
-    pub fn draw(&mut self, content: Vec<String>, space: bool) -> eyre::Result<()> {
+    pub fn draw(&mut self, content: Vec<String>, space: bool) -> eyre::Result<(), UIError> {
         let len: u16 = content.len().try_into()?;
 
         // Note that this will have a trailing newline, which we use later.
@@ -151,7 +166,7 @@ async fn interface(
     borderless: bool,
     fps: u8,
     width: usize,
-) -> eyre::Result<()> {
+) -> eyre::Result<(), UIError> {
     let mut window = Window::new(width, borderless);
 
     loop {
@@ -207,7 +222,7 @@ pub struct Environment {
 impl Environment {
     /// This prepares the terminal, returning an [Environment] helpful
     /// for cleaning up afterwards.
-    pub fn ready(alternate: bool) -> eyre::Result<Self> {
+    pub fn ready(alternate: bool) -> eyre::Result<Self, UIError> {
         let mut lock = stdout().lock();
 
         crossterm::execute!(lock, Hide)?;
@@ -234,7 +249,7 @@ impl Environment {
 
     /// Uses the information collected from initialization to safely close down
     /// the terminal & restore it to it's previous state.
-    pub fn cleanup(&self) -> eyre::Result<()> {
+    pub fn cleanup(&self) -> eyre::Result<(), UIError> {
         let mut lock = stdout().lock();
 
         if self.alternate {
@@ -267,7 +282,11 @@ impl Drop for Environment {
 ///
 /// `alternate` controls whether to use [`EnterAlternateScreen`] in order to hide
 /// previous terminal history.
-pub async fn start(player: Arc<Player>, sender: Sender<Messages>, args: Args) -> eyre::Result<()> {
+pub async fn start(
+    player: Arc<Player>,
+    sender: Sender<Messages>,
+    args: Args,
+) -> eyre::Result<(), UIError> {
     let environment = Environment::ready(args.alternate)?;
     let interface = task::spawn(interface(
         Arc::clone(&player),

@@ -25,9 +25,10 @@ use tokio::io;
 use unicode_segmentation::UnicodeSegmentation;
 use url::form_urlencoded;
 
-pub mod bookmark;
 pub mod list;
 
+/// The error type for the track system, which is used to handle errors that occur
+/// while downloading, decoding, or playing tracks.
 #[derive(Debug, Error)]
 pub enum TrackError {
     #[error("timeout")]

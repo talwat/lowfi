@@ -22,7 +22,6 @@ use tokio::{
         RwLock,
     },
     task,
-    time::sleep,
 };
 
 #[cfg(feature = "mpris")]
@@ -31,11 +30,14 @@ use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 use crate::{
     messages::Messages,
     play::{PersistentVolume, SendableOutputStream},
-    tracks::{self, bookmark, list::List},
+    tracks::{self, list::List},
     Args,
 };
 
+pub mod audio;
+pub mod bookmark;
 pub mod downloader;
+pub mod queue;
 pub mod ui;
 
 #[cfg(feature = "mpris")]
@@ -54,6 +56,9 @@ const TIMEOUT: Duration = Duration::from_secs(3);
 pub struct Player {
     /// [rodio]'s [`Sink`] which can control playback.
     pub sink: Sink,
+
+    /// The internal buffer size.
+    pub buffer_size: usize,
 
     /// Whether the current track has been bookmarked.
     bookmarked: AtomicBool,
@@ -85,46 +90,6 @@ pub struct Player {
 }
 
 impl Player {
-    /// This gets the output stream while also shutting up alsa with [libc].
-    /// Uses raw libc calls, and therefore is functional only on Linux.
-    #[cfg(target_os = "linux")]
-    fn silent_get_output_stream() -> eyre::Result<(OutputStream, OutputStreamHandle)> {
-        use libc::freopen;
-        use std::ffi::CString;
-
-        // Get the file descriptor to stderr from libc.
-        extern "C" {
-            static stderr: *mut libc::FILE;
-        }
-
-        // This is a bit of an ugly hack that basically just uses `libc` to redirect alsa's
-        // output to `/dev/null` so that it wont be shoved down our throats.
-
-        // The mode which to redirect terminal output with.
-        let mode = CString::new("w")?;
-
-        // First redirect to /dev/null, which basically silences alsa.
-        let null = CString::new("/dev/null")?;
-
-        // SAFETY: Simple enough to be impossible to fail. Hopefully.
-        unsafe {
-            freopen(null.as_ptr(), mode.as_ptr(), stderr);
-        }
-
-        // Make the OutputStream while stderr is still redirected to /dev/null.
-        let (stream, handle) = OutputStream::try_default()?;
-
-        // Redirect back to the current terminal, so that other output isn't silenced.
-        let tty = CString::new("/dev/tty")?;
-
-        // SAFETY: See the first call to `freopen`.
-        unsafe {
-            freopen(tty.as_ptr(), mode.as_ptr(), stderr);
-        }
-
-        Ok((stream, handle))
-    }
-
     /// Just a shorthand for setting `current`.
     fn set_current(&self, info: tracks::Info) {
         self.current.store(Some(Arc::new(info)));
@@ -153,7 +118,7 @@ impl Player {
         // We should only shut up alsa forcefully on Linux if we really have to.
         #[cfg(target_os = "linux")]
         let (stream, handle) = if !args.alternate && !args.debug {
-            Self::silent_get_output_stream()?
+            audio::silent_get_output_stream()?
         } else {
             OutputStream::try_default()?
         };
@@ -178,6 +143,7 @@ impl Player {
 
         let player = Self {
             tracks: RwLock::new(VecDeque::with_capacity(args.buffer_size)),
+            buffer_size: args.buffer_size,
             current: ArcSwapOption::new(None),
             client,
             sink,
@@ -188,80 +154,6 @@ impl Player {
         };
 
         Ok((player, SendableOutputStream(stream)))
-    }
-
-    /// This will play the next track, as well as refilling the buffer in the background.
-    ///
-    /// This will also set `current` to the newly loaded song.
-    pub async fn next(&self) -> Result<tracks::Decoded, tracks::TrackError> {
-        // TODO: Consider replacing this with `unwrap_or_else` when async closures are stablized.
-        let track = self.tracks.write().await.pop_front();
-        let track = if let Some(track) = track {
-            track
-        } else {
-            // If the queue is completely empty, then fallback to simply getting a new track.
-            // This is relevant particularly at the first song.
-
-            // Serves as an indicator that the queue is "loading".
-            // We're doing it here so that we don't get the "loading" display
-            // for only a frame in the other case that the buffer is not empty.
-            self.current.store(None);
-            self.list.random(&self.client).await?
-        };
-
-        let decoded = track.decode()?;
-
-        // Set the current track.
-        self.set_current(decoded.info.clone());
-
-        Ok(decoded)
-    }
-
-    /// This basically just calls [`Player::next`], and then appends the new track to the player.
-    ///
-    /// This also notifies the background thread to get to work, and will send `TryAgain`
-    /// if it fails. This functions purpose is to be called in the background, so that
-    /// when the audio server recieves a `Next` signal it will still be able to respond to other
-    /// signals while it's loading.
-    ///
-    /// This also sends the `NewSong` signal to `tx` apon successful completion.
-    async fn handle_next(
-        player: Arc<Self>,
-        itx: Sender<()>,
-        tx: Sender<Messages>,
-        debug: bool,
-    ) -> eyre::Result<()> {
-        // Stop the sink.
-        player.sink.stop();
-
-        let track = player.next().await;
-
-        match track {
-            Ok(track) => {
-                // Start playing the new track.
-                player.sink.append(track.data);
-
-                // Notify the background downloader that there's an empty spot
-                // in the buffer.
-                Downloader::notify(&itx).await?;
-
-                // Notify the audio server that the next song has actually been downloaded.
-                tx.send(Messages::NewSong).await?;
-            }
-            Err(error) => {
-                if !error.is_timeout() {
-                    if debug {
-                        panic!("{:?}", error)
-                    }
-
-                    sleep(TIMEOUT).await;
-                }
-
-                tx.send(Messages::TryAgain).await?;
-            }
-        };
-
-        Ok(())
     }
 
     /// This is the main "audio server".
@@ -275,7 +167,6 @@ impl Player {
         player: Arc<Self>,
         tx: Sender<Messages>,
         mut rx: Receiver<Messages>,
-        buf_size: usize,
         debug: bool,
     ) -> eyre::Result<()> {
         // Initialize the mpris player.
@@ -292,7 +183,7 @@ impl Player {
             })?;
 
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
-        let downloader = Downloader::new(Arc::clone(&player), buf_size);
+        let downloader = Downloader::new(Arc::clone(&player));
         let (itx, downloader) = downloader.start(debug);
 
         // Start buffering tracks immediately.
@@ -345,7 +236,7 @@ impl Player {
 
                     // Handle the rest of the signal in the background,
                     // as to not block the main audio server thread.
-                    task::spawn(Self::handle_next(
+                    task::spawn(Self::next(
                         Arc::clone(&player),
                         itx.clone(),
                         tx.clone(),

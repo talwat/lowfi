@@ -24,9 +24,6 @@ pub struct Downloader {
     /// A copy of the internal sender, which can be useful for keeping
     /// track of it.
     tx: Sender<()>,
-
-    /// The size of the internal download buffer.
-    buf_size: usize,
 }
 
 impl Downloader {
@@ -40,40 +37,41 @@ impl Downloader {
     ///
     /// This also sends a [`Sender`] which can be used to notify
     /// when the downloader needs to begin downloading more tracks.
-    pub fn new(player: Arc<Player>, buf_size: usize) -> Self {
+    pub fn new(player: Arc<Player>) -> Self {
         let (tx, rx) = mpsc::channel(8);
-        Self {
-            player,
-            rx,
-            tx,
-            buf_size,
+        Self { player, rx, tx }
+    }
+
+    /// Push a new, random track onto the internal buffer.
+    pub async fn push_buffer(&self, debug: bool) {
+        let data = self.player.list.random(&self.player.client).await;
+        match data {
+            Ok(track) => self.player.tracks.write().await.push_back(track),
+            Err(error) if !error.is_timeout() => {
+                if debug {
+                    panic!("{}", error)
+                }
+
+                sleep(TIMEOUT).await;
+            }
+            _ => {}
         }
     }
 
     /// Actually starts & consumes the [Downloader].
     pub fn start(mut self, debug: bool) -> (Sender<()>, JoinHandle<()>) {
-        (
-            self.tx,
-            task::spawn(async move {
-                // Loop through each update notification.
-                while self.rx.recv().await == Some(()) {
-                    //  For each update notification, we'll push tracks until the buffer is completely full.
-                    while self.player.tracks.read().await.len() < self.buf_size {
-                        let data = self.player.list.random(&self.player.client).await;
-                        match data {
-                            Ok(track) => self.player.tracks.write().await.push_back(track),
-                            Err(error) if !error.is_timeout() => {
-                                if debug {
-                                    panic!("{}", error)
-                                }
+        let tx = self.tx.clone();
 
-                                sleep(TIMEOUT).await;
-                            }
-                            _ => {}
-                        }
-                    }
+        let handle = task::spawn(async move {
+            // Loop through each update notification.
+            while self.rx.recv().await == Some(()) {
+                //  For each update notification, we'll push tracks until the buffer is completely full.
+                while self.player.tracks.read().await.len() < self.player.buffer_size {
+                    self.push_buffer(debug).await;
                 }
-            }),
-        )
+            }
+        });
+
+        return (tx, handle);
     }
 }

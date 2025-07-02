@@ -119,14 +119,7 @@ pub async fn play(args: Args) -> eyre::Result<()> {
     tx.send(Messages::Init).await?;
 
     // Actually starts the player.
-    Player::play(
-        Arc::clone(&player),
-        tx.clone(),
-        rx,
-        args.buffer_size,
-        args.debug,
-    )
-    .await?;
+    Player::play(Arc::clone(&player), tx.clone(), rx, args.debug).await?;
 
     // Save the volume.txt file for the next session.
     PersistentVolume::save(player.sink.volume()).await?;

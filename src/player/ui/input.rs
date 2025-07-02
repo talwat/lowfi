@@ -5,10 +5,13 @@ use crossterm::event::{self, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use futures::{FutureExt as _, StreamExt as _};
 use tokio::sync::mpsc::Sender;
 
-use crate::player::{ui, Messages};
+use crate::player::{
+    ui::{self, UIError},
+    Messages,
+};
 
 /// Starts the listener to recieve input from the terminal for various events.
-pub async fn listen(sender: Sender<Messages>) -> eyre::Result<()> {
+pub async fn listen(sender: Sender<Messages>) -> eyre::Result<(), UIError> {
     let mut reader = EventStream::new();
 
     loop {

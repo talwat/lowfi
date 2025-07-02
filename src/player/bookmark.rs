@@ -18,6 +18,8 @@ pub async fn bookmark(path: String, custom: Option<String>) -> eyre::Result<bool
     let data_dir = data_dir()?;
     create_dir_all(data_dir.clone()).await?;
 
+    // TODO: Only open and close the file at startup and shutdown, not every single bookmark.
+    // TODO: Sort of like PersistentVolume, but for bookmarks.
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)

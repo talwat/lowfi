@@ -71,7 +71,7 @@ pub struct Player {
     /// *undecoded* [Track]s.
     ///
     /// This is populated specifically by the [Downloader].
-    tracks: RwLock<VecDeque<tracks::Track>>,
+    tracks: RwLock<VecDeque<tracks::QueuedTrack>>,
 
     /// The actual list of tracks to be played.
     list: List,

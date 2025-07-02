@@ -10,7 +10,7 @@ use crate::{
 impl Player {
     /// Fetches the next track from the queue, or a random track if the queue is empty.
     /// This will also set the current track to the fetched track's info.
-    async fn fetch(&self) -> Result<tracks::Decoded, tracks::TrackError> {
+    async fn fetch(&self) -> Result<tracks::DecodedTrack, tracks::TrackError> {
         // TODO: Consider replacing this with `unwrap_or_else` when async closures are stablized.
         let track = self.tracks.write().await.pop_front();
         let track = if let Some(track) = track {

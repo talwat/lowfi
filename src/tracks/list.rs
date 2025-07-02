@@ -9,7 +9,7 @@ use tokio::fs;
 
 use crate::{data_dir, tracks::TrackError};
 
-use super::Track;
+use super::QueuedTrack;
 
 /// Represents a list of tracks that can be played.
 ///
@@ -93,7 +93,7 @@ impl List {
     ///
     /// The Result's error is a bool, which is true if a timeout error occured,
     /// and false otherwise. This tells lowfi if it shouldn't wait to try again.
-    pub async fn random(&self, client: &Client) -> Result<Track, TrackError> {
+    pub async fn random(&self, client: &Client) -> Result<QueuedTrack, TrackError> {
         let (path, custom_name) = self.random_path();
         let (data, full_path) = self.download(&path, client).await?;
 
@@ -101,7 +101,7 @@ impl List {
             super::TrackName::Formatted(formatted)
         });
 
-        Ok(Track {
+        Ok(QueuedTrack {
             name,
             data,
             full_path,

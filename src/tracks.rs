@@ -8,7 +8,7 @@
 //! First Stage, when a track is initially fetched.
 //! 1. Raw entry selected from track list.
 //! 2. Raw entry split into path & display name.
-//! 3. Track data fetched, and [`Track`] is created which includes a [`TrackName`] that may be raw.
+//! 3. Track data fetched, and [`QueuedTrack`] is created which includes a [`TrackName`] that may be raw.
 //!
 //! Second Stage, when a track is played.
 //! 1. Track data is decoded.
@@ -73,8 +73,10 @@ pub enum TrackName {
     Formatted(String),
 }
 
-/// The main track struct, which only includes data & the track name.
-pub struct Track {
+/// Tracks which are still waiting in the queue, and can't be played yet.
+///
+/// This means that only the data & track name are included.
+pub struct QueuedTrack {
     /// Name of the track, which may be raw.
     pub name: TrackName,
 
@@ -86,12 +88,12 @@ pub struct Track {
     pub data: Bytes,
 }
 
-impl Track {
+impl QueuedTrack {
     /// This will actually decode and format the track,
     /// returning a [`DecodedTrack`] which can be played
     /// and also has a duration & formatted name.
-    pub fn decode(self) -> eyre::Result<Decoded, TrackError> {
-        Decoded::new(self)
+    pub fn decode(self) -> eyre::Result<DecodedTrack, TrackError> {
+        DecodedTrack::new(self)
     }
 }
 
@@ -198,7 +200,7 @@ impl Info {
 
 /// This struct is seperate from [Track] since it is generated lazily from
 /// a track, and not when the track is first downloaded.
-pub struct Decoded {
+pub struct DecodedTrack {
     /// Has both the formatted name and some information from the decoded data.
     pub info: Info,
 
@@ -206,10 +208,10 @@ pub struct Decoded {
     pub data: DecodedData,
 }
 
-impl Decoded {
+impl DecodedTrack {
     /// Creates a new track.
-    /// This is equivalent to [`Track::decode`].
-    pub fn new(track: Track) -> eyre::Result<Self, TrackError> {
+    /// This is equivalent to [`QueuedTrack::decode`].
+    pub fn new(track: QueuedTrack) -> eyre::Result<Self, TrackError> {
         let data = Decoder::new(Cursor::new(track.data))?;
         let info = Info::new(track.name, track.full_path, &data)?;
 

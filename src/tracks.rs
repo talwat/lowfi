@@ -15,17 +15,45 @@
 //! 2. [`Info`] created from decoded data.
 //! 3. [`Decoded`] made from [`Info`] and the original decoded data.
 
-use std::{error::Error, io::Cursor, time::Duration};
+use std::{io::Cursor, time::Duration};
 
 use bytes::Bytes;
-use eyre::OptionExt as _;
 use inflector::Inflector as _;
 use rodio::{Decoder, Source as _};
+use thiserror::Error;
+use tokio::io;
 use unicode_segmentation::UnicodeSegmentation;
 use url::form_urlencoded;
 
 pub mod bookmark;
 pub mod list;
+
+#[derive(Debug, Error)]
+pub enum TrackError {
+    #[error("timeout")]
+    Timeout,
+
+    #[error("unable to decode")]
+    Decode(#[from] rodio::decoder::DecoderError),
+
+    #[error("invalid name")]
+    InvalidName,
+
+    #[error("invalid file path")]
+    InvalidPath,
+
+    #[error("unable to read file")]
+    File(#[from] io::Error),
+
+    #[error("unable to fetch data")]
+    Request(#[from] reqwest::Error),
+}
+
+impl TrackError {
+    pub fn is_timeout(&self) -> bool {
+        return matches!(self, TrackError::Timeout);
+    }
+}
 
 /// Just a shorthand for a decoded [Bytes].
 pub type DecodedData = Decoder<Cursor<Bytes>>;
@@ -61,7 +89,7 @@ impl Track {
     /// This will actually decode and format the track,
     /// returning a [`DecodedTrack`] which can be played
     /// and also has a duration & formatted name.
-    pub fn decode(self) -> eyre::Result<Decoded> {
+    pub fn decode(self) -> eyre::Result<Decoded, TrackError> {
         Decoded::new(self)
     }
 }
@@ -105,11 +133,8 @@ impl Info {
     /// Formats a name with [Inflector].
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks.
-    fn format_name(name: &str) -> eyre::Result<String> {
-        let split = name
-            .split('/')
-            .last()
-            .ok_or_eyre("split is never supposed to return nothing")?;
+    fn format_name(name: &str) -> eyre::Result<String, TrackError> {
+        let split = name.split('/').last().ok_or(TrackError::InvalidName)?;
 
         let stripped = split.strip_suffix(".mp3").unwrap_or(split);
         let formatted = Self::decode_url(stripped)
@@ -150,7 +175,11 @@ impl Info {
     }
 
     /// Creates a new [`TrackInfo`] from a possibly raw name & decoded data.
-    pub fn new(name: TrackName, full_path: String, decoded: &DecodedData) -> eyre::Result<Self> {
+    pub fn new(
+        name: TrackName,
+        full_path: String,
+        decoded: &DecodedData,
+    ) -> eyre::Result<Self, TrackError> {
         let (display_name, custom_name) = match name {
             TrackName::Raw(raw) => (Self::format_name(&raw)?, false),
             TrackName::Formatted(custom) => (custom, true),
@@ -179,55 +208,10 @@ pub struct Decoded {
 impl Decoded {
     /// Creates a new track.
     /// This is equivalent to [`Track::decode`].
-    pub fn new(track: Track) -> eyre::Result<Self> {
+    pub fn new(track: Track) -> eyre::Result<Self, TrackError> {
         let data = Decoder::new(Cursor::new(track.data))?;
         let info = Info::new(track.name, track.full_path, &data)?;
 
         Ok(Self { info, data })
-    }
-}
-
-#[derive(Debug)]
-pub struct TrackError {
-    pub timeout: bool,
-    inner: Option<eyre::Error>,
-}
-
-impl<'a> std::fmt::Display for TrackError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "TrackError (timeout: {}): {:?}",
-            self.timeout, self.inner
-        )
-    }
-}
-
-impl<'a> std::error::Error for TrackError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.inner.as_ref().map(|e| e.as_ref())
-    }
-}
-
-impl TrackError {
-    pub fn new<T: Error + 'static + Send + Sync>(timeout: bool, inner: T) -> Self {
-        Self {
-            inner: Some(eyre::eyre!(inner)),
-            timeout,
-        }
-    }
-
-    pub fn new_eyre(timeout: bool, inner: eyre::Error) -> Self {
-        Self {
-            inner: Some(inner),
-            timeout,
-        }
-    }
-
-    pub fn empty(timeout: bool) -> Self {
-        Self {
-            inner: None,
-            timeout,
-        }
     }
 }

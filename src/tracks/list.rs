@@ -62,28 +62,28 @@ impl List {
 
         let data: Bytes = if let Some(x) = full_path.strip_prefix("file://") {
             let path = if x.starts_with("~") {
-                let home_path = dirs::home_dir().ok_or(TrackError::empty(false))?;
-                let home = home_path.to_str().ok_or(TrackError::empty(false))?;
+                let home_path = dirs::home_dir().ok_or(TrackError::InvalidPath)?;
+                let home = home_path.to_str().ok_or(TrackError::InvalidPath)?;
 
                 x.replace("~", home)
             } else {
                 x.to_owned()
             };
 
-            let result = tokio::fs::read(path)
-                .await
-                .map_err(|x| TrackError::new(false, x))?;
+            let result = tokio::fs::read(path).await?;
             result.into()
         } else {
-            let response = client
-                .get(full_path.clone())
-                .send()
-                .await
-                .map_err(|x| TrackError::new(x.is_timeout(), x))?;
-            response
-                .bytes()
-                .await
-                .map_err(|x| TrackError::new(false, x))?
+            let response = match client.get(full_path.clone()).send().await {
+                Ok(x) => Ok(x),
+                Err(x) => {
+                    if x.is_timeout() {
+                        Err(TrackError::Timeout)
+                    } else {
+                        Err(TrackError::Request(x))
+                    }
+                }
+            }?;
+            response.bytes().await?
         };
 
         Ok((data, full_path))

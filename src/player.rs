@@ -31,7 +31,7 @@ use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 use crate::{
     messages::Messages,
     play::{PersistentVolume, SendableOutputStream},
-    tracks::{self, bookmark, list::List, TrackError},
+    tracks::{self, bookmark, list::List},
     Args,
 };
 
@@ -209,7 +209,7 @@ impl Player {
             self.list.random(&self.client).await?
         };
 
-        let decoded = track.decode().map_err(|x| TrackError::new_eyre(false, x))?;
+        let decoded = track.decode()?;
 
         // Set the current track.
         self.set_current(decoded.info.clone());
@@ -249,7 +249,7 @@ impl Player {
                 tx.send(Messages::NewSong).await?;
             }
             Err(error) => {
-                if !error.timeout {
+                if !error.is_timeout() {
                     if debug {
                         panic!("{:?}", error)
                     }

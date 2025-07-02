@@ -62,15 +62,14 @@ impl Downloader {
                         let data = self.player.list.random(&self.player.client).await;
                         match data {
                             Ok(track) => self.player.tracks.write().await.push_back(track),
-                            Err(error) => {
-                                if !error.timeout {
-                                    if debug {
-                                        panic!("{}", error)
-                                    }
-
-                                    sleep(TIMEOUT).await;
+                            Err(error) if !error.is_timeout() => {
+                                if debug {
+                                    panic!("{}", error)
                                 }
+
+                                sleep(TIMEOUT).await;
                             }
+                            _ => {}
                         }
                     }
                 }

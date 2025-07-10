@@ -171,7 +171,7 @@ Some nice users, especially [danielwerg](https://github.com/danielwerg),
 have aleady made alternative track lists located in the [data](https://github.com/talwat/lowfi/blob/main/data/)
 directory of this repo. You can use them with lowfi by using the `--tracks` flag.
 
-Feel free to contribute any you think others would like.
+Feel free to contribute your own list with a PR.
 
 > [!WARNING]
 >

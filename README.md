@@ -167,6 +167,12 @@ where more information can be found by running `lowfi help scrape`.
 
 ### Custom Track Lists
 
+Some nice users, especially [danielwerg](https://github.com/danielwerg),
+have aleady made alternative track lists located in the [data](https://github.com/talwat/lowfi/blob/main/data/)
+directory of this repo. You can use them with lowfi by using the `--tracks` flag.
+
+Feel free to contribute any you think others would like.
+
 > [!WARNING]
 >
 > Custom track lists are going to be pretty particular.
@@ -223,5 +229,14 @@ For example, if you had an entry like this:
 ```
 
 Then lowfi would download from the first section, and display the second as the track name.
+
+You can also prepend `file://` to the header track name, which will make lowfi treat it as a local file.
+This is useful if you want to use a local file as the base URL, such as:
+
+```txt
+file:///home/user/Music/
+file.mp3
+file:///home/user/Music/second-file.mp3
+```
 
 Further examples can be found in the [data](https://github.com/talwat/lowfi/tree/main/data) folder.

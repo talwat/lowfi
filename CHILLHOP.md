@@ -11,7 +11,7 @@ curl https://raw.githubusercontent.com/talwat/lowfi/refs/heads/main/data/chillho
 
 ```sh
 mkdir -p "~/Library/Application Support/lowfi"
-curl https://raw.githubusercontent.com/talwat/lowfi/refs/heads/main/data/chillhop.txt -O --output-dir ~/Library/Application Support/lowfi
+curl https://raw.githubusercontent.com/talwat/lowfi/refs/heads/main/data/chillhop.txt -O --output-dir "~/Library/Application Support/lowfi"
 ```
 
 ## Windows

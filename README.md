@@ -7,6 +7,13 @@ It'll do this as simply as it can: no albums, no ads, just lofi.
 
 ## Disclaimer
 
+> [!NOTE]
+>
+> As of the 19th of June 2025, lofigirl.com is temporarily down. If your lowfi is up to date,
+> you can follow the [quick instructions](CHILLHOP.md) for using the [chillhop](https://chillhop.com/) alternative track list.
+>
+> Apologies for the inconvenience, it's out of lowfi's control.
+
 **All** of the audio files embedded into in lowfi by default are from [Lofi Girl's](https://lofigirl.com/) website,
 under their [licensing guidelines](https://form.lofigirl.com/CommercialLicense).
 

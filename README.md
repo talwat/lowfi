@@ -9,7 +9,7 @@ It'll do this as simply as it can: no albums, no ads, just lofi.
 
 > [!NOTE]
 >
-> As of the 19th of June 2025, lofigirl.com is temporarily down. If your lowfi is up to date,
+> As of the 19th of July 2025, lofigirl.com is temporarily down. If your lowfi is up to date,
 > you can follow the [quick instructions](CHILLHOP.md) for using the [chillhop](https://chillhop.com/) alternative track list.
 >
 > Apologies for the inconvenience, it's out of lowfi's control.

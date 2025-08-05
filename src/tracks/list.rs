@@ -111,7 +111,7 @@ impl List {
     /// Parses text into a [List].
     pub fn new(name: &str, text: &str) -> Self {
         let lines: Vec<String> = text
-            .trim()
+            .trim_end()
             .lines()
             .map(|x| x.trim_end().to_owned())
             .collect();

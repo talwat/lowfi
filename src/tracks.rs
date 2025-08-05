@@ -215,7 +215,11 @@ impl DecodedTrack {
     /// Creates a new track.
     /// This is equivalent to [`QueuedTrack::decode`].
     pub fn new(track: QueuedTrack) -> eyre::Result<Self, TrackError> {
-        let data = Decoder::new(Cursor::new(track.data))?;
+        let data = Decoder::builder()
+            .with_byte_len(track.data.len().try_into().unwrap())
+            .with_data(Cursor::new(track.data))
+            .build()?;
+
         let info = Info::new(track.name, track.full_path, &data)?;
 
         Ok(Self { info, data })

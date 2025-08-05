@@ -15,7 +15,7 @@
 //! 2. [`Info`] created from decoded data.
 //! 3. [`Decoded`] made from [`Info`] and the original decoded data.
 
-use std::{io::Cursor, time::Duration};
+use std::{io::Cursor, path::Path, time::Duration};
 
 use bytes::Bytes;
 use inflector::Inflector as _;
@@ -137,10 +137,13 @@ impl Info {
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks.
     fn format_name(name: &str) -> eyre::Result<String, TrackError> {
-        let split = name.split('/').last().ok_or(TrackError::InvalidName)?;
+        let path = Path::new(name);
 
-        let stripped = split.strip_suffix(".mp3").unwrap_or(split);
-        let formatted = Self::decode_url(stripped)
+        let stem = path
+            .file_stem()
+            .and_then(|x| x.to_str())
+            .ok_or(TrackError::InvalidName)?;
+        let formatted = Self::decode_url(stem)
             .to_lowercase()
             .to_title_case()
             // Inflector doesn't like contractions...

@@ -14,7 +14,7 @@ use std::{
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
 use reqwest::Client;
-use rodio::{OutputStream, OutputStreamHandle, Sink};
+use rodio::{OutputStream, OutputStreamBuilder, Sink};
 use tokio::{
     select,
     sync::{
@@ -29,7 +29,7 @@ use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 
 use crate::{
     messages::Messages,
-    play::{PersistentVolume, SendableOutputStream},
+    play::PersistentVolume,
     tracks::{self, list::List},
     Args,
 };
@@ -82,11 +82,6 @@ pub struct Player {
     /// The web client, which can contain a `UserAgent` & some
     /// settings that help lowfi work more effectively.
     client: Client,
-
-    /// The [`OutputStreamHandle`], which also can control some
-    /// playback, is for now unused and is here just to keep it
-    /// alive so the playback can function properly.
-    _handle: OutputStreamHandle,
 }
 
 impl Player {
@@ -108,7 +103,7 @@ impl Player {
     /// Initializes the entire player, including audio devices & sink.
     ///
     /// This also will load the track list & persistent volume.
-    pub async fn new(args: &Args) -> eyre::Result<(Self, SendableOutputStream)> {
+    pub async fn new(args: &Args) -> eyre::Result<(Self, OutputStream)> {
         // Load the volume file.
         let volume = PersistentVolume::load().await?;
 
@@ -117,17 +112,15 @@ impl Player {
 
         // We should only shut up alsa forcefully on Linux if we really have to.
         #[cfg(target_os = "linux")]
-        let (stream, handle) = if !args.alternate && !args.debug {
+        let mut stream = if !args.alternate && !args.debug {
             audio::silent_get_output_stream()?
         } else {
-            OutputStream::try_default()?
+            OutputStreamBuilder::open_default_stream()?
         };
 
-        // If we're not on Linux, then there's no problem.
-        #[cfg(not(target_os = "linux"))]
-        let (stream, handle) = OutputStream::try_default()?;
+        stream.log_on_drop(false); // Frankly, this is a stupid feature. Stop shoving your crap into my beloved stderr!!!
+        let sink = Sink::connect_new(stream.mixer());
 
-        let sink = Sink::try_new(&handle)?;
         if args.paused {
             sink.pause();
         }
@@ -149,11 +142,10 @@ impl Player {
             sink,
             volume,
             list,
-            _handle: handle,
             bookmarked: AtomicBool::new(false),
         };
 
-        Ok((player, SendableOutputStream(stream)))
+        Ok((player, stream))
     }
 
     /// This is the main "audio server".

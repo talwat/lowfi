@@ -67,11 +67,11 @@ impl PersistentVolume {
         let config = Self::config().await?;
         let path = config.join(PathBuf::from("volume.txt"));
 
+        // Already rounded & absolute, therefore this should be safe.
         #[expect(
             clippy::as_conversions,
             clippy::cast_sign_loss,
-            clippy::cast_possible_truncation,
-            reason = "already rounded & absolute, therefore this should be safe"
+            clippy::cast_possible_truncation
         )]
         let percentage = (volume * 100.0).abs().round() as u16;
 
@@ -80,20 +80,6 @@ impl PersistentVolume {
         Ok(())
     }
 }
-
-/// Wrapper around [`rodio::OutputStream`] to implement [Send], currently unsafely.
-///
-/// This is more of a temporary solution until cpal implements [Send] on it's output stream.
-pub struct SendableOutputStream(pub rodio::OutputStream);
-
-// SAFETY: This is necessary because [OutputStream] does not implement [Send],
-// due to some limitation with Android's Audio API.
-// I'm pretty sure nobody will use lowfi with android, so this is safe.
-#[expect(
-    clippy::non_send_fields_in_send_ty,
-    reason = "this is expected because of the nature of the struct"
-)]
-unsafe impl Send for SendableOutputStream {}
 
 /// Initializes the audio server, and then safely stops
 /// it when the frontend quits.
@@ -123,7 +109,7 @@ pub async fn play(args: Args) -> eyre::Result<()> {
 
     // Save the volume.txt file for the next session.
     PersistentVolume::save(player.sink.volume()).await?;
-    drop(stream.0);
+    drop(stream);
     player.sink.stop();
     ui.and_then(|x| Some(x.abort()));
 

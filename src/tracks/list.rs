@@ -1,5 +1,5 @@
 //! The module containing all of the logic behind track lists,
-//! as well as obtaining track names & downloading the raw mp3 data.
+//! as well as obtaining track names & downloading the raw audio data
 
 use bytes::Bytes;
 use eyre::OptionExt as _;

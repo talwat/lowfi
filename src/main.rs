@@ -13,15 +13,12 @@ mod player;
 mod tracks;
 
 #[allow(clippy::all, clippy::pedantic, clippy::nursery, clippy::restriction)]
-mod scrape;
+mod scrapers;
 
 /// An extremely simple lofi player.
 #[derive(Parser, Clone)]
 #[command(about, version)]
-#[allow(
-    clippy::struct_excessive_bools,
-    reason = "señor clippy, i assure you this is not a state machine"
-)]
+#[allow(clippy::struct_excessive_bools)]
 struct Args {
     /// Use an alternate terminal screen.
     #[clap(long, short)]
@@ -68,8 +65,11 @@ struct Args {
 /// Defines all of the extra commands lowfi can run.
 #[derive(Subcommand, Clone)]
 enum Commands {
-    /// Scrapes the lofi girl website file server for files.
+    /// Scrapes a music source for files.
     Scrape {
+        // The source to scrape from.
+        source: scrapers::Sources,
+
         /// The file extension to search for, defaults to mp3.
         #[clap(long, short, default_value = "mp3")]
         extension: String,
@@ -98,10 +98,12 @@ async fn main() -> eyre::Result<()> {
 
     if let Some(command) = cli.command {
         match command {
+            // TODO: Actually distinguish between sources.
             Commands::Scrape {
+                source,
                 extension,
                 include_full,
-            } => scrape::scrape(extension, include_full).await,
+            } => scrapers::lofigirl::scrape(extension, include_full).await,
         }
     } else {
         play::play(cli).await

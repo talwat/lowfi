@@ -13,6 +13,7 @@ use std::{
 
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
+use eyre::Context;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamBuilder, Sink};
 use tokio::{
@@ -29,7 +30,7 @@ use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 
 use crate::{
     messages::Messages,
-    play::PersistentVolume,
+    play::{PersistentVolume},
     tracks::{self, list::List},
     Args,
 };
@@ -108,7 +109,7 @@ impl Player {
         let volume = PersistentVolume::load().await?;
 
         // Load the track list.
-        let list = List::load(args.track_list.as_ref()).await?;
+        let list = List::load(args.track_list.as_ref()).await.wrap_err("unable to load the track list")?;
 
         // We should only shut up alsa forcefully on Linux if we really have to.
         #[cfg(target_os = "linux")]
@@ -117,10 +118,10 @@ impl Player {
         } else {
             OutputStreamBuilder::open_default_stream()?
         };
-
+        
         stream.log_on_drop(false); // Frankly, this is a stupid feature. Stop shoving your crap into my beloved stderr!!!
         let sink = Sink::connect_new(stream.mixer());
-
+        
         if args.paused {
             sink.pause();
         }

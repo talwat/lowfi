@@ -127,7 +127,6 @@ impl List {
         if let Some(arg) = tracks {
             // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
             let name = data_dir()?.join(format!("{arg}.txt"));
-
             let name = if name.exists() { name } else { arg.into() };
 
             let raw = fs::read_to_string(name.clone()).await?;

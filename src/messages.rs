@@ -1,6 +1,6 @@
 /// Handles communication between the frontend & audio player.
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub enum Messages {
+pub enum Message {
     /// Notifies the audio server that it should update the track.
     Next,
 

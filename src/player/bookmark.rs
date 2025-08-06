@@ -9,7 +9,7 @@ use crate::data_dir;
 ///
 /// Returns whether the track is now bookmarked, or not.
 pub async fn bookmark(path: String, custom: Option<String>) -> eyre::Result<bool> {
-    let mut entry = format!("{path}");
+    let mut entry = path.to_string();
     if let Some(custom) = custom {
         entry.push('!');
         entry.push_str(&custom);
@@ -25,6 +25,7 @@ pub async fn bookmark(path: String, custom: Option<String>) -> eyre::Result<bool
         .write(true)
         .read(true)
         .append(false)
+        .truncate(true)
         .open(data_dir.join("bookmarks.txt"))
         .await?;
 

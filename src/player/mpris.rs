@@ -10,7 +10,7 @@ use mpris_server::{
 use tokio::sync::mpsc::Sender;
 
 use super::ui;
-use super::Messages;
+use super::Message;
 
 const ERROR: fdo::Error = fdo::Error::Failed(String::new());
 
@@ -21,7 +21,7 @@ pub struct Player {
 
     /// The audio server sender, which is used to communicate with
     /// the audio sender for skips and a few other inputs.
-    pub sender: Sender<Messages>,
+    pub sender: Sender<Message>,
 }
 
 impl RootInterface for Player {
@@ -31,7 +31,7 @@ impl RootInterface for Player {
 
     async fn quit(&self) -> fdo::Result<()> {
         self.sender
-            .send(Messages::Quit)
+            .send(Message::Quit)
             .await
             .map_err(|_error| ERROR)
     }
@@ -80,7 +80,7 @@ impl RootInterface for Player {
 impl PlayerInterface for Player {
     async fn next(&self) -> fdo::Result<()> {
         self.sender
-            .send(Messages::Next)
+            .send(Message::Next)
             .await
             .map_err(|_error| ERROR)
     }
@@ -91,14 +91,14 @@ impl PlayerInterface for Player {
 
     async fn pause(&self) -> fdo::Result<()> {
         self.sender
-            .send(Messages::Pause)
+            .send(Message::Pause)
             .await
             .map_err(|_error| ERROR)
     }
 
     async fn play_pause(&self) -> fdo::Result<()> {
         self.sender
-            .send(Messages::PlayPause)
+            .send(Message::PlayPause)
             .await
             .map_err(|_error| ERROR)
     }
@@ -109,7 +109,7 @@ impl PlayerInterface for Player {
 
     async fn play(&self) -> fdo::Result<()> {
         self.sender
-            .send(Messages::Play)
+            .send(Message::Play)
             .await
             .map_err(|_error| ERROR)
     }
@@ -247,10 +247,8 @@ impl Server {
     pub async fn changed(
         &self,
         properties: impl IntoIterator<Item = mpris_server::Property> + Send + Sync,
-    ) -> eyre::Result<()> {
-        self.inner.properties_changed(properties).await?;
-
-        Ok(())
+    ) -> zbus::Result<()> {
+        self.inner.properties_changed(properties).await
     }
 
     /// Shorthand to emit a `PropertiesChanged` signal, specifically about playback.
@@ -266,7 +264,10 @@ impl Server {
     }
 
     /// Creates a new MPRIS server.
-    pub async fn new(player: Arc<super::Player>, sender: Sender<Messages>) -> eyre::Result<Self> {
+    pub async fn new(
+        player: Arc<super::Player>,
+        sender: Sender<Message>,
+    ) -> eyre::Result<Self, zbus::Error> {
         let suffix = if env::var("LOWFI_FIXED_MPRIS_NAME").is_ok_and(|x| x == "1") {
             String::from("lowfi")
         } else {

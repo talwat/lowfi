@@ -17,7 +17,7 @@ use super::QueuedTrack;
 #[derive(Clone)]
 pub struct List {
     /// The "name" of the list, usually derived from a filename.
-    #[allow(dead_code, reason = "this code may not be dead depending on features")]
+    #[allow(dead_code)]
     pub name: String,
 
     /// Just the raw file, but seperated by `/n` (newlines).
@@ -61,11 +61,11 @@ impl List {
         };
 
         let data: Bytes = if let Some(x) = full_path.strip_prefix("file://") {
-            let path = if x.starts_with("~") {
+            let path = if x.starts_with('~') {
                 let home_path = dirs::home_dir().ok_or(TrackError::InvalidPath)?;
                 let home = home_path.to_str().ok_or(TrackError::InvalidPath)?;
 
-                x.replace("~", home)
+                x.replace('~', home)
             } else {
                 x.to_owned()
             };
@@ -97,14 +97,15 @@ impl List {
         let (path, custom_name) = self.random_path();
         let (data, full_path) = self.download(&path, client).await?;
 
-        let name = custom_name.map_or(super::TrackName::Raw(path.clone()), |formatted| {
-            super::TrackName::Formatted(formatted)
-        });
+        let name = custom_name.map_or_else(
+            || super::TrackName::Raw(path.clone()),
+            |formatted| super::TrackName::Formatted(formatted),
+        );
 
         Ok(QueuedTrack {
             name,
-            data,
             full_path,
+            data,
         })
     }
 

@@ -13,7 +13,6 @@ use std::{
 
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
-use eyre::Context;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamBuilder, Sink};
 use tokio::{
@@ -29,8 +28,8 @@ use tokio::{
 use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 
 use crate::{
-    messages::Messages,
-    play::PersistentVolume,
+    messages::Message,
+    player::{self, persistent_volume::PersistentVolume},
     tracks::{self, list::List},
     Args,
 };
@@ -38,8 +37,12 @@ use crate::{
 pub mod audio;
 pub mod bookmark;
 pub mod downloader;
+pub mod error;
+pub mod persistent_volume;
 pub mod queue;
 pub mod ui;
+
+pub use error::Error;
 
 #[cfg(feature = "mpris")]
 pub mod mpris;
@@ -104,14 +107,16 @@ impl Player {
     /// Initializes the entire player, including audio devices & sink.
     ///
     /// This also will load the track list & persistent volume.
-    pub async fn new(args: &Args) -> eyre::Result<(Self, OutputStream)> {
+    pub async fn new(args: &Args) -> eyre::Result<(Self, OutputStream), player::Error> {
         // Load the volume file.
-        let volume = PersistentVolume::load().await?;
+        let volume = PersistentVolume::load()
+            .await
+            .map_err(player::Error::PersistentVolumeLoad)?;
 
         // Load the track list.
         let list = List::load(args.track_list.as_ref())
             .await
-            .wrap_err("unable to load the track list")?;
+            .map_err(player::Error::TrackListLoad)?;
 
         // We should only shut up alsa forcefully on Linux if we really have to.
         #[cfg(target_os = "linux")]
@@ -160,10 +165,10 @@ impl Player {
     /// The [Downloader]s internal buffer size is determined by `buf_size`.
     pub async fn play(
         player: Arc<Self>,
-        tx: Sender<Messages>,
-        mut rx: Receiver<Messages>,
+        tx: Sender<Message>,
+        mut rx: Receiver<Message>,
         debug: bool,
-    ) -> eyre::Result<()> {
+    ) -> eyre::Result<(), player::Error> {
         // Initialize the mpris player.
         //
         // We're initializing here, despite MPRIS being a "user interface",
@@ -213,11 +218,11 @@ impl Player {
                 // It's also important to note that the condition is only checked at the
                 // beginning of the loop, not throughout.
                 Ok(()) = task::spawn_blocking(move || clone.sink.sleep_until_end()),
-                        if new => Messages::Next,
+                        if new => Message::Next,
             };
 
             match msg {
-                Messages::Next | Messages::Init | Messages::TryAgain => {
+                Message::Next | Message::Init | Message::TryAgain => {
                     player.bookmarked.swap(false, Ordering::Relaxed);
 
                     // We manually skipped, so we shouldn't actually wait for the song
@@ -225,7 +230,7 @@ impl Player {
                     new = false;
 
                     // This basically just prevents `Next` while a song is still currently loading.
-                    if msg == Messages::Next && !player.current_exists() {
+                    if msg == Message::Next && !player.current_exists() {
                         continue;
                     }
 
@@ -238,19 +243,19 @@ impl Player {
                         debug,
                     ));
                 }
-                Messages::Play => {
+                Message::Play => {
                     player.sink.play();
 
                     #[cfg(feature = "mpris")]
                     mpris.playback(PlaybackStatus::Playing).await?;
                 }
-                Messages::Pause => {
+                Message::Pause => {
                     player.sink.pause();
 
                     #[cfg(feature = "mpris")]
                     mpris.playback(PlaybackStatus::Paused).await?;
                 }
-                Messages::PlayPause => {
+                Message::PlayPause => {
                     if player.sink.is_paused() {
                         player.sink.play();
                     } else {
@@ -262,7 +267,7 @@ impl Player {
                         .playback(mpris.player().playback_status().await?)
                         .await?;
                 }
-                Messages::ChangeVolume(change) => {
+                Message::ChangeVolume(change) => {
                     player.set_volume(player.sink.volume() + change);
 
                     #[cfg(feature = "mpris")]
@@ -273,7 +278,7 @@ impl Player {
                 // This basically just continues, but more importantly, it'll re-evaluate
                 // the select macro at the beginning of the loop.
                 // See the top section to find out why this matters.
-                Messages::NewSong => {
+                Message::NewSong => {
                     // We've recieved `NewSong`, so on the next loop iteration we'll
                     // begin waiting for the song to be over in order to autoplay.
                     new = true;
@@ -288,7 +293,7 @@ impl Player {
 
                     continue;
                 }
-                Messages::Bookmark => {
+                Message::Bookmark => {
                     let current = player.current.load();
                     let current = current.as_ref().unwrap();
 
@@ -300,11 +305,12 @@ impl Player {
                             None
                         },
                     )
-                    .await?;
+                    .await
+                    .map_err(player::Error::Bookmark)?;
 
                     player.bookmarked.swap(bookmarked, Ordering::Relaxed);
                 }
-                Messages::Quit => break,
+                Message::Quit => break,
             }
         }
 

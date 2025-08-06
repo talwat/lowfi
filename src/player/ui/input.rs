@@ -7,11 +7,11 @@ use tokio::sync::mpsc::Sender;
 
 use crate::player::{
     ui::{self, UIError},
-    Messages,
+    Message,
 };
 
 /// Starts the listener to recieve input from the terminal for various events.
-pub async fn listen(sender: Sender<Messages>) -> eyre::Result<(), UIError> {
+pub async fn listen(sender: Sender<Message>) -> eyre::Result<(), UIError> {
     let mut reader = EventStream::new();
 
     loop {
@@ -25,29 +25,29 @@ pub async fn listen(sender: Sender<Messages>) -> eyre::Result<(), UIError> {
 
         let messages = match event.code {
             // Arrow key volume controls.
-            KeyCode::Up => Messages::ChangeVolume(0.1),
-            KeyCode::Right => Messages::ChangeVolume(0.01),
-            KeyCode::Down => Messages::ChangeVolume(-0.1),
-            KeyCode::Left => Messages::ChangeVolume(-0.01),
+            KeyCode::Up => Message::ChangeVolume(0.1),
+            KeyCode::Right => Message::ChangeVolume(0.01),
+            KeyCode::Down => Message::ChangeVolume(-0.1),
+            KeyCode::Left => Message::ChangeVolume(-0.01),
             KeyCode::Char(character) => match character.to_ascii_lowercase() {
                 // Ctrl+C
-                'c' if event.modifiers == KeyModifiers::CONTROL => Messages::Quit,
+                'c' if event.modifiers == KeyModifiers::CONTROL => Message::Quit,
 
                 // Quit
-                'q' => Messages::Quit,
+                'q' => Message::Quit,
 
                 // Skip/Next
-                's' | 'n' | 'l' => Messages::Next,
+                's' | 'n' | 'l' => Message::Next,
 
                 // Pause
-                'p' | ' ' => Messages::PlayPause,
+                'p' | ' ' => Message::PlayPause,
 
                 // Volume up & down
-                '+' | '=' | 'k' => Messages::ChangeVolume(0.1),
-                '-' | '_' | 'j' => Messages::ChangeVolume(-0.1),
+                '+' | '=' | 'k' => Message::ChangeVolume(0.1),
+                '-' | '_' | 'j' => Message::ChangeVolume(-0.1),
 
                 // Bookmark
-                'b' => Messages::Bookmark,
+                'b' => Message::Bookmark,
 
                 _ => continue,
             },
@@ -55,18 +55,18 @@ pub async fn listen(sender: Sender<Messages>) -> eyre::Result<(), UIError> {
             KeyCode::Media(media) => match media {
                 event::MediaKeyCode::Pause
                 | event::MediaKeyCode::Play
-                | event::MediaKeyCode::PlayPause => Messages::PlayPause,
-                event::MediaKeyCode::Stop => Messages::Pause,
-                event::MediaKeyCode::TrackNext => Messages::Next,
-                event::MediaKeyCode::LowerVolume => Messages::ChangeVolume(-0.1),
-                event::MediaKeyCode::RaiseVolume => Messages::ChangeVolume(0.1),
-                event::MediaKeyCode::MuteVolume => Messages::ChangeVolume(-1.0),
+                | event::MediaKeyCode::PlayPause => Message::PlayPause,
+                event::MediaKeyCode::Stop => Message::Pause,
+                event::MediaKeyCode::TrackNext => Message::Next,
+                event::MediaKeyCode::LowerVolume => Message::ChangeVolume(-0.1),
+                event::MediaKeyCode::RaiseVolume => Message::ChangeVolume(0.1),
+                event::MediaKeyCode::MuteVolume => Message::ChangeVolume(-1.0),
                 _ => continue,
             },
             _ => continue,
         };
 
-        if let Messages::ChangeVolume(_) = messages {
+        if let Message::ChangeVolume(_) = messages {
             ui::flash_audio();
         }
 

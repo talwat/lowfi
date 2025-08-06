@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 use crate::{
-    messages::Messages,
+    messages::Message,
     player::{downloader::Downloader, Player, TIMEOUT},
     tracks,
 };
@@ -43,7 +43,7 @@ impl Player {
     pub async fn next(
         player: Arc<Self>,
         itx: Sender<()>,
-        tx: Sender<Messages>,
+        tx: Sender<Message>,
         debug: bool,
     ) -> eyre::Result<()> {
         // Stop the sink.
@@ -61,18 +61,18 @@ impl Player {
                 Downloader::notify(&itx).await?;
 
                 // Notify the audio server that the next song has actually been downloaded.
-                tx.send(Messages::NewSong).await?;
+                tx.send(Message::NewSong).await?;
             }
             Err(error) => {
                 if !error.is_timeout() {
                     if debug {
-                        panic!("{:?}", error)
+                        panic!("{error:?}")
                     }
 
                     sleep(TIMEOUT).await;
                 }
 
-                tx.send(Messages::TryAgain).await?;
+                tx.send(Message::TryAgain).await?;
             }
         };
 

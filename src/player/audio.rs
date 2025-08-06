@@ -1,10 +1,13 @@
 #[cfg(target_os = "linux")]
 use rodio::OutputStream;
 
+#[cfg(target_os = "linux")]
+use crate::player;
+
 /// This gets the output stream while also shutting up alsa with [libc].
 /// Uses raw libc calls, and therefore is functional only on Linux.
 #[cfg(target_os = "linux")]
-pub fn silent_get_output_stream() -> eyre::Result<OutputStream> {
+pub fn silent_get_output_stream() -> eyre::Result<OutputStream, player::Error> {
     use libc::freopen;
     use rodio::OutputStreamBuilder;
     use std::ffi::CString;

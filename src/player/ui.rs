@@ -32,7 +32,8 @@ use thiserror::Error;
 use tokio::{sync::mpsc::Sender, task, time::sleep};
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::{Messages, Player};
+use super::Player;
+use crate::messages::Message;
 
 mod components;
 mod input;
@@ -47,8 +48,8 @@ pub enum UIError {
     #[error("unable to write output")]
     Write(#[from] std::io::Error),
 
-    #[error("sending message to backend failed")]
-    Communication(#[from] tokio::sync::mpsc::error::SendError<Messages>),
+    #[error("sending message to backend from ui failed")]
+    Communication(#[from] tokio::sync::mpsc::error::SendError<Message>),
 }
 
 /// How long the audio bar will be visible for when audio is adjusted.
@@ -204,7 +205,7 @@ async fn interface(
 
         window.draw(menu, false)?;
 
-        let delta = 1.0 / (fps as f32);
+        let delta = 1.0 / f32::from(fps);
         sleep(Duration::from_secs_f32(delta)).await;
     }
 }
@@ -284,10 +285,11 @@ impl Drop for Environment {
 /// previous terminal history.
 pub async fn start(
     player: Arc<Player>,
-    sender: Sender<Messages>,
+    sender: Sender<Message>,
     args: Args,
 ) -> eyre::Result<(), UIError> {
     let environment = Environment::ready(args.alternate)?;
+
     let interface = task::spawn(interface(
         Arc::clone(&player),
         args.minimalist,

@@ -51,8 +51,8 @@ pub enum TrackError {
 }
 
 impl TrackError {
-    pub fn is_timeout(&self) -> bool {
-        return matches!(self, TrackError::Timeout);
+    pub const fn is_timeout(&self) -> bool {
+        matches!(self, Self::Timeout)
     }
 }
 
@@ -124,10 +124,8 @@ pub struct Info {
 impl Info {
     /// Decodes a URL string into normal UTF-8.
     fn decode_url(text: &str) -> String {
-        #[expect(
-            clippy::tuple_array_conversions,
-            reason = "the tuple contains smart pointers, so it's not really practical to use `into()`"
-        )]
+        // The tuple contains smart pointers, so it's not really practical to use `into()`.
+        #[allow(clippy::tuple_array_conversions)]
         form_urlencoded::parse(text.as_bytes())
             .map(|(key, val)| [key, val].concat())
             .collect()
@@ -172,10 +170,8 @@ impl Info {
         if skip == formatted.len() {
             Ok(formatted)
         } else {
-            #[expect(
-                clippy::string_slice,
-                reason = "We've already checked before that the bound is at an ASCII digit."
-            )]
+            // We've already checked before that the bound is at an ASCII digit.
+            #[allow(clippy::string_slice)]
             Ok(String::from(&formatted[skip..]))
         }
     }

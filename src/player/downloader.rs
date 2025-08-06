@@ -72,6 +72,6 @@ impl Downloader {
             }
         });
 
-        return (tx, handle);
+        (tx, handle)
     }
 }

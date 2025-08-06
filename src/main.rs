@@ -2,10 +2,8 @@
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
-use std::path::PathBuf;
-
 use clap::{Parser, Subcommand};
-use eyre::OptionExt;
+use std::path::PathBuf;
 
 mod messages;
 mod play;
@@ -81,9 +79,9 @@ enum Commands {
 }
 
 /// Gets lowfi's data directory.
-pub fn data_dir() -> eyre::Result<PathBuf> {
+pub fn data_dir() -> eyre::Result<PathBuf, player::Error> {
     let dir = dirs::data_dir()
-        .ok_or_eyre("data directory not found, are you *really* running this on wasm?")?
+        .ok_or(player::Error::DataDir)?
         .join("lowfi");
 
     Ok(dir)
@@ -91,8 +89,7 @@ pub fn data_dir() -> eyre::Result<PathBuf> {
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    #[cfg(target_os = "android")]
-    compile_error!("Android Audio API not supported due to threading shenanigans");
+    color_eyre::install()?;
 
     let cli = Args::parse();
 
@@ -100,12 +97,14 @@ async fn main() -> eyre::Result<()> {
         match command {
             // TODO: Actually distinguish between sources.
             Commands::Scrape {
-                source,
+                source: _,
                 extension,
                 include_full,
-            } => scrapers::lofigirl::scrape(extension, include_full).await,
+            } => scrapers::lofigirl::scrape(extension, include_full).await?,
         }
     } else {
-        play::play(cli).await
-    }
+        play::play(cli).await?;
+    };
+
+    Ok(())
 }

@@ -88,7 +88,7 @@ impl ActionBar {
             |(subject, len)| {
                 (
                     format!("{} {}{}", word, if star { "*" } else { "" }, subject.bold()),
-                    word.len() + 1 + len + if star { 1 } else { 0 },
+                    word.len() + 1 + len + usize::from(star),
                 )
             },
         )

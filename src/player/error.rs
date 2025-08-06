@@ -1,6 +1,6 @@
 use std::ffi::NulError;
 
-use crate::messages::Message;
+use crate::{messages::Message, player::bookmark::BookmarkError};
 use tokio::sync::mpsc::error::SendError;
 
 #[cfg(feature = "mpris")]
@@ -43,9 +43,9 @@ pub enum Error {
     #[error("unable to notify downloader")]
     DownloaderNotify(#[from] SendError<()>),
 
-    #[error("unable to bookmark track")]
-    Bookmark(eyre::Error),
-
     #[error("unable to find data directory")]
     DataDir,
+
+    #[error("bookmarking load/unload failed")]
+    Bookmark(#[from] BookmarkError),
 }

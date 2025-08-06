@@ -1,11 +1,7 @@
 //! Various different individual components that
 //! appear in lowfi's UI, like the progress bar.
 
-use std::{
-    ops::Deref as _,
-    sync::{atomic::Ordering, Arc},
-    time::Duration,
-};
+use std::{ops::Deref as _, sync::Arc, time::Duration};
 
 use crossterm::style::Stylize as _;
 use unicode_segmentation::UnicodeSegmentation as _;
@@ -108,7 +104,7 @@ pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> Str
                 ActionBar::Playing(info)
             }
         })
-        .format(player.bookmarked.load(Ordering::Relaxed));
+        .format(player.bookmarks.bookmarked());
 
     if len > width {
         let chopped: String = main.graphemes(true).take(width + 1).collect();

@@ -2,14 +2,7 @@
 //! This also has the code for the underlying
 //! audio server which adds new tracks.
 
-use std::{
-    collections::VecDeque,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use downloader::Downloader;
@@ -29,7 +22,7 @@ use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 
 use crate::{
     messages::Message,
-    player::{self, persistent_volume::PersistentVolume},
+    player::{self, bookmark::Bookmarks, persistent_volume::PersistentVolume},
     tracks::{self, list::List},
     Args,
 };
@@ -64,9 +57,6 @@ pub struct Player {
     /// The internal buffer size.
     pub buffer_size: usize,
 
-    /// Whether the current track has been bookmarked.
-    bookmarked: AtomicBool,
-
     /// The [`TrackInfo`] of the current track.
     /// This is [`None`] when lowfi is buffering/loading.
     current: ArcSwapOption<tracks::Info>,
@@ -76,6 +66,9 @@ pub struct Player {
     ///
     /// This is populated specifically by the [Downloader].
     tracks: RwLock<VecDeque<tracks::QueuedTrack>>,
+
+    /// The bookmarks, which are saved on quit.
+    pub bookmarks: Bookmarks,
 
     /// The actual list of tracks to be played.
     list: List,
@@ -108,6 +101,9 @@ impl Player {
     ///
     /// This also will load the track list & persistent volume.
     pub async fn new(args: &Args) -> eyre::Result<(Self, OutputStream), player::Error> {
+        // Load the bookmarks.
+        let bookmarks = Bookmarks::load().await?;
+
         // Load the volume file.
         let volume = PersistentVolume::load()
             .await
@@ -146,11 +142,11 @@ impl Player {
             tracks: RwLock::new(VecDeque::with_capacity(args.buffer_size)),
             buffer_size: args.buffer_size,
             current: ArcSwapOption::new(None),
+            bookmarks,
             client,
             sink,
             volume,
             list,
-            bookmarked: AtomicBool::new(false),
         };
 
         Ok((player, stream))
@@ -223,7 +219,7 @@ impl Player {
 
             match msg {
                 Message::Next | Message::Init | Message::TryAgain => {
-                    player.bookmarked.swap(false, Ordering::Relaxed);
+                    player.bookmarks.set_bookmarked(false);
 
                     // We manually skipped, so we shouldn't actually wait for the song
                     // to be over until we recieve the `NewSong` signal.
@@ -297,18 +293,17 @@ impl Player {
                     let current = player.current.load();
                     let current = current.as_ref().unwrap();
 
-                    let bookmarked = bookmark::bookmark(
-                        current.full_path.clone(),
-                        if current.custom_name {
-                            Some(current.display_name.clone())
-                        } else {
-                            None
-                        },
-                    )
-                    .await
-                    .map_err(player::Error::Bookmark)?;
-
-                    player.bookmarked.swap(bookmarked, Ordering::Relaxed);
+                    player
+                        .bookmarks
+                        .bookmark(
+                            current.full_path.clone(),
+                            if current.custom_name {
+                                Some(current.display_name.clone())
+                            } else {
+                                None
+                            },
+                        )
+                        .await?;
                 }
                 Message::Quit => break,
             }

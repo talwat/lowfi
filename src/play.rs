@@ -65,6 +65,9 @@ pub async fn play(args: Args) -> eyre::Result<(), player::Error> {
         .await
         .map_err(player::Error::PersistentVolumeSave)?;
 
+    // Save the bookmarks for the next session.
+    player.bookmarks.save().await?;
+
     drop(stream);
     player.sink.stop();
     ui.map(|x| x.abort());

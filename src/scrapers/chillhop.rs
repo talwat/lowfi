@@ -66,6 +66,8 @@ impl Release {
             return Err(ReleaseError::Ignored);
         }
 
+        eprintln!("finished scanning {path}!");
+
         Ok(release)
     }
 }

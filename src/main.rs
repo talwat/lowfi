@@ -104,7 +104,7 @@ async fn main() -> eyre::Result<()> {
                 include_full,
             } => match source {
                 Sources::Lofigirl => scrapers::lofigirl::scrape(extension, include_full).await?,
-                Sources::Chillhop => scrapers::chillhop::scrape().await,
+                Sources::Chillhop => scrapers::chillhop::scrape().await?,
             },
         }
     } else {

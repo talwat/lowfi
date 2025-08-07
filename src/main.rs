@@ -5,6 +5,8 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+use crate::scrapers::Sources;
+
 mod messages;
 mod play;
 mod player;
@@ -97,10 +99,13 @@ async fn main() -> eyre::Result<()> {
         match command {
             // TODO: Actually distinguish between sources.
             Commands::Scrape {
-                source: _,
+                source,
                 extension,
                 include_full,
-            } => scrapers::lofigirl::scrape(extension, include_full).await?,
+            } => match source {
+                Sources::Lofigirl => scrapers::lofigirl::scrape(extension, include_full).await?,
+                Sources::Chillhop => scrapers::chillhop::scrape().await,
+            },
         }
     } else {
         play::play(cli).await?;

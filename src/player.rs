@@ -122,6 +122,9 @@ impl Player {
             OutputStreamBuilder::open_default_stream()?
         };
 
+        #[cfg(not(target_os = "linux"))]
+        let mut stream = OutputStreamBuilder::open_default_stream()?;
+
         stream.log_on_drop(false); // Frankly, this is a stupid feature. Stop shoving your crap into my beloved stderr!!!
         let sink = Sink::connect_new(stream.mixer());
 

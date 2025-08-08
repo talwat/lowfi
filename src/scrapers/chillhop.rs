@@ -45,10 +45,12 @@ impl Track {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct Release {
     #[serde(skip)]
     pub path: String,
+
     #[serde(skip)]
     pub name: String,
     pub tracks: Vec<Track>,
@@ -72,17 +74,20 @@ impl Release {
         let content = get(&client, &path).await?;
         let html = Html::parse_document(&content);
 
-        let textarea = html
-            .select(&RELEASE_TEXTAREA)
-            .next()
-            .ok_or(eyre!("unable to find textarea: {path}"))?;
-        let mut release: Self = serde_json::from_str(&textarea.inner_html()).unwrap();
-        release.tracks.reverse();
-
         let author = html
             .select(&RELEASE_AUTHOR)
             .next()
             .ok_or(eyre!("unable to find author: {path}"))?;
+
+        let textarea = html
+            .select(&RELEASE_TEXTAREA)
+            .next()
+            .ok_or(eyre!("unable to find textarea: {path}"))?;
+
+        let mut release: Self = serde_json::from_str(&textarea.inner_html()).unwrap();
+        release.path = path;
+        release.tracks.reverse();
+
         if author.inner_html() == "Kenji" {
             return Err(ReleaseError::Ignored);
         }

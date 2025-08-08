@@ -61,9 +61,6 @@ struct Release {
 enum ReleaseError {
     #[error("invalid release: {0}")]
     Invalid(#[from] eyre::Error),
-
-    #[error("release explicitly ignored")]
-    Ignored,
 }
 
 impl Release {
@@ -75,15 +72,6 @@ impl Release {
     ) -> Result<Self, ReleaseError> {
         let content = get(&client, &path).await?;
         let html = Html::parse_document(&content);
-
-        let author = html.select(&RELEASE_AUTHOR).next();
-
-        if let Some(author) = author {
-            if author.inner_html() == "Kenji" {
-                // No lyrics!
-                return Err(ReleaseError::Ignored);
-            }
-        }
 
         let textarea = html
             .select(&RELEASE_TEXTAREA)
@@ -179,7 +167,17 @@ async fn scan_page(
 pub async fn scrape() -> eyre::Result<()> {
     const PAGE_COUNT: usize = 40;
     const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
-    const TRACK_COUNT: u64 = 1650;
+    const TRACK_COUNT: u64 = 1625;
+
+    const IGNORED_TRACKS: [u32; 3] = [
+        74707, // 404
+        21655, // Lyrics
+        21773, // Lyrics
+    ];
+
+    const IGNORED_ARTISTS: [&str; 1] = [
+        "Kenji", // Lyrics
+    ];
 
     fs::create_dir_all("./cache/chillhop").await.unwrap();
     let client = Client::builder().user_agent(USER_AGENT).build().unwrap();
@@ -200,12 +198,13 @@ pub async fn scrape() -> eyre::Result<()> {
     let mut results: Vec<Result<Release, ReleaseError>> = futures.collect().await;
     bar.finish_and_clear();
 
+    // I mean, is it... optimal? Absolutely not. Does it work? Yes.
     eprintln!("sorting...");
     results.sort_by_key(|x| if let Ok(x) = x { x.index } else { 0 });
     results.reverse();
 
     eprintln!("printing...");
-    let mut printed = Vec::with_capacity(TRACK_COUNT as usize);
+    let mut printed = Vec::with_capacity(TRACK_COUNT as usize); // Lazy way to get rid of dupes.
     for result in results {
         let release = match result {
             Ok(release) => release,
@@ -216,7 +215,11 @@ pub async fn scrape() -> eyre::Result<()> {
         };
 
         for mut track in release.tracks {
-            if track.file_id == 74707 {
+            if IGNORED_TRACKS.contains(&track.file_id) {
+                continue;
+            }
+
+            if IGNORED_ARTISTS.contains(&track.artists.as_ref()) {
                 continue;
             }
 
@@ -233,10 +236,6 @@ pub async fn scrape() -> eyre::Result<()> {
 
     eprintln!("-- ERROR REPORT --");
     for error in errors {
-        if matches!(error, ReleaseError::Ignored) {
-            continue;
-        }
-
         eprintln!("{error}");
     }
 

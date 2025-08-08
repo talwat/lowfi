@@ -1,6 +1,6 @@
 use eyre::{bail, eyre};
 use futures::stream::FuturesUnordered;
-use futures::{stream::FuturesOrdered, StreamExt};
+use futures::StreamExt;
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
 use std::str::FromStr;
@@ -179,13 +179,13 @@ async fn scan_page(
 pub async fn scrape() -> eyre::Result<()> {
     const PAGE_COUNT: usize = 40;
     const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
-    const TRACK_COUNT: u64 = 1600;
+    const TRACK_COUNT: u64 = 1650;
 
     fs::create_dir_all("./cache/chillhop").await.unwrap();
     let client = Client::builder().user_agent(USER_AGENT).build().unwrap();
 
-    let mut futures = FuturesUnordered::new();
-    let bar = ProgressBar::new(TRACK_COUNT + 12 * (PAGE_COUNT as u64));
+    let futures = FuturesUnordered::new();
+    let bar = ProgressBar::new(TRACK_COUNT + (12 * (PAGE_COUNT as u64)));
 
     let mut errors = Vec::new();
 

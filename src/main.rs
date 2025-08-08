@@ -5,16 +5,17 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-use crate::scrapers::Sources;
-
 mod messages;
 mod play;
 mod player;
 mod tracks;
 
 #[allow(clippy::all, clippy::pedantic, clippy::nursery, clippy::restriction)]
+#[cfg(feature = "scrape")]
 mod scrapers;
 
+#[cfg(feature = "scrape")]
+use crate::scrapers::Sources;
 /// An extremely simple lofi player.
 #[derive(Parser, Clone)]
 #[command(about, version)]
@@ -66,6 +67,7 @@ struct Args {
 #[derive(Subcommand, Clone)]
 enum Commands {
     /// Scrapes a music source for files.
+    #[cfg(feature = "scrape")]
     Scrape {
         // The source to scrape from.
         source: scrapers::Sources,
@@ -98,6 +100,7 @@ async fn main() -> eyre::Result<()> {
     if let Some(command) = cli.command {
         match command {
             // TODO: Actually distinguish between sources.
+            #[cfg(feature = "scrape")]
             Commands::Scrape {
                 source,
                 extension,

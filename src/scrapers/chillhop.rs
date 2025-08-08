@@ -1,11 +1,19 @@
 use eyre::{bail, eyre};
 use futures::{stream::FuturesOrdered, StreamExt};
+use indicatif::ProgressBar;
 use lazy_static::lazy_static;
-use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use reqwest::Client;
 use scraper::{Html, Selector};
-use serde::Deserialize;
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer,
+};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
@@ -24,8 +32,17 @@ lazy_static! {
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     title: String,
-    file_id: String,
+    #[serde(deserialize_with = "deserialize_u32_from_string")]
+    file_id: u32,
     artists: String,
+}
+
+impl Track {
+    pub fn clean(&mut self) {
+        self.artists = html_escape::decode_html_entities(&self.artists).to_string();
+
+        self.title = html_escape::decode_html_entities(&self.title).to_string();
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -39,15 +56,19 @@ struct Release {
 
 #[derive(thiserror::Error, Debug)]
 enum ReleaseError {
-    #[error("invalid track: {0}")]
+    #[error("invalid release: {0}")]
     Invalid(#[from] eyre::Error),
 
-    #[error("track explicitly ignored")]
+    #[error("release explicitly ignored")]
     Ignored,
 }
 
 impl Release {
-    pub async fn scan(path: String, client: Client) -> Result<Self, ReleaseError> {
+    pub async fn scan(
+        path: String,
+        client: Client,
+        bar: ProgressBar,
+    ) -> Result<Self, ReleaseError> {
         let content = get(&client, &path).await?;
         let html = Html::parse_document(&content);
 
@@ -66,7 +87,7 @@ impl Release {
             return Err(ReleaseError::Ignored);
         }
 
-        eprintln!("finished scanning {path}!");
+        bar.inc(release.tracks.len() as u64);
 
         Ok(release)
     }
@@ -122,6 +143,7 @@ async fn get(client: &Client, path: &str) -> eyre::Result<String> {
 async fn scan_page(
     number: usize,
     client: &Client,
+    bar: ProgressBar,
 ) -> eyre::Result<Vec<impl futures::Future<Output = Result<Release, ReleaseError>>>> {
     let path = format!("releases/?page={number}");
     let content = get(client, &path).await?;
@@ -131,11 +153,15 @@ async fn scan_page(
     Ok(elements
         .filter_map(|x| {
             let label = x.select(&RELEASE_LABEL).next()?.inner_html();
-            if label == "Compilation" || label == "Mix" {
+            if label == "Compilation" {
                 return None;
             }
 
-            Some(Release::scan(x.attr("href")?.to_string(), client.clone()))
+            Some(Release::scan(
+                x.attr("href")?.to_string(),
+                client.clone(),
+                bar.clone(),
+            ))
         })
         .collect())
 }
@@ -143,37 +169,76 @@ async fn scan_page(
 pub async fn scrape() -> eyre::Result<()> {
     const PAGE_COUNT: usize = 40;
     const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
+    const TRACK_COUNT: u64 = 1500;
 
     fs::create_dir_all("./cache/chillhop").await.unwrap();
     let client = Client::builder().user_agent(USER_AGENT).build().unwrap();
 
     let mut futures = FuturesOrdered::new();
+    let bar = ProgressBar::new(TRACK_COUNT);
 
     // This is slightly less memory efficient than I'd hope, but it is what it is.
     for page in 0..=PAGE_COUNT {
-        for x in scan_page(page, &client).await? {
+        for x in scan_page(page, &client, bar.clone()).await? {
             futures.push_front(x);
         }
     }
 
+    let mut printed = Vec::with_capacity(1500);
     while let Some(result) = futures.next().await {
         let release = match result {
             Ok(release) => release,
-            Err(error) => {
-                eprintln!("error: {}, skipping", error);
+            Err(_) => {
                 continue;
             }
         };
 
-        for track in release.tracks {
-            let title = html_escape::decode_html_entities(&track.title);
-            let artist = html_escape::decode_html_entities(
-                track.artists.split(", ").next().unwrap_or(&track.artists),
-            );
+        for mut track in release.tracks {
+            if track.file_id == 74707 {
+                continue;
+            }
 
-            println!("{}!{artist} - {title}", track.file_id)
+            if printed.contains(&track.file_id) {
+                continue;
+            }
+
+            printed.push(track.file_id);
+
+            track.clean();
+            println!("{}!{}", track.file_id, track.title);
         }
     }
 
+    bar.finish();
+
     Ok(())
+}
+
+pub fn deserialize_u32_from_string<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct U32FromStringVisitor;
+
+    impl<'de> Visitor<'de> for U32FromStringVisitor {
+        type Value = u32;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a string containing an unsigned 32-bit integer")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            u32::from_str(value).map_err(|_| {
+                de::Error::invalid_value(
+                    de::Unexpected::Str(value),
+                    &"a valid unsigned 32-bit integer",
+                )
+            })
+        }
+    }
+
+    deserializer.deserialize_str(U32FromStringVisitor)
 }

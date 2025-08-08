@@ -24,17 +24,13 @@ scrape = ["dep:serde", "dep:serde_json", "dep:html-escape", "dep:scraper", "dep:
 [dependencies]
 # Basics
 clap = { version = "4.5.21", features = ["derive", "cargo"] }
-eyre = { version = "0.6.12" }
+eyre = "0.6.12"
 rand = "0.8.5"
 thiserror = "2.0.12"
 color-eyre = { version = "0.6.5", default-features = false }
 
 # Async
-tokio = { version = "1.41.1", features = [
-    "macros",
-    "rt-multi-thread",
-    "fs"
-], default-features = false }
+tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "fs"], default-features = false }
 futures = "0.3.31"
 arc-swap = "1.7.1"
 

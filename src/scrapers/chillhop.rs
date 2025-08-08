@@ -1,4 +1,5 @@
 use eyre::{bail, eyre};
+use futures::stream::FuturesUnordered;
 use futures::{stream::FuturesOrdered, StreamExt};
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
@@ -45,14 +46,14 @@ impl Track {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct Release {
     #[serde(skip)]
     pub path: String,
 
     #[serde(skip)]
-    pub name: String,
+    pub index: usize,
+
     pub tracks: Vec<Track>,
 }
 
@@ -68,16 +69,21 @@ enum ReleaseError {
 impl Release {
     pub async fn scan(
         path: String,
+        index: usize,
         client: Client,
         bar: ProgressBar,
     ) -> Result<Self, ReleaseError> {
         let content = get(&client, &path).await?;
         let html = Html::parse_document(&content);
 
-        let author = html
-            .select(&RELEASE_AUTHOR)
-            .next()
-            .ok_or(eyre!("unable to find author: {path}"))?;
+        let author = html.select(&RELEASE_AUTHOR).next();
+
+        if let Some(author) = author {
+            if author.inner_html() == "Kenji" {
+                // No lyrics!
+                return Err(ReleaseError::Ignored);
+            }
+        }
 
         let textarea = html
             .select(&RELEASE_TEXTAREA)
@@ -86,11 +92,8 @@ impl Release {
 
         let mut release: Self = serde_json::from_str(&textarea.inner_html()).unwrap();
         release.path = path;
+        release.index = index;
         release.tracks.reverse();
-
-        if author.inner_html() == "Kenji" {
-            return Err(ReleaseError::Ignored);
-        }
 
         bar.inc(release.tracks.len() as u64);
 
@@ -156,7 +159,8 @@ async fn scan_page(
 
     let elements = html.select(&RELEASES);
     Ok(elements
-        .filter_map(|x| {
+        .enumerate()
+        .filter_map(|(i, x)| {
             let label = x.select(&RELEASE_LABEL).next()?.inner_html();
             if label == "Compilation" {
                 return None;
@@ -164,6 +168,7 @@ async fn scan_page(
 
             Some(Release::scan(
                 x.attr("href")?.to_string(),
+                (number * 12) + i,
                 client.clone(),
                 bar.clone(),
             ))
@@ -174,26 +179,38 @@ async fn scan_page(
 pub async fn scrape() -> eyre::Result<()> {
     const PAGE_COUNT: usize = 40;
     const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
-    const TRACK_COUNT: u64 = 1500;
+    const TRACK_COUNT: u64 = 1600;
 
     fs::create_dir_all("./cache/chillhop").await.unwrap();
     let client = Client::builder().user_agent(USER_AGENT).build().unwrap();
 
-    let mut futures = FuturesOrdered::new();
-    let bar = ProgressBar::new(TRACK_COUNT);
+    let mut futures = FuturesUnordered::new();
+    let bar = ProgressBar::new(TRACK_COUNT + 12 * (PAGE_COUNT as u64));
+
+    let mut errors = Vec::new();
 
     // This is slightly less memory efficient than I'd hope, but it is what it is.
     for page in 0..=PAGE_COUNT {
+        bar.inc(12);
         for x in scan_page(page, &client, bar.clone()).await? {
-            futures.push_front(x);
+            futures.push(x);
         }
     }
 
-    let mut printed = Vec::with_capacity(1500);
-    while let Some(result) = futures.next().await {
+    let mut results: Vec<Result<Release, ReleaseError>> = futures.collect().await;
+    bar.finish_and_clear();
+
+    eprintln!("sorting...");
+    results.sort_by_key(|x| if let Ok(x) = x { x.index } else { 0 });
+    results.reverse();
+
+    eprintln!("printing...");
+    let mut printed = Vec::with_capacity(TRACK_COUNT as usize);
+    for result in results {
         let release = match result {
             Ok(release) => release,
-            Err(_) => {
+            Err(error) => {
+                errors.push(error);
                 continue;
             }
         };
@@ -214,7 +231,14 @@ pub async fn scrape() -> eyre::Result<()> {
         }
     }
 
-    bar.finish();
+    eprintln!("-- ERROR REPORT --");
+    for error in errors {
+        if matches!(error, ReleaseError::Ignored) {
+            continue;
+        }
+
+        eprintln!("{error}");
+    }
 
     Ok(())
 }

@@ -1,13 +1,10 @@
-use eyre::{bail, eyre};
+use eyre::eyre;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
+use std::fmt;
 use std::str::FromStr;
-use std::{
-    fmt,
-    path::{Path, PathBuf},
-};
 
 use reqwest::Client;
 use scraper::{Html, Selector};
@@ -15,10 +12,9 @@ use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer,
 };
-use tokio::{
-    fs::{self, File},
-    io::AsyncWriteExt,
-};
+use tokio::fs;
+
+use crate::scrapers::{get, Source};
 
 lazy_static! {
     static ref RELEASES: Selector = Selector::parse(".table-body > a").unwrap();
@@ -70,7 +66,7 @@ impl Release {
         client: Client,
         bar: ProgressBar,
     ) -> Result<Self, ReleaseError> {
-        let content = get(&client, &path).await?;
+        let content = get(&client, &path, Source::Chillhop).await?;
         let html = Html::parse_document(&content);
 
         let textarea = html
@@ -89,60 +85,13 @@ impl Release {
     }
 }
 
-/// Sends a get request, with caching.
-async fn get(client: &Client, path: &str) -> eyre::Result<String> {
-    let trimmed = path.trim_matches('/');
-    let cache = PathBuf::from(format!("./cache/chillhop/{trimmed}.html"));
-
-    if let Ok(x) = fs::read_to_string(&cache).await {
-        Ok(x)
-    } else {
-        let resp = client
-            .get(format!("https://chillhop.com/{trimmed}"))
-            .send()
-            .await?;
-
-        let status = resp.status();
-
-        if status == 429 {
-            bail!("rate limit reached: {path}");
-        }
-
-        if status != 404 && !status.is_success() && !status.is_redirection() {
-            bail!("non success code {}: {path}", resp.status().as_u16());
-        }
-
-        let text = resp.text().await?;
-
-        let parent = cache.parent();
-        if let Some(x) = parent {
-            if x != Path::new("") {
-                fs::create_dir_all(x).await?;
-            }
-        }
-
-        let mut file = File::create(&cache).await?;
-        file.write_all(text.as_bytes()).await?;
-
-        if status.is_redirection() {
-            bail!("redirect: {path}")
-        }
-
-        if status == 404 {
-            bail!("not found: {path}")
-        }
-
-        Ok(text)
-    }
-}
-
 async fn scan_page(
     number: usize,
     client: &Client,
     bar: ProgressBar,
 ) -> eyre::Result<Vec<impl futures::Future<Output = Result<Release, ReleaseError>>>> {
     let path = format!("releases/?page={number}");
-    let content = get(client, &path).await?;
+    let content = get(client, &path, Source::Chillhop).await?;
     let html = Html::parse_document(&content);
 
     let elements = html.select(&RELEASES);

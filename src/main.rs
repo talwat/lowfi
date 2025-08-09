@@ -15,7 +15,7 @@ mod tracks;
 mod scrapers;
 
 #[cfg(feature = "scrape")]
-use crate::scrapers::Sources;
+use crate::scrapers::Source;
 /// An extremely simple lofi player.
 #[derive(Parser, Clone)]
 #[command(about, version)]
@@ -70,7 +70,7 @@ enum Commands {
     #[cfg(feature = "scrape")]
     Scrape {
         // The source to scrape from.
-        source: scrapers::Sources,
+        source: scrapers::Source,
 
         /// The file extension to search for, defaults to mp3.
         #[clap(long, short, default_value = "mp3")]
@@ -106,8 +106,8 @@ async fn main() -> eyre::Result<()> {
                 extension,
                 include_full,
             } => match source {
-                Sources::Lofigirl => scrapers::lofigirl::scrape(extension, include_full).await?,
-                Sources::Chillhop => scrapers::chillhop::scrape().await?,
+                Source::Lofigirl => scrapers::lofigirl::scrape(extension, include_full).await?,
+                Source::Chillhop => scrapers::chillhop::scrape().await?,
             },
         }
     } else {

@@ -11,8 +11,11 @@ mod player;
 mod tracks;
 
 #[allow(clippy::all, clippy::pedantic, clippy::nursery, clippy::restriction)]
+#[cfg(feature = "scrape")]
 mod scrapers;
 
+#[cfg(feature = "scrape")]
+use crate::scrapers::Source;
 /// An extremely simple lofi player.
 #[derive(Parser, Clone)]
 #[command(about, version)]
@@ -64,9 +67,10 @@ struct Args {
 #[derive(Subcommand, Clone)]
 enum Commands {
     /// Scrapes a music source for files.
+    #[cfg(feature = "scrape")]
     Scrape {
         // The source to scrape from.
-        source: scrapers::Sources,
+        source: scrapers::Source,
 
         /// The file extension to search for, defaults to mp3.
         #[clap(long, short, default_value = "mp3")]
@@ -96,11 +100,15 @@ async fn main() -> eyre::Result<()> {
     if let Some(command) = cli.command {
         match command {
             // TODO: Actually distinguish between sources.
+            #[cfg(feature = "scrape")]
             Commands::Scrape {
-                source: _,
+                source,
                 extension,
                 include_full,
-            } => scrapers::lofigirl::scrape(extension, include_full).await?,
+            } => match source {
+                Source::Lofigirl => scrapers::lofigirl::scrape(extension, include_full).await?,
+                Source::Chillhop => scrapers::chillhop::scrape().await?,
+            },
         }
     } else {
         play::play(cli).await?;

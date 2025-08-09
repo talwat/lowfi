@@ -71,14 +71,6 @@ enum Commands {
     Scrape {
         // The source to scrape from.
         source: scrapers::Source,
-
-        /// The file extension to search for, defaults to mp3.
-        #[clap(long, short, default_value = "mp3")]
-        extension: String,
-
-        /// Whether to include the full HTTP URL or just the distinguishing part.
-        #[clap(long, short)]
-        include_full: bool,
     },
 }
 
@@ -101,12 +93,9 @@ async fn main() -> eyre::Result<()> {
         match command {
             // TODO: Actually distinguish between sources.
             #[cfg(feature = "scrape")]
-            Commands::Scrape {
-                source,
-                extension,
-                include_full,
-            } => match source {
-                Source::Lofigirl => scrapers::lofigirl::scrape(extension, include_full).await?,
+            Commands::Scrape { source } => match source {
+                Source::Archive => scrapers::archive::scrape().await?,
+                Source::Lofigirl => scrapers::lofigirl::scrape().await?,
                 Source::Chillhop => scrapers::chillhop::scrape().await?,
             },
         }

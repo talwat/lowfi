@@ -49,7 +49,7 @@ impl Downloader {
             Ok(track) => self.player.tracks.write().await.push_back(track),
             Err(error) if !error.is_timeout() => {
                 if debug {
-                    panic!("{}", error)
+                    panic!("{error}")
                 }
 
                 sleep(TIMEOUT).await;

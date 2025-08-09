@@ -41,7 +41,8 @@ pub use error::Error;
 pub mod mpris;
 
 /// The time to wait in between errors.
-const TIMEOUT: Duration = Duration::from_secs(3);
+/// TODO: Make this configurable.
+const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Main struct responsible for queuing up & playing tracks.
 // TODO: Consider refactoring [Player] from being stored in an [Arc], into containing many smaller [Arc]s.

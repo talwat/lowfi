@@ -20,41 +20,15 @@ use std::{io::Cursor, path::Path, time::Duration};
 use bytes::Bytes;
 use inflector::Inflector as _;
 use rodio::{Decoder, Source as _};
-use thiserror::Error;
-use tokio::io;
 use unicode_segmentation::UnicodeSegmentation;
 use url::form_urlencoded;
 
+pub mod error;
 pub mod list;
 
-/// The error type for the track system, which is used to handle errors that occur
-/// while downloading, decoding, or playing tracks.
-#[derive(Debug, Error)]
-pub enum TrackError {
-    #[error("timeout")]
-    Timeout,
+pub use error::Error;
 
-    #[error("unable to decode")]
-    Decode(#[from] rodio::decoder::DecoderError),
-
-    #[error("invalid name")]
-    InvalidName,
-
-    #[error("invalid file path")]
-    InvalidPath,
-
-    #[error("unable to read file")]
-    File(#[from] io::Error),
-
-    #[error("unable to fetch data")]
-    Request(#[from] reqwest::Error),
-}
-
-impl TrackError {
-    pub const fn is_timeout(&self) -> bool {
-        matches!(self, Self::Timeout)
-    }
-}
+use crate::tracks::error::Context;
 
 /// Just a shorthand for a decoded [Bytes].
 pub type DecodedData = Decoder<Cursor<Bytes>>;
@@ -92,7 +66,7 @@ impl QueuedTrack {
     /// This will actually decode and format the track,
     /// returning a [`DecodedTrack`] which can be played
     /// and also has a duration & formatted name.
-    pub fn decode(self) -> eyre::Result<DecodedTrack, TrackError> {
+    pub fn decode(self) -> eyre::Result<DecodedTrack, Error> {
         DecodedTrack::new(self)
     }
 }
@@ -134,13 +108,13 @@ impl Info {
     /// Formats a name with [Inflector].
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks.
-    fn format_name(name: &str) -> eyre::Result<String, TrackError> {
+    fn format_name(name: &str) -> eyre::Result<String, Error> {
         let path = Path::new(name);
 
         let stem = path
             .file_stem()
             .and_then(|x| x.to_str())
-            .ok_or(TrackError::InvalidName)?;
+            .ok_or((name, error::Kind::InvalidName))?;
         let formatted = Self::decode_url(stem)
             .to_lowercase()
             .to_title_case()
@@ -181,7 +155,7 @@ impl Info {
         name: TrackName,
         full_path: String,
         decoded: &DecodedData,
-    ) -> eyre::Result<Self, TrackError> {
+    ) -> eyre::Result<Self, Error> {
         let (display_name, custom_name) = match name {
             TrackName::Raw(raw) => (Self::format_name(&raw)?, false),
             TrackName::Formatted(custom) => (custom, true),
@@ -210,11 +184,12 @@ pub struct DecodedTrack {
 impl DecodedTrack {
     /// Creates a new track.
     /// This is equivalent to [`QueuedTrack::decode`].
-    pub fn new(track: QueuedTrack) -> eyre::Result<Self, TrackError> {
+    pub fn new(track: QueuedTrack) -> eyre::Result<Self, Error> {
         let data = Decoder::builder()
             .with_byte_len(track.data.len().try_into().unwrap())
             .with_data(Cursor::new(track.data))
-            .build()?;
+            .build()
+            .track(track.full_path.clone())?;
 
         let info = Info::new(track.name, track.full_path, &data)?;
 

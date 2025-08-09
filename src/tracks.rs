@@ -19,6 +19,7 @@ use std::{io::Cursor, path::Path, time::Duration};
 
 use bytes::Bytes;
 use inflector::Inflector as _;
+use regex::Regex;
 use rodio::{Decoder, Source as _};
 use unicode_segmentation::UnicodeSegmentation;
 use url::form_urlencoded;
@@ -29,6 +30,7 @@ pub mod list;
 pub use error::Error;
 
 use crate::tracks::error::Context;
+use lazy_static::lazy_static;
 
 /// Just a shorthand for a decoded [Bytes].
 pub type DecodedData = Decoder<Cursor<Bytes>>;
@@ -95,6 +97,21 @@ pub struct Info {
     pub duration: Option<Duration>,
 }
 
+lazy_static! {
+    static ref MASTER_PATTERNS: [Regex; 5] = [
+        // (master), (master v3), (kupla master), (kupla master2)
+        Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)$").unwrap(),
+        // mstr or - mstr or (mstr) — now also matches "mstr v3", "mstr2", etc.
+        Regex::new(r"\s*[-(]?\s*mstr(?:\s*v?\d+)?\s*\)?$").unwrap(),
+        // - master, master at end without parentheses
+        Regex::new(r"\s*[-]?\s*master(?:\s*v?\d+)?$").unwrap(),
+        // kupla master1, kupla master v2 (without parentheses or separator)
+        Regex::new(r"\s+kupla\s+master(?:\s*v?\d+|\d+)?$").unwrap(),
+        // (kupla master) followed by trailing parenthetical numbers, e.g. "... (kupla master) (1)"
+        Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)(?:\s*\(\d+\))+$").unwrap(),
+    ];
+}
+
 impl Info {
     /// Decodes a URL string into normal UTF-8.
     fn decode_url(text: &str) -> String {
@@ -106,17 +123,30 @@ impl Info {
     }
 
     /// Formats a name with [Inflector].
+    ///
     /// This will also strip the first few numbers that are
-    /// usually present on most lofi tracks.
+    /// usually present on most lofi tracks and do some other
+    /// formatting operations.
     fn format_name(name: &str) -> eyre::Result<String, Error> {
         let path = Path::new(name);
 
-        let stem = path
+        let name = path
             .file_stem()
             .and_then(|x| x.to_str())
             .ok_or((name, error::Kind::InvalidName))?;
-        let formatted = Self::decode_url(stem)
-            .to_lowercase()
+
+        let name = Self::decode_url(name).to_lowercase();
+        let mut name = name
+            .replace("masster", "master")
+            .replace("(online-audio-converter.com)", ""); // Some of these names, man...
+
+        // Get rid of "master" suffix with a few regex patterns.
+        for regex in MASTER_PATTERNS.iter() {
+            name = regex.replace(&name, "").to_string();
+        }
+
+        let name = name
+            .trim_end_matches("13lufs")
             .to_title_case()
             // Inflector doesn't like contractions...
             // Replaces a few very common ones.
@@ -128,11 +158,12 @@ impl Info {
             .replace(" Ll ", "'ll ")
             .replace(" Re ", "'re ")
             .replace(" M ", "'m ");
+        let name = name.trim();
 
         // This is incremented for each digit in front of the song name.
         let mut skip = 0;
 
-        for character in formatted.as_bytes() {
+        for character in name.as_bytes() {
             if character.is_ascii_digit() {
                 skip += 1;
             } else {
@@ -141,12 +172,12 @@ impl Info {
         }
 
         // If the entire name of the track is a number, then just return it.
-        if skip == formatted.len() {
-            Ok(formatted)
+        if skip == name.len() {
+            Ok(name.to_string())
         } else {
             // We've already checked before that the bound is at an ASCII digit.
             #[allow(clippy::string_slice)]
-            Ok(String::from(&formatted[skip..]))
+            Ok(String::from(&name[skip..]))
         }
     }
 

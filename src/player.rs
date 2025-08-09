@@ -42,7 +42,7 @@ pub mod mpris;
 
 /// The time to wait in between errors.
 /// TODO: Make this configurable.
-const TIMEOUT: Duration = Duration::from_secs(5);
+const TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Main struct responsible for queuing up & playing tracks.
 // TODO: Consider refactoring [Player] from being stored in an [Arc], into containing many smaller [Arc]s.
@@ -139,7 +139,7 @@ impl Player {
                 "/",
                 env!("CARGO_PKG_VERSION")
             ))
-            .timeout(TIMEOUT)
+            .timeout(TIMEOUT * 2)
             .build()?;
 
         let player = Self {

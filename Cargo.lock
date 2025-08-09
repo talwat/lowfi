@@ -1467,6 +1467,7 @@ dependencies = [
  "libc",
  "mpris-server",
  "rand",
+ "regex",
  "reqwest",
  "rodio",
  "scraper",

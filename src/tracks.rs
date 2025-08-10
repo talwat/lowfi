@@ -99,7 +99,7 @@ pub struct Info {
 
 lazy_static! {
     static ref MASTER_PATTERNS: [Regex; 5] = [
-        // (master), (master v3), (kupla master), (kupla master2)
+        // (master), (master v2)
         Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)$").unwrap(),
         // mstr or - mstr or (mstr) — now also matches "mstr v3", "mstr2", etc.
         Regex::new(r"\s*[-(]?\s*mstr(?:\s*v?\d+)?\s*\)?$").unwrap(),
@@ -110,6 +110,7 @@ lazy_static! {
         // (kupla master) followed by trailing parenthetical numbers, e.g. "... (kupla master) (1)"
         Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)(?:\s*\(\d+\))+$").unwrap(),
     ];
+    static ref ID_PATTERN: Regex = Regex::new(r"^[a-z]\d[ .]").unwrap();
 }
 
 impl Info {
@@ -138,20 +139,21 @@ impl Info {
         let name = Self::decode_url(name).to_lowercase();
         let mut name = name
             .replace("masster", "master")
-            .replace("(online-audio-converter.com)", ""); // Some of these names, man...
+            .replace("(online-audio-converter.com)", "") // Some of these names, man...
+            .replace('_', " ");
 
         // Get rid of "master" suffix with a few regex patterns.
         for regex in MASTER_PATTERNS.iter() {
             name = regex.replace(&name, "").to_string();
         }
 
-        // TODO: Get rid of track numberings beginning with a letter,
-        // like B2 or E4.
+        name = ID_PATTERN.replace(&name, "").to_string();
+
         let name = name
             .replace("13lufs", "")
             .to_case(Case::Title)
             .replace(" .", "")
-            .replace(" Ft ", "ft.")
+            .replace(" Ft ", " ft. ")
             .replace("Ft.", "ft.")
             .replace("Feat.", "ft.")
             .replace(" W ", " w/ ");
@@ -160,7 +162,11 @@ impl Info {
         let mut skip = 0;
 
         for character in name.as_bytes() {
-            if character.is_ascii_digit() || *character == b'.' || *character == b')' {
+            if character.is_ascii_digit()
+                || *character == b'.'
+                || *character == b')'
+                || *character == b'('
+            {
                 skip += 1;
             } else {
                 break;

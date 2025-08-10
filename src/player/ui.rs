@@ -165,10 +165,11 @@ async fn interface(
     player: Arc<Player>,
     minimalist: bool,
     borderless: bool,
+    debug: bool,
     fps: u8,
     width: usize,
 ) -> eyre::Result<(), UIError> {
-    let mut window = Window::new(width, borderless);
+    let mut window = Window::new(width, borderless || debug);
 
     loop {
         // Load `current` once so that it doesn't have to be loaded over and over
@@ -197,10 +198,10 @@ async fn interface(
 
         let controls = components::controls(width);
 
-        let menu = if minimalist {
-            vec![action, middle]
-        } else {
-            vec![action, middle, controls]
+        let menu = match (minimalist, debug, player.current.load().as_ref()) {
+            (true, _, _) => vec![action, middle],
+            (false, true, Some(x)) => vec![x.full_path.clone(), action, middle, controls],
+            _ => vec![action, middle, controls],
         };
 
         window.draw(menu, false)?;
@@ -294,6 +295,7 @@ pub async fn start(
         Arc::clone(&player),
         args.minimalist,
         args.borderless,
+        args.debug,
         args.fps,
         21 + args.width.min(32) * 2,
     ));

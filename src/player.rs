@@ -5,6 +5,7 @@
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
+use atomic_float::AtomicF32;
 use downloader::Downloader;
 use reqwest::Client;
 use rodio::{OutputStream, OutputStreamBuilder, Sink};
@@ -61,6 +62,10 @@ pub struct Player {
     /// The [`TrackInfo`] of the current track.
     /// This is [`None`] when lowfi is buffering/loading.
     current: ArcSwapOption<tracks::Info>,
+
+    /// The current progress for downloading tracks, if
+    /// `current` is None.
+    progress: AtomicF32,
 
     /// The tracks, which is a [`VecDeque`] that holds
     /// *undecoded* [Track]s.
@@ -139,13 +144,14 @@ impl Player {
                 "/",
                 env!("CARGO_PKG_VERSION")
             ))
-            .timeout(TIMEOUT * 2)
+            .timeout(TIMEOUT * 5)
             .build()?;
 
         let player = Self {
             tracks: RwLock::new(VecDeque::with_capacity(args.buffer_size)),
             buffer_size: args.buffer_size,
             current: ArcSwapOption::new(None),
+            progress: AtomicF32::new(-1.0),
             bookmarks,
             client,
             sink,

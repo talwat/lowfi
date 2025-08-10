@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    error::Error,
+    sync::{atomic::Ordering, Arc},
+};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 use crate::{
@@ -23,7 +26,8 @@ impl Player {
             // We're doing it here so that we don't get the "loading" display
             // for only a frame in the other case that the buffer is not empty.
             self.current.store(None);
-            self.list.random(&self.client).await?
+            self.progress.store(0.0, Ordering::Relaxed);
+            self.list.random(&self.client, Some(&self.progress)).await?
         };
 
         let decoded = track.decode()?;
@@ -64,11 +68,11 @@ impl Player {
                 tx.send(Message::NewSong).await?;
             }
             Err(error) => {
-                if !error.is_timeout() {
-                    if debug {
-                        panic!("{error}")
-                    }
+                if debug {
+                    panic!("{error} - {:?}", error.source())
+                }
 
+                if !error.is_timeout() {
                     sleep(TIMEOUT).await;
                 }
 

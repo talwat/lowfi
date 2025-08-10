@@ -1,6 +1,6 @@
 //! Contains the [`Downloader`] struct.
 
-use std::sync::Arc;
+use std::{error::Error, sync::Arc};
 
 use tokio::{
     sync::mpsc::{self, Receiver, Sender},
@@ -44,17 +44,18 @@ impl Downloader {
 
     /// Push a new, random track onto the internal buffer.
     pub async fn push_buffer(&self, debug: bool) {
-        let data = self.player.list.random(&self.player.client).await;
+        let data = self.player.list.random(&self.player.client, None).await;
         match data {
             Ok(track) => self.player.tracks.write().await.push_back(track),
-            Err(error) if !error.is_timeout() => {
+            Err(error) => {
                 if debug {
-                    panic!("{error}")
+                    panic!("{error} - {:?}", error.source())
                 }
 
-                sleep(TIMEOUT).await;
+                if !error.is_timeout() {
+                    sleep(TIMEOUT).await;
+                }
             }
-            _ => {}
         }
     }
 

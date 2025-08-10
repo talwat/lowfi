@@ -66,7 +66,7 @@ enum ActionBar {
     Playing(Info),
 
     /// When the app is currently displaying "loading".
-    Loading,
+    Loading(f32),
 }
 
 impl ActionBar {
@@ -76,7 +76,11 @@ impl ActionBar {
         let (word, subject) = match self {
             Self::Playing(x) => ("playing", Some((x.display_name.clone(), x.width))),
             Self::Paused(x) => ("paused", Some((x.display_name.clone(), x.width))),
-            Self::Loading => ("loading", None),
+            Self::Loading(progress) => {
+                let progress = format!("{: <2.0}%", (progress * 100.0).min(99.0));
+
+                ("loading", Some((progress, 3)))
+            }
         };
 
         subject.map_or_else(
@@ -95,15 +99,18 @@ impl ActionBar {
 /// This also creates all the needed padding.
 pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> String {
     let (main, len) = current
-        .map_or(ActionBar::Loading, |info| {
-            let info = info.deref().clone();
+        .map_or_else(
+            || ActionBar::Loading(player.progress.load(std::sync::atomic::Ordering::Acquire)),
+            |info| {
+                let info = info.deref().clone();
 
-            if player.sink.is_paused() {
-                ActionBar::Paused(info)
-            } else {
-                ActionBar::Playing(info)
-            }
-        })
+                if player.sink.is_paused() {
+                    ActionBar::Paused(info)
+                } else {
+                    ActionBar::Playing(info)
+                }
+            },
+        )
         .format(player.bookmarks.bookmarked());
 
     if len > width {

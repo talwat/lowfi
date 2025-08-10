@@ -18,7 +18,7 @@
 use std::{io::Cursor, path::Path, time::Duration};
 
 use bytes::Bytes;
-use inflector::Inflector as _;
+use convert_case::{Case, Casing};
 use regex::Regex;
 use rodio::{Decoder, Source as _};
 use unicode_segmentation::UnicodeSegmentation;
@@ -122,7 +122,7 @@ impl Info {
             .collect()
     }
 
-    /// Formats a name with [Inflector].
+    /// Formats a name with [convert_case].
     ///
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks and do some other
@@ -145,26 +145,22 @@ impl Info {
             name = regex.replace(&name, "").to_string();
         }
 
+        // TODO: Get rid of track numberings beginning with a letter,
+        // like B2 or E4.
         let name = name
-            .trim_end_matches("13lufs")
-            .to_title_case()
-            // Inflector doesn't like contractions...
-            // Replaces a few very common ones.
-            // TODO: Properly handle these.
-            .replace(" S ", "'s ")
-            .replace(" T ", "'t ")
-            .replace(" D ", "'d ")
-            .replace(" Ve ", "'ve ")
-            .replace(" Ll ", "'ll ")
-            .replace(" Re ", "'re ")
-            .replace(" M ", "'m ");
-        let name = name.trim();
+            .replace("13lufs", "")
+            .to_case(Case::Title)
+            .replace(" .", "")
+            .replace(" Ft ", "ft.")
+            .replace("Ft.", "ft.")
+            .replace("Feat.", "ft.")
+            .replace(" W ", " w/ ");
 
         // This is incremented for each digit in front of the song name.
         let mut skip = 0;
 
         for character in name.as_bytes() {
-            if character.is_ascii_digit() {
+            if character.is_ascii_digit() || *character == b'.' || *character == b')' {
                 skip += 1;
             } else {
                 break;
@@ -173,11 +169,11 @@ impl Info {
 
         // If the entire name of the track is a number, then just return it.
         if skip == name.len() {
-            Ok(name.to_string())
+            Ok(name.trim().to_string())
         } else {
             // We've already checked before that the bound is at an ASCII digit.
             #[allow(clippy::string_slice)]
-            Ok(String::from(&name[skip..]))
+            Ok(String::from(name[skip..].trim()))
         }
     }
 

@@ -1,8 +1,12 @@
 //! The module containing all of the logic behind track lists,
 //! as well as obtaining track names & downloading the raw audio data
 
-use bytes::Bytes;
+use std::{cmp::min, sync::atomic::Ordering};
+
+use atomic_float::AtomicF32;
+use bytes::{BufMut, Bytes, BytesMut};
 use eyre::OptionExt as _;
+use futures::StreamExt;
 use rand::Rng as _;
 use reqwest::Client;
 use tokio::fs;
@@ -59,6 +63,7 @@ impl List {
         &self,
         track: &str,
         client: &Client,
+        progress: Option<&AtomicF32>,
     ) -> Result<(Bytes, String), tracks::Error> {
         // If the track has a protocol, then we should ignore the base for it.
         let full_path = if track.contains("://") {
@@ -83,17 +88,29 @@ impl List {
             let result = tokio::fs::read(path.clone()).await.track(track)?;
             result.into()
         } else {
-            let response = match client.get(full_path.clone()).send().await {
-                Ok(x) => Ok(x),
-                Err(x) => {
-                    if x.is_timeout() {
-                        Err((track, tracks::error::Kind::Timeout))
-                    } else {
-                        Err((track, tracks::error::Kind::Request(x)))
-                    }
+            let response = client.get(full_path.clone()).send().await.track(track)?;
+
+            if let Some(progress) = progress {
+                let total = response
+                    .content_length()
+                    .ok_or((track, tracks::error::Kind::UnknownLength))?;
+                let mut stream = response.bytes_stream();
+                let mut bytes = BytesMut::new();
+                let mut downloaded: u64 = 0;
+
+                while let Some(item) = stream.next().await {
+                    let chunk = item.track(track)?;
+                    let new = min(downloaded + (chunk.len() as u64), total);
+                    downloaded = new;
+                    progress.store((new as f32) / (total as f32), Ordering::Relaxed);
+
+                    bytes.put(chunk);
                 }
-            }?;
-            response.bytes().await.track(track)?
+
+                bytes.into()
+            } else {
+                response.bytes().await.track(track)?
+            }
         };
 
         Ok((data, full_path))
@@ -103,9 +120,13 @@ impl List {
     ///
     /// The Result's error is a bool, which is true if a timeout error occured,
     /// and false otherwise. This tells lowfi if it shouldn't wait to try again.
-    pub async fn random(&self, client: &Client) -> Result<QueuedTrack, tracks::Error> {
+    pub async fn random(
+        &self,
+        client: &Client,
+        progress: Option<&AtomicF32>,
+    ) -> Result<QueuedTrack, tracks::Error> {
         let (path, custom_name) = self.random_path();
-        let (data, full_path) = self.download(&path, client).await?;
+        let (data, full_path) = self.download(&path, client, progress).await?;
 
         let name = custom_name.map_or_else(
             || super::TrackName::Raw(path.clone()),

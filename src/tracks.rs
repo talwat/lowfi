@@ -114,6 +114,18 @@ lazy_static! {
 }
 
 impl Info {
+    /// Converts the info back into a full track list entry.
+    pub fn to_entry(&self) -> String {
+        let mut entry = self.full_path.clone();
+
+        if self.custom_name {
+            entry.push('!');
+            entry.push_str(&self.display_name);
+        }
+
+        entry
+    }
+
     /// Decodes a URL string into normal UTF-8.
     fn decode_url(text: &str) -> String {
         // The tuple contains smart pointers, so it's not really practical to use `into()`.

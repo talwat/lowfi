@@ -28,8 +28,12 @@ pub struct List {
     pub name: String,
 
     /// Just the raw file, but seperated by `/n` (newlines).
-    /// `lines[0]` is the base, with the rest being tracks.
+    /// `lines[0]` is the base/heaeder, with the rest being tracks.
     lines: Vec<String>,
+
+    /// The file path which the list was read from.
+    #[allow(dead_code)]
+    pub path: Option<String>,
 }
 
 impl List {
@@ -141,7 +145,7 @@ impl List {
     }
 
     /// Parses text into a [List].
-    pub fn new(name: &str, text: &str) -> Self {
+    pub fn new(name: &str, text: &str, path: Option<&str>) -> Self {
         let lines: Vec<String> = text
             .trim_end()
             .lines()
@@ -150,6 +154,7 @@ impl List {
 
         Self {
             lines,
+            path: path.map(|s| s.to_owned()),
             name: name.to_owned(),
         }
     }
@@ -158,21 +163,29 @@ impl List {
     pub async fn load(tracks: Option<&String>) -> eyre::Result<Self> {
         if let Some(arg) = tracks {
             // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
-            let name = data_dir()?.join(format!("{arg}.txt"));
-            let name = if name.exists() { name } else { arg.into() };
+            let path = data_dir()?.join(format!("{arg}.txt"));
+            let path = if path.exists() { path } else { arg.into() };
 
-            let raw = fs::read_to_string(name.clone()).await?;
+            let raw = fs::read_to_string(path.clone()).await?;
 
-            let name = name
+            // Get rid of special noheader case for tracklists without a header.
+            let raw = if let Some(stripped) = raw.strip_prefix("noheader") {
+                stripped
+            } else {
+                &raw
+            };
+
+            let name = path
                 .file_stem()
                 .and_then(|x| x.to_str())
                 .ok_or_eyre("invalid track path")?;
 
-            Ok(Self::new(name, &raw))
+            Ok(Self::new(name, raw, path.to_str()))
         } else {
             Ok(Self::new(
-                "lofigirl",
-                include_str!("../../data/lofigirl.txt"),
+                "chillhop",
+                include_str!("../../data/chillhop.txt"),
+                None,
             ))
         }
     }

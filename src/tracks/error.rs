@@ -60,7 +60,6 @@ where
     (String, E): Into<Error>,
     E: Into<Kind>,
 {
-    #[must_use]
     fn track(self, name: impl Into<String>) -> Result<T, Error> {
         self.map_err(|e| {
             let error = match e.into() {

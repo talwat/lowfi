@@ -10,8 +10,8 @@ curl https://raw.githubusercontent.com/talwat/lowfi/refs/heads/main/data/chillho
 ## MacOS
 
 ```sh
-mkdir -p "~/Library/Application Support/lowfi"
-curl https://raw.githubusercontent.com/talwat/lowfi/refs/heads/main/data/chillhop.txt -O --output-dir "~/Library/Application Support/lowfi"
+mkdir -p "$HOME/Library/Application Support/lowfi"
+curl https://raw.githubusercontent.com/talwat/lowfi/refs/heads/main/data/chillhop.txt -O --output-dir "$HOME/Library/Application Support/lowfi"
 ```
 
 ## Windows

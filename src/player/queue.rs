@@ -60,6 +60,9 @@ impl Player {
                 // Start playing the new track.
                 player.sink.append(track.data);
 
+                // Set whether it's bookmarked.
+                player.bookmarks.set_bookmarked(&track.info).await;
+
                 // Notify the background downloader that there's an empty spot
                 // in the buffer.
                 Downloader::notify(&itx).await?;

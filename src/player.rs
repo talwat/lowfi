@@ -229,8 +229,6 @@ impl Player {
 
             match msg {
                 Message::Next | Message::Init | Message::TryAgain => {
-                    player.bookmarks.set_bookmarked(false);
-
                     // We manually skipped, so we shouldn't actually wait for the song
                     // to be over until we recieve the `NewSong` signal.
                     new = false;
@@ -303,17 +301,7 @@ impl Player {
                     let current = player.current.load();
                     let current = current.as_ref().unwrap();
 
-                    player
-                        .bookmarks
-                        .bookmark(
-                            current.full_path.clone(),
-                            if current.custom_name {
-                                Some(current.display_name.clone())
-                            } else {
-                                None
-                            },
-                        )
-                        .await?;
+                    player.bookmarks.bookmark(&&current).await?;
                 }
                 Message::Quit => break,
             }

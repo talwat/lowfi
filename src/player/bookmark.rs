@@ -5,7 +5,7 @@ use tokio::fs::{create_dir_all, File, OpenOptions};
 use tokio::io::{self, AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::RwLock;
 
-use crate::data_dir;
+use crate::{data_dir, tracks};
 
 #[derive(Debug, thiserror::Error)]
 pub enum BookmarkError {
@@ -41,6 +41,7 @@ impl Bookmarks {
         file.read_to_string(&mut text).await?;
 
         let lines: Vec<String> = text
+            .trim_start_matches("noheader")
             .trim()
             .lines()
             .filter_map(|x| {
@@ -60,7 +61,7 @@ impl Bookmarks {
     }
 
     pub async fn save(&self) -> eyre::Result<(), BookmarkError> {
-        let text = format!("\n{}", self.entries.read().await.join("\n"));
+        let text = format!("noheader\n{}", self.entries.read().await.join("\n"));
 
         let mut lock = self.file.write().await;
         lock.seek(SeekFrom::Start(0)).await?;
@@ -74,16 +75,8 @@ impl Bookmarks {
     /// Bookmarks a given track with a full path and optional custom name.
     ///
     /// Returns whether the track is now bookmarked, or not.
-    pub async fn bookmark(
-        &self,
-        mut entry: String,
-        custom: Option<String>,
-    ) -> eyre::Result<(), BookmarkError> {
-        if let Some(custom) = custom {
-            entry.push('!');
-            entry.push_str(&custom);
-        }
-
+    pub async fn bookmark(&self, track: &tracks::Info) -> eyre::Result<(), BookmarkError> {
+        let entry = track.to_entry();
         let idx = self.entries.read().await.iter().position(|x| **x == entry);
 
         if let Some(idx) = idx {
@@ -92,7 +85,8 @@ impl Bookmarks {
             self.entries.write().await.push(entry);
         };
 
-        self.set_bookmarked(idx.is_none());
+        self.bookmarked
+            .swap(idx.is_none(), std::sync::atomic::Ordering::Relaxed);
 
         Ok(())
     }
@@ -101,7 +95,8 @@ impl Bookmarks {
         self.bookmarked.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn set_bookmarked(&self, val: bool) {
+    pub async fn set_bookmarked(&self, track: &tracks::Info) {
+        let val = self.entries.read().await.contains(&track.to_entry());
         self.bookmarked
             .swap(val, std::sync::atomic::Ordering::Relaxed);
     }

@@ -59,14 +59,17 @@ pub fn audio_bar(volume: f32, percentage: &str, width: usize) -> String {
 
 /// This represents the main "action" bars state.
 enum ActionBar {
-    /// When the app is currently displaying "paused".
+    /// When the app is paused.
     Paused(Info),
 
-    /// When the app is currently displaying "playing".
+    /// When the app is playing.
     Playing(Info),
 
-    /// When the app is currently displaying "loading".
+    /// When the app is loading.
     Loading(f32),
+
+    /// When the app is muted.
+    Muted,
 }
 
 impl ActionBar {
@@ -80,6 +83,11 @@ impl ActionBar {
                 let progress = format!("{: <2.0}%", (progress * 100.0).min(99.0));
 
                 ("loading", Some((progress, 3)))
+            }
+            Self::Muted => {
+                let msg = "+ to increase volume";
+
+                ("muted", Some((String::from(msg), msg.len())))
             }
         };
 
@@ -103,6 +111,10 @@ pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> Str
             || ActionBar::Loading(player.progress.load(std::sync::atomic::Ordering::Acquire)),
             |info| {
                 let info = info.deref().clone();
+
+                if player.sink.volume() < 0.01 {
+                    return ActionBar::Muted;
+                }
 
                 if player.sink.is_paused() {
                     ActionBar::Paused(info)

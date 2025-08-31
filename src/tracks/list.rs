@@ -7,7 +7,6 @@ use atomic_float::AtomicF32;
 use bytes::{BufMut, Bytes, BytesMut};
 use eyre::OptionExt as _;
 use futures::StreamExt;
-use rand::Rng as _;
 use reqwest::Client;
 use tokio::fs;
 
@@ -52,7 +51,7 @@ impl List {
         // We're also not pre-trimming `self.lines` into `base` & `tracks` due to
         // how rust vectors work, since it is slower to drain only a single element from
         // the start, so it's faster to just keep it in & work around it.
-        let random = rand::thread_rng().gen_range(1..self.lines.len());
+        let random = fastrand::usize(1..self.lines.len());
         let line = self.lines[random].clone();
 
         if let Some((first, second)) = line.split_once('!') {

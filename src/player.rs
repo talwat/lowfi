@@ -151,7 +151,7 @@ impl Player {
             tracks: RwLock::new(VecDeque::with_capacity(args.buffer_size)),
             buffer_size: args.buffer_size,
             current: ArcSwapOption::new(None),
-            progress: AtomicF32::new(-1.0),
+            progress: AtomicF32::new(0.0),
             bookmarks,
             client,
             sink,

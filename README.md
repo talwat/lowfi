@@ -192,7 +192,7 @@ Feel free to contribute your own list with a PR.
 lowfi also supports custom track lists, although the default one from Lofi Girl
 is embedded into the binary.
 
-To use a custom list, use the `--tracks` flag. This can either be a path to some file,
+To use a custom list, use the `--track-list` flag. This can either be a path to some file,
 or it could also be the name of a file (without the `.txt` extension) in the data
 directory, so on Linux it's `~/.local/share/lowfi`.
 

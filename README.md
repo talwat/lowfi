@@ -126,6 +126,7 @@ Yeah, that's it.
 | `-`, `_`, `j`, `↓` | Volume Down 10% |
 | `←`                | Volume Down 1%  |
 | `q`, CTRL+C        | Quit            |
+| `b`                | Bookmark        |
 
 > [!NOTE]
 > Besides its regular controls, lowfi offers compatibility with Media Keys

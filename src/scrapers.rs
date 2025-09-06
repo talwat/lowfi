@@ -12,6 +12,7 @@ pub mod archive;
 pub mod chillhop;
 pub mod lofigirl;
 
+/// Represents the different sources which can be scraped.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
 pub enum Source {
     Lofigirl,
@@ -20,6 +21,7 @@ pub enum Source {
 }
 
 impl Source {
+    /// Gets the cache directory name, for example, `chillhop`.
     pub fn cache_dir(&self) -> &'static str {
         match self {
             Source::Lofigirl => "lofigirl",
@@ -28,6 +30,7 @@ impl Source {
         }
     }
 
+    /// Gets the full root URL of the source.
     pub fn url(&self) -> &'static str {
         match self {
             Source::Chillhop => "https://chillhop.com",

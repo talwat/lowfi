@@ -44,7 +44,7 @@ where
     Kind: From<E>,
 {
     fn from((track, err): (T, E)) -> Self {
-        Error {
+        Self {
             track: track.into(),
             kind: Kind::from(err),
         }

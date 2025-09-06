@@ -8,9 +8,8 @@ It'll do this as simply as it can: no albums, no ads, just lofi.
 ## Disclaimer
 
 As of the 1.7.0 version of lowfi, **all** of the audio files embedded
-by default are from [chillhop](https://chillhop.com/).
-
-<!-- TODO: Make seperate write-up about using chillhop. -->
+by default are from [chillhop](https://chillhop.com/). Read
+[MUSIC.md] for more information.
 
 ## Why?
 
@@ -154,15 +153,10 @@ slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lo
 
 ### Scraping
 
-lowfi also has a `scrape` command which is usually not relevant, but
-if you're trying to download some files from Lofi Girls' website,
-it can be useful.
+lowfi also has an optional `scrape` command enabled by the `scrape` feature.
+It's usually not very useful, but is included for transparency's sake.
 
-An example of scrape is as follows,
-
-`lowfi scrape --extension zip --include-full`
-
-where more information can be found by running `lowfi help scrape`.
+More information can be found by running `lowfi help scrape`.
 
 ### Custom Track Lists
 

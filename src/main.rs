@@ -75,6 +75,7 @@ enum Commands {
     #[cfg(feature = "scrape")]
     Scrape {
         // The source to scrape from.
+        #[clap(long, short)]
         source: scrapers::Source,
     },
 }
@@ -96,7 +97,6 @@ async fn main() -> eyre::Result<()> {
 
     if let Some(command) = cli.command {
         match command {
-            // TODO: Actually distinguish between sources.
             #[cfg(feature = "scrape")]
             Commands::Scrape { source } => match source {
                 Source::Archive => scrapers::archive::scrape().await?,

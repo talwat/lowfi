@@ -163,14 +163,14 @@ More information can be found by running `lowfi help scrape`.
 > [!NOTE]
 > Some nice users, especially [danielwerg](https://github.com/danielwerg),
 > have aleady made alternative track lists located in the [data](https://github.com/talwat/lowfi/blob/main/data/)
-> directory of this repo. You can use them with lowfi by using the `--tracks` flag.
+> directory of this repo. You can use them with lowfi by using the `--track-list` flag.
 >
 > Feel free to contribute your own list with a PR.
 
 lowfi also supports custom track lists, although the default one from Lofi Girl
 is embedded into the binary.
 
-To use a custom list, use the `--tracks` flag. This can either be a path to some file,
+To use a custom list, use the `--track-list` flag. This can either be a path to some file,
 or it could also be the name of a file (without the `.txt` extension) in the data
 directory.
 
@@ -181,8 +181,8 @@ directory.
 > - macOS - `~/Library/Application Support/lowfi`
 > - Windows - `%appdata%\Roaming\lowfi`
 
-For example, `lowfi --tracks minipop` would load `~/.local/share/lowfi/minipop.txt`.
-Whereas if you did `lowfi --tracks ~/Music/minipop.txt` it would load from that
+For example, `lowfi --track-list minipop` would load `~/.local/share/lowfi/minipop.txt`.
+Whereas if you did `lowfi --track-list ~/Music/minipop.txt` it would load from that
 specified directory.
 
 All tracks must be in the MP3 format, unless lowfi has been compiled with the

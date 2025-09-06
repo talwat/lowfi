@@ -1,11 +1,11 @@
 //! Module for handling saving, loading, and adding
 //! bookmarks.
 
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 
-use tokio::fs::{create_dir_all, File, OpenOptions};
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::RwLock;
+use tokio::{fs, io};
 
 use crate::{data_dir, tracks};
 
@@ -32,28 +32,16 @@ pub struct Bookmarks {
 }
 
 impl Bookmarks {
-    /// Actually opens the bookmarks file itself.
-    pub async fn open(write: bool) -> eyre::Result<File, BookmarkError> {
+    /// Gets the path of the bookmarks file.
+    pub async fn path() -> eyre::Result<PathBuf, BookmarkError> {
         let data_dir = data_dir().map_err(|_| BookmarkError::DataDir)?;
-        create_dir_all(data_dir.clone()).await?;
+        fs::create_dir_all(data_dir.clone()).await?;
 
-        OpenOptions::new()
-            .create(true)
-            .write(write)
-            .read(true)
-            .append(false)
-            .truncate(true)
-            .open(data_dir.join("bookmarks.txt"))
-            .await
-            .map_err(BookmarkError::Io)
+        Ok(data_dir.join("bookmarks.txt"))
     }
-
     /// Loads bookmarks from the `bookmarks.txt` file.
     pub async fn load() -> eyre::Result<Self, BookmarkError> {
-        let mut file = Self::open(false).await?;
-
-        let mut text = String::new();
-        file.read_to_string(&mut text).await?;
+        let text = fs::read_to_string(Self::path().await?).await?;
 
         let lines: Vec<String> = text
             .trim_start_matches("noheader")
@@ -76,12 +64,8 @@ impl Bookmarks {
 
     // Saves the bookmarks to the `bookmarks.txt` file.
     pub async fn save(&self) -> eyre::Result<(), BookmarkError> {
-        let mut file = Self::open(true).await?;
         let text = format!("noheader\n{}", self.entries.read().await.join("\n"));
-
-        file.write_all(text.as_bytes()).await?;
-        file.flush().await?;
-
+        fs::write(Self::path().await?, text).await?;
         Ok(())
     }
 

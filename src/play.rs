@@ -70,7 +70,9 @@ pub async fn play(args: Args) -> eyre::Result<(), player::Error> {
 
     drop(stream);
     player.sink.stop();
-    ui.map(|x| x.abort());
+    if let Some(x) = ui {
+        x.abort();
+    }
 
     Ok(())
 }

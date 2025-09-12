@@ -8,7 +8,7 @@ use tokio::{
     time::sleep,
 };
 
-use super::{Player, TIMEOUT};
+use super::Player;
 
 /// This struct is responsible for downloading tracks in the background.
 ///
@@ -53,7 +53,7 @@ impl Downloader {
                 }
 
                 if !error.is_timeout() {
-                    sleep(TIMEOUT).await;
+                    sleep(self.player.timeout).await;
                 }
             }
         }

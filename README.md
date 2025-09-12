@@ -7,18 +7,9 @@ It'll do this as simply as it can: no albums, no ads, just lofi.
 
 ## Disclaimer
 
-> [!NOTE]
->
-> As of the 19th of July 2025, lofigirl.com is temporarily down. If your lowfi is up to date,
-> you can follow the [quick instructions](CHILLHOP.md) for using the [chillhop](https://chillhop.com/) alternative track list.
->
-> Apologies for the inconvenience, it's out of lowfi's control.
-
-**All** of the audio files embedded into in lowfi by default are from [Lofi Girl's](https://lofigirl.com/) website,
-under their [licensing guidelines](https://form.lofigirl.com/CommercialLicense).
-
-If, god forbid, you're planning to use lowfi in a commercial setting, please
-follow their rules.
+As of the 1.7.0 version of lowfi, **all** of the audio files embedded
+by default are from [chillhop](https://chillhop.com/). Read
+[MUSIC.md] for more information.
 
 ## Why?
 
@@ -135,6 +126,7 @@ Yeah, that's it.
 | `-`, `_`, `j`, `↓` | Volume Down 10% |
 | `←`                | Volume Down 1%  |
 | `q`, CTRL+C        | Quit            |
+| `b`                | Bookmark        |
 
 > [!NOTE]
 > Besides its regular controls, lowfi offers compatibility with Media Keys
@@ -162,56 +154,54 @@ slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lo
 
 ### Scraping
 
-lowfi also has a `scrape` command which is usually not relevant, but
-if you're trying to download some files from Lofi Girls' website,
-it can be useful.
+lowfi also has an optional `scrape` command enabled by the `scrape` feature.
+It's usually not very useful, but is included for transparency's sake.
 
-An example of scrape is as follows,
-
-`lowfi scrape --extension zip --include-full`
-
-where more information can be found by running `lowfi help scrape`.
+More information can be found by running `lowfi help scrape`.
 
 ### Custom Track Lists
 
-Some nice users, especially [danielwerg](https://github.com/danielwerg),
-have aleady made alternative track lists located in the [data](https://github.com/talwat/lowfi/blob/main/data/)
-directory of this repo. You can use them with lowfi by using the `--track-list` flag.
-
-Feel free to contribute your own list with a PR.
-
-> [!WARNING]
+> [!NOTE]
+> Some nice users, especially [danielwerg](https://github.com/danielwerg),
+> have aleady made alternative track lists located in the [data](https://github.com/talwat/lowfi/blob/main/data/)
+> directory of this repo. You can use them with lowfi by using the `--track-list` flag.
 >
-> Custom track lists are going to be pretty particular.
-> This is because I still want to keep `lowfi` as simple as possible,
-> so custom lists will be very similar to how the built in list functions.
->
-> This also means that there will be no added flexibility to these lists,
-> so you'll have to work that out on your own.
+> Feel free to contribute your own list with a PR.
 
 lowfi also supports custom track lists, although the default one from Lofi Girl
 is embedded into the binary.
 
 To use a custom list, use the `--track-list` flag. This can either be a path to some file,
 or it could also be the name of a file (without the `.txt` extension) in the data
-directory, so on Linux it's `~/.local/share/lowfi`.
+directory.
+
+> [!NOTE]
+> Data directories:
+>
+> - Linux - `~/.local/share/lowfi`
+> - macOS - `~/Library/Application Support/lowfi`
+> - Windows - `%appdata%\Roaming\lowfi`
 
 For example, `lowfi --track-list minipop` would load `~/.local/share/lowfi/minipop.txt`.
 Whereas if you did `lowfi --track-list ~/Music/minipop.txt` it would load from that
 specified directory.
 
+All tracks must be in the MP3 format, unless lowfi has been compiled with the
+`extra-audio-formats` feature which includes support for some others.
+
 #### The Format
 
-In lists, the first line should be the base URL, followed by the rest of the tracks.
-This is also known as the "header", because it comes first.
+In lists, the first line is what's known as the header, followed by the rest of the tracks.
+Each track will be first appended to the header, and then use that to download
+the track.
 
-Each track will be first appended to the base URL, and then the result use to download
-the track. All tracks must be in the MP3 format, as lowfi doesn't support any others currently.
+> [!NOTE]
+> lowfi _will not_ put a `/` between the base & track for added flexibility,
+> so for most cases you should have a trailing `/` in your header.
 
-Additionally, lowfi _won't_ put a `/` between the base & track for added flexibility,
-so for most cases you should have a trailing `/` in your base url.
-The exception to this is if the track name begins with something like `https://`,
-where in that case the base will not be prepended to it.
+The exception to this is if the track name begins with a protocol like `https://`,
+in which case the base will not be prepended to it. If all of your tracks are like this,
+then you can put `noheader` as the first line and not have a header at all.
 
 For example, in this list:
 
@@ -243,7 +233,7 @@ This is useful if you want to use a local file as the base URL, such as:
 ```txt
 file:///home/user/Music/
 file.mp3
-file:///home/user/Music/second-file.mp3
+file:///home/user/Other Music/second-file.mp3
 ```
 
 Further examples can be found in the [data](https://github.com/talwat/lowfi/tree/main/data) folder.

@@ -135,7 +135,7 @@ impl Info {
             .collect()
     }
 
-    /// Formats a name with [convert_case].
+    /// Formats a name with [`convert_case`].
     ///
     /// This will also strip the first few numbers that are
     /// usually present on most lofi tracks and do some other

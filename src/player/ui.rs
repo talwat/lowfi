@@ -159,8 +159,6 @@ impl Window {
 /// The code for the terminal interface itself.
 ///
 /// * `minimalist` - All this does is hide the bottom control bar.
-/// * `borderless` - Whether to include borders or not.
-/// * `width` - The width of player
 async fn interface(
     player: Arc<Player>,
     minimalist: bool,

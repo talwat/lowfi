@@ -41,10 +41,6 @@ pub use error::Error;
 #[cfg(feature = "mpris")]
 pub mod mpris;
 
-/// The time to wait in between errors.
-/// TODO: Make this configurable.
-const TIMEOUT: Duration = Duration::from_secs(3);
-
 /// Main struct responsible for queuing up & playing tracks.
 // TODO: Consider refactoring [Player] from being stored in an [Arc], into containing many smaller [Arc]s.
 // TODO: In other words, this would change the type from `Arc<Player>` to just `Player`.
@@ -75,6 +71,9 @@ pub struct Player {
 
     /// The bookmarks, which are saved on quit.
     pub bookmarks: Bookmarks,
+
+    /// The timeout for track downloads, as a [Duration].
+    timeout: Duration,
 
     /// The actual list of tracks to be played.
     list: List,
@@ -144,14 +143,15 @@ impl Player {
                 "/",
                 env!("CARGO_PKG_VERSION")
             ))
-            .timeout(TIMEOUT * 5)
+            .timeout(Duration::from_secs(args.timeout * 5))
             .build()?;
 
         let player = Self {
             tracks: RwLock::new(VecDeque::with_capacity(args.buffer_size)),
             buffer_size: args.buffer_size,
             current: ArcSwapOption::new(None),
-            progress: AtomicF32::new(-1.0),
+            progress: AtomicF32::new(0.0),
+            timeout: Duration::from_secs(args.timeout),
             bookmarks,
             client,
             sink,
@@ -301,7 +301,7 @@ impl Player {
                     let current = player.current.load();
                     let current = current.as_ref().unwrap();
 
-                    player.bookmarks.bookmark(&&current).await?;
+                    player.bookmarks.bookmark(current).await?;
                 }
                 Message::Quit => break,
             }

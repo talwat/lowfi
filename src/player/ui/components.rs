@@ -87,7 +87,7 @@ impl ActionBar {
             Self::Muted => {
                 let msg = "+ to increase volume";
 
-                ("muted", Some((String::from(msg), msg.len())))
+                ("muted,", Some((String::from(msg), msg.len())))
             }
         };
 

@@ -1,12 +1,15 @@
-use std::io::SeekFrom;
+//! Module for handling saving, loading, and adding
+//! bookmarks.
+
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 
-use tokio::fs::{create_dir_all, File, OpenOptions};
-use tokio::io::{self, AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::RwLock;
+use tokio::{fs, io};
 
 use crate::{data_dir, tracks};
 
+/// Errors that might occur while managing bookmarks.
 #[derive(Debug, thiserror::Error)]
 pub enum BookmarkError {
     #[error("data directory not found")]
@@ -18,57 +21,51 @@ pub enum BookmarkError {
 
 /// Manages the bookmarks in the current player.
 pub struct Bookmarks {
+    /// The different entries in the bookmarks file.
     entries: RwLock<Vec<String>>,
-    file: RwLock<File>,
+
+    /// The internal bookmarked register, which keeps track
+    /// of whether a track is bookmarked or not.
+    ///
+    /// This is much more efficient than checking every single frame.
     bookmarked: AtomicBool,
 }
 
 impl Bookmarks {
-    pub async fn load() -> eyre::Result<Self, BookmarkError> {
+    /// Gets the path of the bookmarks file.
+    pub async fn path() -> eyre::Result<PathBuf, BookmarkError> {
         let data_dir = data_dir().map_err(|_| BookmarkError::DataDir)?;
-        create_dir_all(data_dir.clone()).await?;
+        fs::create_dir_all(data_dir.clone()).await?;
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .append(false)
-            .truncate(false)
-            .open(data_dir.join("bookmarks.txt"))
-            .await?;
-
-        let mut text = String::new();
-        file.read_to_string(&mut text).await?;
+        Ok(data_dir.join("bookmarks.txt"))
+    }
+    /// Loads bookmarks from the `bookmarks.txt` file.
+    pub async fn load() -> eyre::Result<Self, BookmarkError> {
+        let text = fs::read_to_string(Self::path().await?).await?;
 
         let lines: Vec<String> = text
             .trim_start_matches("noheader")
             .trim()
             .lines()
             .filter_map(|x| {
-                if !x.is_empty() {
-                    Some(x.to_string())
-                } else {
+                if x.is_empty() {
                     None
+                } else {
+                    Some(x.to_string())
                 }
             })
             .collect();
 
         Ok(Self {
             entries: RwLock::new(lines),
-            file: RwLock::new(file),
             bookmarked: AtomicBool::new(false),
         })
     }
 
+    // Saves the bookmarks to the `bookmarks.txt` file.
     pub async fn save(&self) -> eyre::Result<(), BookmarkError> {
         let text = format!("noheader\n{}", self.entries.read().await.join("\n"));
-
-        let mut lock = self.file.write().await;
-        lock.seek(SeekFrom::Start(0)).await?;
-        lock.set_len(0).await?;
-        lock.write_all(text.as_bytes()).await?;
-        lock.flush().await?;
-
+        fs::write(Self::path().await?, text).await?;
         Ok(())
     }
 
@@ -91,10 +88,14 @@ impl Bookmarks {
         Ok(())
     }
 
+    /// Returns whether a track is bookmarked or not by using the internal
+    /// bookmarked register.
     pub fn bookmarked(&self) -> bool {
         self.bookmarked.load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Sets the internal bookmarked register by checking against
+    /// the current track's info.
     pub async fn set_bookmarked(&self, track: &tracks::Info) {
         let val = self.entries.read().await.contains(&track.to_entry());
         self.bookmarked

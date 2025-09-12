@@ -7,7 +7,6 @@ use atomic_float::AtomicF32;
 use bytes::{BufMut, Bytes, BytesMut};
 use eyre::OptionExt as _;
 use futures::StreamExt;
-use rand::Rng as _;
 use reqwest::Client;
 use tokio::fs;
 
@@ -52,7 +51,7 @@ impl List {
         // We're also not pre-trimming `self.lines` into `base` & `tracks` due to
         // how rust vectors work, since it is slower to drain only a single element from
         // the start, so it's faster to just keep it in & work around it.
-        let random = rand::thread_rng().gen_range(1..self.lines.len());
+        let random = fastrand::usize(1..self.lines.len());
         let line = self.lines[random].clone();
 
         if let Some((first, second)) = line.split_once('!') {
@@ -134,7 +133,7 @@ impl List {
 
         let name = custom_name.map_or_else(
             || super::TrackName::Raw(path.clone()),
-            |formatted| super::TrackName::Formatted(formatted),
+            super::TrackName::Formatted,
         );
 
         Ok(QueuedTrack {
@@ -154,7 +153,7 @@ impl List {
 
         Self {
             lines,
-            path: path.map(|s| s.to_owned()),
+            path: path.map(ToOwned::to_owned),
             name: name.to_owned(),
         }
     }
@@ -169,11 +168,9 @@ impl List {
             let raw = fs::read_to_string(path.clone()).await?;
 
             // Get rid of special noheader case for tracklists without a header.
-            let raw = if let Some(stripped) = raw.strip_prefix("noheader") {
-                stripped
-            } else {
-                &raw
-            };
+            let raw = raw
+                .strip_prefix("noheader")
+                .map_or(raw.as_ref(), |stripped| stripped);
 
             let name = path
                 .file_stem()

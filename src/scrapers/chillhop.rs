@@ -125,6 +125,11 @@ pub async fn scrape() -> eyre::Result<()> {
         8172,  // Lyrics
         55397, // Lyrics
         75135, // Lyrics
+        24827, // Lyrics
+        8141,  // Lyrics
+        8157,  // Lyrics
+        64052, // Lyrics
+        31612, // Lyrics
     ];
 
     const IGNORED_ARTISTS: [&str; 1] = [

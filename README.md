@@ -13,14 +13,11 @@ by default are from [chillhop](https://chillhop.com/). Read
 
 ## Why?
 
-I really hate modern music platforms, and I wanted a small, "suckless"
-app that would just play random lofi without video.
+I really hate modern music platforms, and I wanted a small, simple  
+app that would just play random ambient music without video and other fluff.
 
-It was also designed to be fairly resilient to inconsistent networks,
+Beyond that, it was also designed to be fairly resilient to inconsistent networks,
 and as such it buffers 5 whole songs at a time instead of parts of the same song.
-
-See [Scraping](#scraping) if you're interested in downloading the tracks.
-Beware, there's a lot of them.
 
 ## Installing
 
@@ -154,12 +151,30 @@ slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lo
 | `-t`, `--track-list <TRACK_LIST>`   | Use a [custom track list](#custom-track-lists)      |
 | `-s`, `--buffer-size <BUFFER_SIZE>` | Internal song buffer size [default: 5]              |
 
-### Scraping
+### Extra Features
 
-lowfi also has an optional `scrape` command enabled by the `scrape` feature.
+lowfi uses cargo/rust's "feature" system to make certain parts of the program optional,
+like those which are only expected to be used by a handful of users.
+
+#### `scrape` - Scraping
+
+This feature provides the `scrape` command.
 It's usually not very useful, but is included for transparency's sake.
 
 More information can be found by running `lowfi help scrape`.
+
+#### `mpris` - MPRIS
+
+Enables MPRIS. It's not rocket science.
+
+#### `extra-audio-formats` - Extra Audio Formats
+
+This is only relevant to those using a custom track list, in which case
+it allows for more formats than just MP3. Those are FLAC, Vorbis, and WAV.
+
+These should be sufficient for some 99% of music files people might want to play.
+If you dealing with the 1% using another audio format which is in
+[this list](https://github.com/pdeljanov/Symphonia?tab=readme-ov-file#codecs-decoders), open an issue.
 
 ### Custom Track Lists
 
@@ -194,7 +209,7 @@ All tracks must be in the MP3 format, unless lowfi has been compiled with the
 #### The Format
 
 In lists, the first line is what's known as the header, followed by the rest of the tracks.
-Each track will be first appended to the header, and then use that to download
+Each track will be first appended to the header, and then use the combination to download
 the track.
 
 > [!NOTE]
@@ -229,8 +244,8 @@ For example, if you had an entry like this:
 
 Then lowfi would download from the first section, and display the second as the track name.
 
-You can also prepend `file://` to the header track name, which will make lowfi treat it as a local file.
-This is useful if you want to use a local file as the base URL, such as:
+`file://` can be used in front a track/header to make lowfi treat it as a local file.
+This is useful if you want to use a local file as the base URL, for example:
 
 ```txt
 file:///home/user/Music/

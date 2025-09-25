@@ -9,7 +9,7 @@ It'll do this as simply as it can: no albums, no ads, just lofi.
 
 As of the 1.7.0 version of lowfi, **all** of the audio files embedded
 by default are from [chillhop](https://chillhop.com/). Read
-[MUSIC.md] for more information.
+[MUSIC.md](MUSIC.md) for more information.
 
 ## Why?
 

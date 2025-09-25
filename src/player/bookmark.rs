@@ -39,9 +39,10 @@ impl Bookmarks {
 
         Ok(data_dir.join("bookmarks.txt"))
     }
+
     /// Loads bookmarks from the `bookmarks.txt` file.
     pub async fn load() -> eyre::Result<Self, BookmarkError> {
-        let text = fs::read_to_string(Self::path().await?).await?;
+        let text = fs::read_to_string(Self::path().await?).await.unwrap_or_default();
 
         let lines: Vec<String> = text
             .trim_start_matches("noheader")

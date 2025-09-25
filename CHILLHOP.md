@@ -1,5 +1,10 @@
 # Using the chillhop list
 
+> [!WARNING]
+> As of lowfi 1.7.0, the chillhop list is included by default. For a more
+> detailed explanation, see [MUSIC.md](MUSIC.md). This document is included
+> to preserve any old links or references. The instructions are still valid.
+
 ## Linux
 
 ```sh

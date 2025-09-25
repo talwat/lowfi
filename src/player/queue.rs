@@ -6,7 +6,7 @@ use tokio::{sync::mpsc::Sender, time::sleep};
 
 use crate::{
     messages::Message,
-    player::{downloader::Downloader, Player, TIMEOUT},
+    player::{downloader::Downloader, Player},
     tracks,
 };
 
@@ -76,7 +76,7 @@ impl Player {
                 }
 
                 if !error.is_timeout() {
-                    sleep(TIMEOUT).await;
+                    sleep(player.timeout).await;
                 }
 
                 tx.send(Message::TryAgain).await?;

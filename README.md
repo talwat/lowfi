@@ -132,7 +132,7 @@ Yeah, that's it.
 > Besides its regular controls, lowfi offers compatibility with Media Keys
 > and [MPRIS](https://wiki.archlinux.org/title/MPRIS) (with tools like `playerctl`).
 >
-> MPRIS is currently optional feature in cargo (enabled with `--features mpris`)
+> MPRIS is currently an optional feature in cargo (enabled with `--features mpris`)
 > due to it being only for Linux, as well as the fact that the main point of
 > lowfi is it's unique & minimal interface.
 
@@ -141,16 +141,18 @@ Yeah, that's it.
 If you have something you'd like to tweak about lowfi, you use additional flags which
 slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lowfi help`.
 
-| Flag                                | Function                                       |
-| ----------------------------------- | ---------------------------------------------- |
-| `-a`, `--alternate`                 | Use an alternate terminal screen               |
-| `-m`, `--minimalist`                | Hide the bottom control bar                    |
-| `-b`, `--borderless`                | Exclude borders in UI                          |
-| `-p`, `--paused`                    | Start lowfi paused                             |
-| `-d`, `--debug`                     | Include ALSA & other logs                      |
-| `-w`, `--width <WIDTH>`             | Width of the player, from 0 to 32 [default: 3] |
-| `-t`, `--track-list <TRACK_LIST>`   | Use a [custom track list](#custom-track-lists) |
-| `-s`, `--buffer-size <BUFFER_SIZE>` | Internal song buffer size [default: 5]         |
+| Flag                                | Function                                            |
+| ----------------------------------- | --------------------------------------------------- |
+| `-a`, `--alternate`                 | Use an alternate terminal screen                    |
+| `-m`, `--minimalist`                | Hide the bottom control bar                         |
+| `-b`, `--borderless`                | Exclude borders in UI                               |
+| `-p`, `--paused`                    | Start lowfi paused                                  |
+| `-f`, `--fps`                       | FPS of the UI [default: 12]                         |
+| `--timeout`                         | Timeout in seconds for music downloads [default: 3] |
+| `-d`, `--debug`                     | Include ALSA & other logs                           |
+| `-w`, `--width <WIDTH>`             | Width of the player, from 0 to 32 [default: 3]      |
+| `-t`, `--track-list <TRACK_LIST>`   | Use a [custom track list](#custom-track-lists)      |
+| `-s`, `--buffer-size <BUFFER_SIZE>` | Internal song buffer size [default: 5]              |
 
 ### Scraping
 
@@ -168,7 +170,7 @@ More information can be found by running `lowfi help scrape`.
 >
 > Feel free to contribute your own list with a PR.
 
-lowfi also supports custom track lists, although the default one from Lofi Girl
+lowfi also supports custom track lists, although the default one from chillhop
 is embedded into the binary.
 
 To use a custom list, use the `--track-list` flag. This can either be a path to some file,

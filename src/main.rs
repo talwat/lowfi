@@ -75,7 +75,6 @@ enum Commands {
     #[cfg(feature = "scrape")]
     Scrape {
         // The source to scrape from.
-        #[clap(long, short)]
         source: scrapers::Source,
     },
 }

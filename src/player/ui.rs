@@ -11,6 +11,7 @@
 use std::{
     fmt::Write as _,
     io::{stdout, Stdout},
+    process::{Command, Output},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -27,9 +28,14 @@ use crossterm::{
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
+use eyre::Context;
 use lazy_static::lazy_static;
 use thiserror::Error;
-use tokio::{sync::mpsc::Sender, task, time::sleep};
+use tokio::{
+    sync::mpsc::Sender,
+    task,
+    time::sleep,
+};
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::Player;
@@ -94,6 +100,24 @@ pub struct Window {
 }
 
 impl Window {
+    pub fn top(width: usize) -> String {
+        let output = Command::new("date")
+            .arg("+%H:%M:%S")
+            .output()
+            .wrap_err("couldn't run the command")
+            .and_then(|x: Output| String::from_utf8(x.stdout).wrap_err("invalid command output"))
+            .unwrap_or_default();
+
+        let output = output.trim();
+        let len = output.len().min(width);
+        let output = &output[..len];
+
+        let pad = "─".repeat((width-1).saturating_sub(output.len()));
+        let top = format!("┌─ {} {}┐", output, pad);
+
+        return top;
+    }
+
     /// Initializes a new [Window].
     ///
     /// * `width` - Width of the windows.
@@ -104,7 +128,7 @@ impl Window {
         } else {
             let middle = "─".repeat(width + 2);
 
-            [format!("┌{middle}┐"), format!("└{middle}┘")]
+            [Self::top(width), format!("└{middle}┘")]
         };
 
         Self {

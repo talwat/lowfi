@@ -21,6 +21,9 @@ use tokio::{
 #[cfg(feature = "mpris")]
 use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 
+use bytes::Bytes;
+use crate::debug_log;
+
 use crate::{
     messages::Message,
     player::{self, bookmark::Bookmarks, persistent_volume::PersistentVolume},
@@ -42,12 +45,6 @@ pub use error::Error;
 pub mod mpris;
 
 /// Main struct responsible for queuing up & playing tracks.
-// TODO: Consider refactoring [Player] from being stored in an [Arc], into containing many smaller [Arc]s.
-// TODO: In other words, this would change the type from `Arc<Player>` to just `Player`.
-// TODO:
-// TODO: This is conflicting, since then it'd clone ~10 smaller [Arc]s
-// TODO: every single time, which could be even worse than having an
-// TODO: [Arc] of an [Arc] in some cases (Like with [Sink] & [Client]).
 pub struct Player {
     /// [rodio]'s [`Sink`] which can control playback.
     pub sink: Sink,
@@ -84,6 +81,15 @@ pub struct Player {
     /// The web client, which can contain a `UserAgent` & some
     /// settings that help lowfi work more effectively.
     client: Client,
+
+    /// The art cache for storing color palettes and cover art.
+    #[cfg(feature = "color")]
+    art_cache: Arc<ui::cover::ArtCache>,
+    pub skip_art: bool,
+
+    /// Skip color palette loading (but still load art if --art is specified).
+    #[cfg(feature = "color")]
+    pub skip_colors: bool,
 }
 
 impl Player {
@@ -92,7 +98,34 @@ impl Player {
         self.current.store(Some(Arc::new(info)));
     }
 
-    /// A shorthand for checking if `self.current` is [Some].
+    /// Preloads color palette and art for a track if it has an art URL.
+    #[cfg(feature = "color")]
+    pub async fn preload_color_palette_and_art(self: Arc<Self>, info: &tracks::Info) {
+        self.art_cache.clone().preload_color_palette_and_art(&self.client, info, self.skip_art, self.skip_colors).await;
+    }
+
+    /// Gets color palette from cache.
+    #[cfg(feature = "color")]
+    pub async fn get_color_palette(&self, info: &tracks::Info) -> Option<Vec<[u8; 3]>> {
+        self.art_cache.get_color_palette(info).await
+    }
+
+    /// Gets cover art from cache.
+    #[cfg(feature = "color")]
+    pub async fn get_art(&self, info: &tracks::Info) -> Option<Vec<u8>> {
+        self.art_cache.get_art(info).await
+    }
+
+    /// Updates current track with colors if they become available.
+    #[cfg(feature = "color")]
+    pub async fn update_current_with_colors(&self) {
+        if let Some(current) = self.current.load().as_ref() {
+            if let Some(updated) = self.art_cache.update_current_with_colors(current).await {
+                self.current.store(Some(updated));
+            }
+        }
+    }
+
     pub fn current_exists(&self) -> bool {
         self.current.load().is_some()
     }
@@ -102,10 +135,24 @@ impl Player {
         self.sink.set_volume(volume.clamp(0.0, 1.0));
     }
 
+    pub fn get_current_track_data(&self) -> Option<Bytes> {
+        let current = self.current.load();
+        current
+            .as_ref()
+            .and_then(|info| info.raw_data.as_ref())
+            .map(|data| (**data).clone())
+    }
+
+    /// Gets a Bandcamp HTTP client for downloading cover art.
+    pub fn get_bandcamp_client(&self) -> eyre::Result<reqwest::Client> {
+        crate::bandcamp::discography::DiscographyParser::create_http_client()
+    }
+
     /// Initializes the entire player, including audio devices & sink.
     ///
-    /// This also will load the track list & persistent volume.
+    /// This also will load the track list & persistent volume.    
     pub async fn new(args: &Args) -> eyre::Result<(Self, OutputStream), player::Error> {
+        debug_log!("player.rs - new: initialization start buffer_size={} timeout={} paused={} debug={}", args.buffer_size, args.timeout, args.paused, args.debug);
         // Load the bookmarks.
         let bookmarks = Bookmarks::load().await?;
 
@@ -115,7 +162,12 @@ impl Player {
             .map_err(player::Error::PersistentVolumeLoad)?;
 
         // Load the track list.
-        let list = List::load(args.track_list.as_ref())
+            let list = List::load(args.track_list.as_ref(), 
+            #[cfg(feature = "bandcamp")]
+            !args.archive,  // Bandcamp mode by default, unless --archive is specified
+            #[cfg(not(feature = "bandcamp"))]
+            false
+        )
             .await
             .map_err(player::Error::TrackListLoad)?;
 
@@ -157,8 +209,23 @@ impl Player {
             sink,
             volume,
             list,
+            #[cfg(feature = "color")]
+            art_cache: Arc::new(ui::cover::ArtCache::new()),
+            skip_art: {
+                #[cfg(feature = "color")]
+                { args.colorless && args.art.is_none() }  // Skip art only if --colorless AND no --art
+                #[cfg(not(feature = "color"))]
+                { true }
+            },
+            #[cfg(feature = "color")]
+            skip_colors: {
+                #[cfg(feature = "color")]
+                { args.colorless }  // Skip colors only if --colorless is specified
+                #[cfg(not(feature = "color"))]
+                { true }
+            },
         };
-
+        debug_log!("player.rs - new: initialization completed");
         Ok((player, stream))
     }
 
@@ -175,17 +242,18 @@ impl Player {
         mut rx: Receiver<Message>,
         debug: bool,
     ) -> eyre::Result<(), player::Error> {
+        debug_log!("player.rs - play: playback loop start");
         // Initialize the mpris player.
         //
         // We're initializing here, despite MPRIS being a "user interface",
         // since we need to be able to *actively* write new information to MPRIS
         // specifically when it occurs, unlike the UI which passively reads the
-        // information each frame. Blame MPRIS, not me.
+        // information each frame. Blame MPRIS, not me.        
         #[cfg(feature = "mpris")]
         let mpris = mpris::Server::new(Arc::clone(&player), tx.clone())
             .await
             .inspect_err(|x| {
-                dbg!(x);
+                debug_log!("player.rs - play: initialization error: {:?}", x);
             })?;
 
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
@@ -226,6 +294,7 @@ impl Player {
                 Ok(()) = task::spawn_blocking(move || clone.sink.sleep_until_end()),
                         if new => Message::Next,
             };
+            debug_log!("player.rs - play: message received: {:?}", msg);
 
             match msg {
                 Message::Next | Message::Init | Message::TryAgain => {
@@ -249,12 +318,14 @@ impl Player {
                 }
                 Message::Play => {
                     player.sink.play();
+                    debug_log!("player.rs - play: playback started");
 
                     #[cfg(feature = "mpris")]
                     mpris.playback(PlaybackStatus::Playing).await?;
                 }
                 Message::Pause => {
                     player.sink.pause();
+                    debug_log!("player.rs - play: playback paused");
 
                     #[cfg(feature = "mpris")]
                     mpris.playback(PlaybackStatus::Paused).await?;
@@ -262,8 +333,10 @@ impl Player {
                 Message::PlayPause => {
                     if player.sink.is_paused() {
                         player.sink.play();
+                        debug_log!("player.rs - play: toggle play/pause -> play");
                     } else {
                         player.sink.pause();
+                        debug_log!("player.rs - play: toggle play/pause -> pause");
                     }
 
                     #[cfg(feature = "mpris")]
@@ -273,6 +346,7 @@ impl Player {
                 }
                 Message::ChangeVolume(change) => {
                     player.set_volume(player.sink.volume() + change);
+                    debug_log!("player.rs - play: volume changed to {}", player.sink.volume());
 
                     #[cfg(feature = "mpris")]
                     mpris
@@ -286,7 +360,7 @@ impl Player {
                     // We've recieved `NewSong`, so on the next loop iteration we'll
                     // begin waiting for the song to be over in order to autoplay.
                     new = true;
-
+                    debug_log!("player.rs - play: new song started");
                     #[cfg(feature = "mpris")]
                     mpris
                         .changed(vec![
@@ -302,12 +376,14 @@ impl Player {
                     let current = current.as_ref().unwrap();
 
                     player.bookmarks.bookmark(current).await?;
+                    debug_log!("player.rs - play: bookmark created for path={}", current.full_path);
                 }
                 Message::Quit => break,
             }
         }
 
         downloader.abort();
+        debug_log!("player.rs - play: playback loop exit");
 
         Ok(())
     }

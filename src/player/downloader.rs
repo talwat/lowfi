@@ -9,6 +9,7 @@ use tokio::{
 };
 
 use super::Player;
+use crate::debug_log;
 
 /// This struct is responsible for downloading tracks in the background.
 ///
@@ -44,10 +45,28 @@ impl Downloader {
 
     /// Push a new, random track onto the internal buffer.
     pub async fn push_buffer(&self, debug: bool) {
+        debug_log!("downloader.rs - push_buffer: requesting random track");
         let data = self.player.list.random(&self.player.client, None).await;
         match data {
-            Ok(track) => self.player.tracks.write().await.push_back(track),
+            Ok(track) => {
+                debug_log!("downloader.rs - push_buffer: track received full_path={}", track.full_path);
+                // Preload color palette and art for the track in background.
+                #[cfg(feature = "color")]
+                {
+                    // Clone track for decoding to get info for preloading.
+                    let track_clone = track.clone();
+                    if let Ok(decoded) = track_clone.decode() {
+                        debug_log!("downloader.rs - push_buffer: decoded for preload display_name={}", decoded.info.display_name);
+                        let player = Arc::clone(&self.player);
+                        player.clone().preload_color_palette_and_art(&decoded.info).await;
+                    }
+                }
+                
+                self.player.tracks.write().await.push_back(track);
+                debug_log!("downloader.rs - push_buffer: pushed to queue size={}", self.player.tracks.read().await.len());
+            }
             Err(error) => {
+                debug_log!("downloader.rs - push_buffer: error fetching track err={}", error);
                 if debug {
                     panic!("{error} - {:?}", error.source())
                 }
@@ -66,10 +85,12 @@ impl Downloader {
         let handle = task::spawn(async move {
             // Loop through each update notification.
             while self.rx.recv().await == Some(()) {
+                debug_log!("downloader.rs - start: notified to fill buffer");
                 //  For each update notification, we'll push tracks until the buffer is completely full.
                 while self.player.tracks.read().await.len() < self.player.buffer_size {
                     self.push_buffer(debug).await;
                 }
+                debug_log!("downloader.rs - start: buffer filled size={}", self.player.tracks.read().await.len());
             }
         });
 

@@ -1,3 +1,5 @@
+//! Helps create a lot of debug logs.
+
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
 use lazy_static::lazy_static;
 
@@ -30,4 +32,4 @@ pub fn log(message: String) {
     log::debug!("{}", message);
 }
 
-// I love debug logs.
+// I love this debug logs.

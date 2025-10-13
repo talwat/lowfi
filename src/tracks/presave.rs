@@ -2,7 +2,6 @@
 //! Maybe it's usefull.
 //! Not needed for regular use.
 
-use serde::{Deserialize, Serialize};
 use flate2::{Compression, write::GzEncoder};
 use tokio::fs;
 use eyre::Result;

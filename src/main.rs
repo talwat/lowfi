@@ -84,7 +84,7 @@ pub struct Args {
     #[clap(long, short, alias = "list", alias = "tracks", short_alias = 'l')]
     track_list: Option<String>,
 
-    /// Use Lofi Girl archive (6321 tracks) instead of Bandcamp, include more accurate tags for some tracks.
+    /// Use Lofi Girl archive (6329 tracks) instead of Bandcamp, include more accurate tags for some tracks.
     #[clap(long)]
     archive: bool,
 

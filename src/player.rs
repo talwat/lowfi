@@ -85,6 +85,9 @@ pub struct Player {
     /// The web client, which can contain a `UserAgent` & some
     /// settings that help lowfi work more effectively.
     client: Client,
+
+    /// Whether to show artist field in track display.
+    show_artist: bool,
 }
 
 impl Player {
@@ -103,6 +106,12 @@ impl Player {
         self.sink.set_volume(volume.clamp(0.0, 1.0));
     }
 
+
+    /// Gets whether to show artist field in track display.
+    pub fn show_artist(&self) -> bool {
+        self.show_artist
+    }
+
     /// Initializes the entire player, including audio devices & sink.
     ///
     /// This also will load the track list & persistent volume.
@@ -117,7 +126,7 @@ impl Player {
             .map_err(player::Error::PersistentVolumeLoad)?;
 
         // Load the track list.
-        let list = List::load(args.track_list.as_ref())
+        let list = List::load(args.track_list.as_ref(), cfg!(feature = "bandcamp"))
             .await
             .map_err(player::Error::TrackListLoad)?;
 
@@ -145,7 +154,11 @@ impl Player {
                 "/",
                 env!("CARGO_PKG_VERSION")
             ))
-            .timeout(Duration::from_secs(args.timeout * 5))
+            .timeout(Duration::from_secs(10)) // Быстрый таймаут вместо args.timeout * 5
+            .connect_timeout(Duration::from_secs(3)) // Быстрое установление соединения
+            .pool_max_idle_per_host(10) // Переиспользование соединений
+            .pool_idle_timeout(Duration::from_secs(30)) // Держать соединения живыми
+            .tcp_keepalive(Duration::from_secs(60)) // Keep-alive для стабильности
             .build()?;
 
         let player = Self {
@@ -159,6 +172,7 @@ impl Player {
             sink,
             volume,
             list,
+            show_artist: args.artist,
         };
         debug_log!("player.rs - new: initialization completed");
         Ok((player, stream))

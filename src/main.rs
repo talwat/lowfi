@@ -10,6 +10,10 @@ mod play;
 mod player;
 mod tracks;
 mod dbg;
+mod bandcamp {
+    pub mod discography;
+    pub use discography::*;
+}
 
 #[allow(clippy::all, clippy::pedantic, clippy::nursery, clippy::restriction)]
 #[cfg(feature = "scrape")]
@@ -63,6 +67,10 @@ struct Args {
     #[clap(long, short = 's', alias = "buffer", default_value_t = 5)]
     buffer_size: usize,
 
+    /// Show artist in track display. Only works if artist are available.
+    #[clap(long)]
+    artist: bool,
+
     /// The command that was ran.
     /// This is [None] if no command was specified.
     #[command(subcommand)]
@@ -77,6 +85,15 @@ enum Commands {
     Scrape {
         // The source to scrape from.
         source: scrapers::Source,
+    },
+
+    // Just for debugging purposes.
+    /// Creates a presaved Bandcamp list in ./data directory. 
+    #[cfg(feature = "presave")]
+    PresaveBandcamp {
+        url: String,
+        #[clap(long, default_value_t = 0)]
+        max_albums: usize,
     },
 }
 
@@ -123,7 +140,12 @@ async fn main() -> eyre::Result<()> {
                     Source::Lofigirl => scrapers::lofigirl::scrape().await?,
                     Source::Chillhop => scrapers::chillhop::scrape().await?,
                 }
-            }
+            },
+            #[cfg(feature = "presave")]
+            Commands::PresaveBandcamp { url, max_albums } => {
+                debug_log!("main.rs - main: executing presave command for URL: {} max_albums: {:?}", url, max_albums);
+                tracks::presave::create_presaved_bandcamp_list(&url, max_albums).await?;
+            },
         }
     } else {
         debug_log!("main.rs - main: no command specified, starting audio player");

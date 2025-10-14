@@ -15,7 +15,14 @@
 //! 2. [`Info`] created from decoded data.
 //! 3. [`Decoded`] made from [`Info`] and the original decoded data.
 
-use std::{io::Cursor, path::Path, time::Duration};
+use std::{
+    io::{Cursor, Read, Seek, SeekFrom},
+    path::Path,
+    sync::{Arc, Condvar, Mutex},
+    time::Duration,
+};
+
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
 use bytes::Bytes;
 use convert_case::{Case, Casing};
@@ -23,18 +30,131 @@ use regex::Regex;
 use rodio::{Decoder, Source as _};
 use unicode_segmentation::UnicodeSegmentation;
 use url::form_urlencoded;
+use lazy_static::lazy_static;
+use lofty::{file::TaggedFileExt, prelude::*, probe::Probe};
 
 pub mod error;
 pub mod list;
+pub mod cache;
+pub mod utils;
+
+#[cfg(feature = "presave")]
+pub mod presave;
 
 pub use error::Error;
 
-use crate::debug_log;
 use crate::tracks::error::Context;
-use lazy_static::lazy_static;
+use crate::debug_log;
 
-/// Just a shorthand for a decoded [Bytes].
-pub type DecodedData = Decoder<Cursor<Bytes>>;
+/// Object-safe trait combining Read and Seek for decoder sources.
+pub trait ReadSeek: Read + Seek {}
+impl<T: Read + Seek + ?Sized> ReadSeek for T {}
+
+/// A decoder over a boxed reader, allowing both in-memory and streaming sources.
+pub type DecodedData = Decoder<Box<dyn ReadSeek + Send + Sync>>;
+
+/// A shared, growable byte buffer that supports concurrent writers and blocking readers.
+#[derive(Clone, Default)]
+pub struct SharedAudioBuffer(Arc<SharedAudioBufferInner>);
+
+#[derive(Default)]
+struct SharedAudioBufferInner {
+    data: Mutex<Vec<u8>>,
+    ready: Condvar,
+    complete: AtomicBool,
+}
+
+impl SharedAudioBuffer {
+    pub fn new() -> Self { Self::default() }
+
+    pub fn append(&self, chunk: &[u8]) {
+        let mut guard = self.0.data.lock().unwrap();
+        guard.extend_from_slice(chunk);
+        self.0.ready.notify_all();
+    }
+
+    pub fn mark_complete(&self) {
+        self.0.complete.store(true, AtomicOrdering::Release);
+        self.0.ready.notify_all();
+    }
+
+    /// Returns a snapshot copy of up to `max_bytes` currently available data.
+    pub fn snapshot(&self, max_bytes: usize) -> Bytes {
+        let guard = self.0.data.lock().unwrap();
+        let take = guard.len().min(max_bytes);
+        if take == 0 {
+            Bytes::new()
+        } else {
+            Bytes::copy_from_slice(&guard[..take])
+        }
+    }
+
+    fn read_exact_range_blocking(&self, start: usize, len: usize, out: &mut [u8]) -> std::io::Result<usize> {
+        let mut read_total = 0;
+        let mut start_idx = start;
+        while read_total < len {
+            let mut guard = self.0.data.lock().unwrap();
+            // Wait until enough data exists or writer completed.
+            while guard.len() < start_idx + (len - read_total) && !self.0.complete.load(AtomicOrdering::Acquire) {
+                guard = self.0.ready.wait(guard).unwrap();
+            }
+
+            let available = guard.len().saturating_sub(start_idx);
+            if available == 0 {
+                // No more data and writer completed.
+                if self.0.complete.load(AtomicOrdering::Acquire) {
+                    return Ok(read_total);
+                }
+                continue;
+            }
+
+            let to_copy = available.min(len - read_total);
+            out[read_total..read_total + to_copy]
+                .copy_from_slice(&guard[start_idx..start_idx + to_copy]);
+            read_total += to_copy;
+            start_idx += to_copy;
+        }
+        Ok(read_total)
+    }
+}
+
+/// A blocking reader over a `SharedAudioBuffer` that implements `Read + Seek`.
+pub struct GrowingReader {
+    buffer: SharedAudioBuffer,
+    position: usize,
+}
+
+impl GrowingReader {
+    pub fn new(buffer: SharedAudioBuffer) -> Self { Self { buffer, position: 0 } }
+}
+
+impl Read for GrowingReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.buffer.read_exact_range_blocking(self.position, buf.len(), buf)?;
+        self.position += read;
+        Ok(read)
+    }
+}
+
+impl Seek for GrowingReader {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        let new_pos: i128 = match pos {
+            SeekFrom::Start(n) => n as i128,
+            SeekFrom::Current(n) => self.position as i128 + n as i128,
+            SeekFrom::End(_n) => {
+                // Unknown total length; treat as unsupported.
+                return Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "SeekFrom::End not supported for streaming buffer"));
+            }
+        };
+
+        if new_pos < 0 {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "negative seek"));
+        }
+
+        self.position = new_pos as usize;
+        Ok(self.position as u64)
+    }
+}
 
 /// Specifies a track's name, and specifically,
 /// whether it has already been formatted or if it
@@ -53,16 +173,32 @@ pub enum TrackName {
 /// Tracks which are still waiting in the queue, and can't be played yet.
 ///
 /// This means that only the data & track name are included.
+#[derive(Clone)]
 pub struct QueuedTrack {
     /// Name of the track, which may be raw.
     pub name: TrackName,
 
     /// Full downloadable path/url of the track.
     pub full_path: String,
+    
+    /// Underlying data storage for the track: full bytes or a streaming buffer.
+    pub data: TrackData,
+}
 
-    /// The raw data of the track, which is not decoded and
-    /// therefore much more memory efficient.
-    pub data: Bytes,
+/// Data backing for a queued track.
+#[derive(Clone)]
+pub enum TrackData {
+    Full(Bytes),
+    Streaming(SharedAudioBuffer),
+}
+
+impl TrackData {
+    pub fn len(&self) -> usize {
+        match self {
+            TrackData::Full(bytes) => bytes.len(),
+            TrackData::Streaming(_) => 0, // Unknown length for streaming
+        }
+    }
 }
 
 impl QueuedTrack {
@@ -74,11 +210,18 @@ impl QueuedTrack {
     }
 }
 
-/// The [`Info`] struct, which has the name and duration of a track.
+/// Metadata extracted from audio file tags.
+#[derive(Debug, Clone, Default)]
+pub struct Metadata {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+}
+
+/// The [`Info`] struct, which has the name, duration, and metadata of a track.
 ///
 /// This is not included in [Track] as the duration has to be acquired
 /// from the decoded data and not from the raw data.
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Info {
     /// The full downloadable path/url of the track.
     pub full_path: String,
@@ -89,6 +232,12 @@ pub struct Info {
     /// This is a formatted name, so it doesn't include the full path.
     pub display_name: String,
 
+    /// The track title (from metadata or parsed from filename).
+    pub title: Option<String>,
+
+    /// The track artist (from metadata or parsed from filename).
+    pub artist: Option<String>,
+
     /// This is the *actual* terminal width of the track name, used to make
     /// the UI consistent.
     pub width: usize,
@@ -96,7 +245,19 @@ pub struct Info {
     /// The duration of the track, this is an [Option] because there are
     /// cases where the duration of a track is unknown.
     pub duration: Option<Duration>,
+
 }
+
+impl PartialEq for Info {
+    fn eq(&self, other: &Self) -> bool {
+        self.full_path == other.full_path
+            && self.custom_name == other.custom_name
+            && self.display_name == other.display_name
+            && self.duration == other.duration
+    }
+}
+
+impl Eq for Info {}
 
 lazy_static! {
     static ref MASTER_PATTERNS: [Regex; 5] = [
@@ -134,6 +295,33 @@ impl Info {
         form_urlencoded::parse(text.as_bytes())
             .map(|(key, val)| [key, val].concat())
             .collect()
+    }
+
+    /// Extracts metadata from audio file.
+    fn extract_metadata(data: &Bytes) -> Metadata {
+        debug_log!("tracks.rs - extract_metadata: start extracting");
+        let cursor = Cursor::new(data.clone());
+
+        let Ok(probe) = Probe::new(cursor).guess_file_type() else {
+            debug_log!("tracks.rs - extract_metadata: guess_file_type failed");
+            return Metadata::default();
+        };
+
+        let Ok(tagged_file) = probe.read() else {
+            debug_log!("tracks.rs - extract_metadata: read tagged_file failed");
+            return Metadata::default();
+        };
+
+        let Some(tag) = tagged_file.primary_tag().or_else(|| tagged_file.first_tag()) else {
+            debug_log!("tracks.rs - extract_metadata: no tags found");
+            return Metadata::default();
+        };
+
+        let title = tag.title().as_deref().map(ToString::to_string);
+        let artist = tag.artist().as_deref().map(ToString::to_string);
+        debug_log!("tracks.rs - extract_metadata: title_present={} artist_present={}", title.is_some(), artist.is_some());
+
+        Metadata { title, artist }
     }
 
     /// Formats a name with [`convert_case`].
@@ -206,11 +394,44 @@ impl Info {
         name: TrackName,
         full_path: String,
         decoded: &DecodedData,
+        data: Option<&Bytes>,
     ) -> eyre::Result<Self, Error> {
-        let (display_name, custom_name) = match name {
-            TrackName::Raw(raw) => (Self::format_name(&raw)?, false),
-            TrackName::Formatted(custom) => (custom, true),
+        // Extract metadata if data is available.
+        let metadata = if let Some(d) = data {
+            Self::extract_metadata(d)
+        } else {
+            Metadata::default()
         };
+
+        let (display_name, custom_name, title, artist) = match name {
+            TrackName::Formatted(custom) => {
+                // For custom names, try to parse "title by artist" format.
+                if let Some((t, a)) = custom.split_once(" by ") {
+                    (custom.clone(), true, Some(t.to_string()), Some(a.to_string()))
+                } else {
+                    (custom.clone(), true, Some(custom.clone()), None)
+                }
+            },
+            TrackName::Raw(raw) => {
+                // Prefer metadata if available.
+                if let (Some(ref meta_title), Some(ref meta_artist)) = (&metadata.title, &metadata.artist) {
+                    let display = format!("{} by {}", meta_title, meta_artist);
+                    (display, false, Some(meta_title.clone()), Some(meta_artist.clone()))
+                } else if let Some(ref meta_title) = metadata.title {
+                    (meta_title.clone(), false, Some(meta_title.clone()), None)
+                } else {
+                    let formatted = Self::format_name(&raw)?;
+                    // Try to parse formatted name for title/artist.
+                    if let Some((t, a)) = formatted.split_once(" by ") {
+                        (formatted.clone(), false, Some(t.to_string()), Some(a.to_string()))
+                    } else {
+                        (formatted.clone(), false, Some(formatted), None)
+                    }
+                }
+            }
+        };
+
+        let _width = display_name.graphemes(true).count();
 
         Ok(Self {
             duration: decoded.total_duration(),
@@ -218,7 +439,14 @@ impl Info {
             full_path,
             custom_name,
             display_name,
+            title,
+            artist,
         })
+    }
+
+    /// Creates `Info` for streaming tracks without raw bytes available.
+    pub fn new_streaming(name: TrackName, full_path: String, decoded: &DecodedData) -> eyre::Result<Self, Error> {
+        Self::new(name, full_path, decoded, None)
     }
 }
 
@@ -242,19 +470,28 @@ impl DecodedTrack {
             track.name,
             track.data.len()
         );
-        let data = Decoder::builder()
-            .with_byte_len(track.data.len().try_into().unwrap())
-            .with_data(Cursor::new(track.data))
-            .build()
-            .track(track.full_path.clone())?;
-
-        let info = Info::new(track.name, track.full_path, &data)?;
-
-        debug_log!(
-            "tracks.rs - DecodedTrack::new: success duration={:?} display_name='{}'",
-            info.duration,
-            info.display_name
-        );
-        Ok(Self { info, data })
+        match track.data {
+            TrackData::Full(bytes) => {
+                let reader: Box<dyn ReadSeek + Send + Sync> = Box::new(Cursor::new(bytes.clone()));
+                let data: DecodedData = Decoder::new(reader).track(track.full_path.clone())?;
+                let info = Info::new(track.name, track.full_path, &data, Some(&bytes))?;
+                Ok(Self { info, data })
+            }
+            TrackData::Streaming(buffer) => {
+                // Use a blocking reader over the shared buffer.
+                let snapshot_src = buffer.clone();
+                let reader: Box<dyn ReadSeek + Send + Sync> = Box::new(GrowingReader::new(buffer));
+                let data: DecodedData = Decoder::new(reader).track(track.full_path.clone())?;
+                // Try to extract metadata/colors from currently available bytes.
+                let snapshot = snapshot_src.snapshot(1024 * 1024); // up to 1MB
+                let data_opt = if snapshot.is_empty() { None } else { Some(snapshot) };
+                let info = if let Some(bytes) = data_opt.as_ref() {
+                    Info::new(track.name, track.full_path, &data, Some(bytes))?
+                } else {
+                    Info::new_streaming(track.name, track.full_path, &data)?
+                };
+                Ok(Self { info, data })
+            }
+        }
     }
 }

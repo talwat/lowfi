@@ -8,15 +8,18 @@ use crate::{
     messages::Message,
     player::{downloader::Downloader, Player},
     tracks,
+    debug_log,
 };
 
 impl Player {
     /// Fetches the next track from the queue, or a random track if the queue is empty.
     /// This will also set the current track to the fetched track's info.
     async fn fetch(&self) -> Result<tracks::DecodedTrack, tracks::Error> {
+        debug_log!("queue.rs - fetch: fetch start");
         // TODO: Consider replacing this with `unwrap_or_else` when async closures are stablized.
         let track = self.tracks.write().await.pop_front();
         let track = if let Some(track) = track {
+            debug_log!("queue.rs - fetch: popped from buffer full_path={}", track.full_path);
             track
         } else {
             // If the queue is completely empty, then fallback to simply getting a new track.
@@ -27,14 +30,17 @@ impl Player {
             // for only a frame in the other case that the buffer is not empty.
             self.current.store(None);
             self.progress.store(0.0, Ordering::Relaxed);
+            debug_log!("queue.rs - fetch: buffer empty; fetching random");
             self.list.random(&self.client, Some(&self.progress)).await?
         };
 
         let decoded = track.decode()?;
+        debug_log!("queue.rs - fetch: decoded display_name={} duration={:?}", decoded.info.display_name, decoded.info.duration);
 
         // Set the current track.
         self.set_current(decoded.info.clone());
-
+        debug_log!("queue.rs - fetch: current track set");
+        
         Ok(decoded)
     }
 
@@ -59,6 +65,7 @@ impl Player {
             Ok(track) => {
                 // Start playing the new track.
                 player.sink.append(track.data);
+                debug_log!("queue.rs - next: track appended to sink");
 
                 // Set whether it's bookmarked.
                 player.bookmarks.set_bookmarked(&track.info).await;
@@ -66,11 +73,14 @@ impl Player {
                 // Notify the background downloader that there's an empty spot
                 // in the buffer.
                 Downloader::notify(&itx).await?;
+                debug_log!("queue.rs - next: downloader notified");
 
                 // Notify the audio server that the next song has actually been downloaded.
                 tx.send(Message::NewSong).await?;
+                debug_log!("queue.rs - next: NewSong message sent");
             }
             Err(error) => {
+                debug_log!("queue.rs - next: error occurred err={}", error);
                 if debug {
                     panic!("{error} - {:?}", error.source())
                 }

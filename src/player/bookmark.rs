@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicBool;
 use tokio::sync::RwLock;
 use tokio::{fs, io};
 
-use crate::{data_dir, tracks};
+use crate::{data_dir, tracks, debug_log};
 
 /// Errors that might occur while managing bookmarks.
 #[derive(Debug, thiserror::Error)]
@@ -34,15 +34,19 @@ pub struct Bookmarks {
 impl Bookmarks {
     /// Gets the path of the bookmarks file.
     pub async fn path() -> eyre::Result<PathBuf, BookmarkError> {
+        debug_log!("bookmark.rs - path: getting bookmarks file path");
         let data_dir = data_dir().map_err(|_| BookmarkError::DataDir)?;
         fs::create_dir_all(data_dir.clone()).await?;
 
-        Ok(data_dir.join("bookmarks.txt"))
+        let bookmarks_path = data_dir.join("bookmarks.txt");
+        Ok(bookmarks_path)
     }
 
     /// Loads bookmarks from the `bookmarks.txt` file.
     pub async fn load() -> eyre::Result<Self, BookmarkError> {
-        let text = fs::read_to_string(Self::path().await?)
+        debug_log!("bookmark.rs - load: loading bookmarks");
+        let bookmarks_path = Self::path().await?;
+        let text = fs::read_to_string(bookmarks_path)
             .await
             .unwrap_or_default();
 
@@ -59,6 +63,7 @@ impl Bookmarks {
             })
             .collect();
 
+        debug_log!("bookmark.rs - load: loaded {} bookmarks", lines.len());
         Ok(Self {
             entries: RwLock::new(lines),
             bookmarked: AtomicBool::new(false),
@@ -67,8 +72,12 @@ impl Bookmarks {
 
     // Saves the bookmarks to the `bookmarks.txt` file.
     pub async fn save(&self) -> eyre::Result<(), BookmarkError> {
-        let text = format!("noheader\n{}", self.entries.read().await.join("\n"));
-        fs::write(Self::path().await?, text).await?;
+        debug_log!("bookmark.rs - save: saving bookmarks");
+        let bookmarks_path = Self::path().await?;
+        let entries = self.entries.read().await;
+        debug_log!("bookmark.rs - save: saving {} bookmarks to: {}", entries.len(), bookmarks_path.display());
+        let text = format!("noheader\n{}", entries.join("\n"));
+        fs::write(bookmarks_path, text).await?;
         Ok(())
     }
 
@@ -80,14 +89,22 @@ impl Bookmarks {
         let idx = self.entries.read().await.iter().position(|x| **x == entry);
 
         if let Some(idx) = idx {
+            debug_log!("bookmark.rs - bookmark: removing bookmark for track: {}", track.display_name);
             self.entries.write().await.remove(idx);
         } else {
+            debug_log!("bookmark.rs - bookmark: adding bookmark for track: {}", track.display_name);
             self.entries.write().await.push(entry);
         };
 
         self.bookmarked
             .swap(idx.is_none(), std::sync::atomic::Ordering::Relaxed);
 
+        let is_now_bookmarked = self.bookmarked.load(std::sync::atomic::Ordering::Relaxed);
+        debug_log!(
+            "bookmark.rs - bookmark: track {} is now bookmarked: {}",
+            track.display_name,
+            is_now_bookmarked
+        );
         Ok(())
     }
 
@@ -100,8 +117,10 @@ impl Bookmarks {
     /// Sets the internal bookmarked register by checking against
     /// the current track's info.
     pub async fn set_bookmarked(&self, track: &tracks::Info) {
+        debug_log!("bookmark.rs - set_bookmarked: checking bookmark status for track: {}", track.display_name);
         let val = self.entries.read().await.contains(&track.to_entry());
         self.bookmarked
             .swap(val, std::sync::atomic::Ordering::Relaxed);
+        debug_log!("bookmark.rs - set_bookmarked: track {} bookmark status: {}", track.display_name, val);
     }
 }

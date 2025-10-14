@@ -11,6 +11,7 @@ use reqwest::Client;
 use tokio::fs;
 
 use crate::{
+    debug_log,
     data_dir,
     tracks::{self, error::Context},
 };
@@ -68,12 +69,14 @@ impl List {
         client: &Client,
         progress: Option<&AtomicF32>,
     ) -> Result<(Bytes, String), tracks::Error> {
+        debug_log!("list.rs - download: start track='{}'", track);
         // If the track has a protocol, then we should ignore the base for it.
         let full_path = if track.contains("://") {
             track.to_owned()
         } else {
             format!("{}{}", self.base(), track)
         };
+        debug_log!("list.rs - download: full_path={}", full_path);
 
         let data: Bytes = if let Some(x) = full_path.strip_prefix("file://") {
             let path = if x.starts_with('~') {

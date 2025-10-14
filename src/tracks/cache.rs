@@ -231,7 +231,7 @@ pub async fn update_cache_background(
 
     if current_hash == cached_hash {
         debug_log!("cache.rs - update_cache_background: item list unchanged (hash match); cache up-to-date.");
-        // Update timestamp to reset the 3-day check cycle.
+        // Update timestamp to reset the 5-day check cycle.
         cache.timestamp = current_timestamp();
         let cache_json = serde_json::to_string(&cache)?;
         BandcampCache::write_gz_string(cache_path, &cache_json).await?;

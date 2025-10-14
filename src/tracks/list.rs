@@ -243,7 +243,7 @@ impl List {
             
             // Start background update if cache is getting old.
             if let Some(ref cached) = cache {
-                if cached.is_expired(259200) { // 3 days
+                if cached.is_expired(432000) { // 5 days
                     // Find the actual cache file path by searching for existing cache.
                     let data_dir = data_dir()?;
                     

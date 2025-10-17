@@ -26,6 +26,7 @@ use crate::{
     player::{self, bookmark::Bookmarks, persistent_volume::PersistentVolume},
     tracks::{self, list::List},
     Args,
+    debug_log,
 };
 
 pub mod audio;
@@ -84,6 +85,9 @@ pub struct Player {
     /// The web client, which can contain a `UserAgent` & some
     /// settings that help lowfi work more effectively.
     client: Client,
+
+    /// Whether to show artist field in track display.
+    show_artist: bool,
 }
 
 impl Player {
@@ -102,10 +106,17 @@ impl Player {
         self.sink.set_volume(volume.clamp(0.0, 1.0));
     }
 
+
+    /// Gets whether to show artist field in track display.
+    pub fn show_artist(&self) -> bool {
+        self.show_artist
+    }
+
     /// Initializes the entire player, including audio devices & sink.
     ///
     /// This also will load the track list & persistent volume.
     pub async fn new(args: &Args) -> eyre::Result<(Self, OutputStream), player::Error> {
+        debug_log!("player.rs - new: initialization start buffer_size={} timeout={} paused={} debug={}", args.buffer_size, args.timeout, args.paused, args.debug);
         // Load the bookmarks.
         let bookmarks = Bookmarks::load().await?;
 
@@ -115,7 +126,7 @@ impl Player {
             .map_err(player::Error::PersistentVolumeLoad)?;
 
         // Load the track list.
-        let list = List::load(args.track_list.as_ref())
+        let list = List::load(args.track_list.as_ref(), cfg!(feature = "bandcamp"))
             .await
             .map_err(player::Error::TrackListLoad)?;
 
@@ -143,7 +154,11 @@ impl Player {
                 "/",
                 env!("CARGO_PKG_VERSION")
             ))
-            .timeout(Duration::from_secs(args.timeout * 5))
+            .timeout(Duration::from_secs(10)) // Быстрый таймаут вместо args.timeout * 5
+            .connect_timeout(Duration::from_secs(3)) // Быстрое установление соединения
+            .pool_max_idle_per_host(10) // Переиспользование соединений
+            .pool_idle_timeout(Duration::from_secs(30)) // Держать соединения живыми
+            .tcp_keepalive(Duration::from_secs(60)) // Keep-alive для стабильности
             .build()?;
 
         let player = Self {
@@ -157,8 +172,9 @@ impl Player {
             sink,
             volume,
             list,
+            show_artist: args.artist,
         };
-
+        debug_log!("player.rs - new: initialization completed");
         Ok((player, stream))
     }
 
@@ -175,6 +191,7 @@ impl Player {
         mut rx: Receiver<Message>,
         debug: bool,
     ) -> eyre::Result<(), player::Error> {
+        debug_log!("player.rs - play: playback loop start");
         // Initialize the mpris player.
         //
         // We're initializing here, despite MPRIS being a "user interface",
@@ -185,7 +202,7 @@ impl Player {
         let mpris = mpris::Server::new(Arc::clone(&player), tx.clone())
             .await
             .inspect_err(|x| {
-                dbg!(x);
+                debug_log!("player.rs - play: initialization error: {:?}", x);
             })?;
 
         // `itx` is used to notify the `Downloader` when it needs to download new tracks.
@@ -226,6 +243,7 @@ impl Player {
                 Ok(()) = task::spawn_blocking(move || clone.sink.sleep_until_end()),
                         if new => Message::Next,
             };
+            debug_log!("player.rs - play: message received: {:?}", msg);
 
             match msg {
                 Message::Next | Message::Init | Message::TryAgain => {
@@ -249,12 +267,14 @@ impl Player {
                 }
                 Message::Play => {
                     player.sink.play();
+                    debug_log!("player.rs - play: playback started");
 
                     #[cfg(feature = "mpris")]
                     mpris.playback(PlaybackStatus::Playing).await?;
                 }
                 Message::Pause => {
                     player.sink.pause();
+                    debug_log!("player.rs - play: playback paused");
 
                     #[cfg(feature = "mpris")]
                     mpris.playback(PlaybackStatus::Paused).await?;
@@ -262,8 +282,10 @@ impl Player {
                 Message::PlayPause => {
                     if player.sink.is_paused() {
                         player.sink.play();
+                        debug_log!("player.rs - play: toggle play/pause -> play");
                     } else {
                         player.sink.pause();
+                        debug_log!("player.rs - play: toggle play/pause -> pause");
                     }
 
                     #[cfg(feature = "mpris")]
@@ -273,6 +295,7 @@ impl Player {
                 }
                 Message::ChangeVolume(change) => {
                     player.set_volume(player.sink.volume() + change);
+                    debug_log!("player.rs - play: volume changed to {}", player.sink.volume());
 
                     #[cfg(feature = "mpris")]
                     mpris
@@ -286,7 +309,7 @@ impl Player {
                     // We've recieved `NewSong`, so on the next loop iteration we'll
                     // begin waiting for the song to be over in order to autoplay.
                     new = true;
-
+                    debug_log!("player.rs - play: new song started");
                     #[cfg(feature = "mpris")]
                     mpris
                         .changed(vec![
@@ -302,12 +325,14 @@ impl Player {
                     let current = current.as_ref().unwrap();
 
                     player.bookmarks.bookmark(current).await?;
+                    debug_log!("player.rs - play: bookmark created for path={}", current.full_path);
                 }
                 Message::Quit => break,
             }
         }
 
         downloader.abort();
+        debug_log!("player.rs - play: playback loop exit");
 
         Ok(())
     }

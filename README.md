@@ -51,10 +51,11 @@ cargo install lowfi --features mpris
 ```
 
 and making sure `$HOME/.cargo/bin` is added to `$PATH`.
+Also see [Extra Features](#extra-features) for extended functionality.
 
 ### Release Binaries
 
-If you're struggling or unwilling to use cargo, you can just download
+If you're struggling or unwilling to use cargo, you can just download the
 precompiled binaries from the [latest release](https://github.com/talwat/lowfi/releases/latest).
 
 ### AUR
@@ -129,14 +130,22 @@ Yeah, that's it.
 > Besides its regular controls, lowfi offers compatibility with Media Keys
 > and [MPRIS](https://wiki.archlinux.org/title/MPRIS) (with tools like `playerctl`).
 >
-> MPRIS is currently an optional feature in cargo (enabled with `--features mpris`)
+> MPRIS is currently an [optional feature](#extra-features) in cargo (enabled with `--features mpris`)
 > due to it being only for Linux, as well as the fact that the main point of
 > lowfi is it's unique & minimal interface.
+
+### Bookmarks
+
+Bookmarks are lowfi's extremely simple answer to "what about if I'd like to save a track."
+You can bookmark/unbookmark tracks with `b`, and play them with `lowfi -t bookmarks`.
+
+From a technical perspective, your bookmarks are no different to any other track list,
+and as such are also stored in the same directory.
 
 ### Extra Flags
 
 If you have something you'd like to tweak about lowfi, you use additional flags which
-slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lowfi help`.
+slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lowfi --help`.
 
 | Flag                                | Function                                            |
 | ----------------------------------- | --------------------------------------------------- |
@@ -173,7 +182,7 @@ This is only relevant to those using a custom track list, in which case
 it allows for more formats than just MP3. Those are FLAC, Vorbis, and WAV.
 
 These should be sufficient for some 99% of music files people might want to play.
-If you dealing with the 1% using another audio format which is in
+If you are dealing with the 1% using another audio format which is in
 [this list](https://github.com/pdeljanov/Symphonia?tab=readme-ov-file#codecs-decoders), open an issue.
 
 ### Custom Track Lists

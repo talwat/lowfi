@@ -141,6 +141,7 @@ impl Window {
 
     /// Actually draws the window, with each element in `content` being on a new line.
     pub fn draw(&mut self, content: Vec<String>, space: bool) -> eyre::Result<(), UIError> {
+        self.borders[0] = Self::top(self.width);
         let len: u16 = content.len().try_into()?;
 
         // Note that this will have a trailing newline, which we use later.

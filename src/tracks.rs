@@ -29,6 +29,7 @@ pub mod list;
 
 pub use error::Error;
 
+use crate::debug_log;
 use crate::tracks::error::Context;
 use lazy_static::lazy_static;
 
@@ -186,13 +187,18 @@ impl Info {
         }
 
         // If the entire name of the track is a number, then just return it.
-        if skip == name.len() {
-            Ok(name.trim().to_string())
+        let result = if skip == name.len() {
+            name.trim().to_string()
         } else {
             // We've already checked before that the bound is at an ASCII digit.
             #[allow(clippy::string_slice)]
-            Ok(String::from(name[skip..].trim()))
-        }
+            String::from(name[skip..].trim())
+        };
+        debug_log!(
+            "tracks.rs - Info::format_name: result formatted='{}'",
+            result
+        );
+        Ok(result)
     }
 
     /// Creates a new [`TrackInfo`] from a possibly raw name & decoded data.
@@ -230,6 +236,12 @@ impl DecodedTrack {
     /// Creates a new track.
     /// This is equivalent to [`QueuedTrack::decode`].
     pub fn new(track: QueuedTrack) -> eyre::Result<Self, Error> {
+        debug_log!(
+            "tracks.rs - DecodedTrack::new: start full_path={} name_variant={:?} data_len_bytes={}",
+            track.full_path,
+            track.name,
+            track.data.len()
+        );
         let data = Decoder::builder()
             .with_byte_len(track.data.len().try_into().unwrap())
             .with_data(Cursor::new(track.data))
@@ -238,6 +250,11 @@ impl DecodedTrack {
 
         let info = Info::new(track.name, track.full_path, &data)?;
 
+        debug_log!(
+            "tracks.rs - DecodedTrack::new: success duration={:?} display_name='{}'",
+            info.duration,
+            info.display_name
+        );
         Ok(Self { info, data })
     }
 }

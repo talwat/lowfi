@@ -27,12 +27,10 @@ clap = { version = "4.5.21", features = ["derive", "cargo"] }
 eyre = "0.6.12"
 fastrand = "2.3.0"
 thiserror = "2.0.12"
-color-eyre = { version = "0.6.5", default-features = false }
 
 # Async
 tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "fs"], default-features = false }
 futures = "0.3.31"
-arc-swap = "1.7.1"
 
 # Data
 reqwest = { version = "0.12.9", features = ["stream"] }
@@ -46,7 +44,6 @@ dirs = "6.0.0"
 
 # Misc
 convert_case = "0.8.0"
-lazy_static = "1.5.0"
 url = "2.5.4"
 unicode-segmentation = "1.12.0"
 

@@ -1,17 +1,13 @@
-/// Handles communication between the frontend & audio player.
-#[derive(PartialEq, Debug, Clone, Copy)]
+use crate::ui;
+
+/// Handles communication between different parts of the program.
+#[derive(PartialEq, Debug, Clone)]
 pub enum Message {
+    /// Sent to update the UI with new information.
+    Render(ui::Render),
+
     /// Notifies the audio server that it should update the track.
     Next,
-
-    /// Special in that this isn't sent in a "client to server" sort of way,
-    /// but rather is sent by a child of the server when a song has not only
-    /// been requested but also downloaded aswell.
-    NewSong,
-
-    /// This signal is only sent if a track timed out. In that case,
-    /// lowfi will try again and again to retrieve the track.
-    TryAgain,
 
     /// Similar to Next, but specific to the first track.
     Init,

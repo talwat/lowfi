@@ -1,13 +1,13 @@
 //! Responsible for specifically recieving terminal input
 //! using [`crossterm`].
 
+use crate::Message;
 use crossterm::event::{self, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use futures::{FutureExt as _, StreamExt as _};
 use tokio::sync::mpsc::Sender;
-use crate::Message;
 
 /// Starts the listener to recieve input from the terminal for various events.
-pub async fn listen(sender: Sender<Message>) -> crate::Result<()> {
+pub async fn listen(sender: Sender<Message>) -> super::Result<()> {
     let mut reader = EventStream::new();
 
     loop {

@@ -1,8 +1,16 @@
 use tokio::sync::mpsc;
 
+use crate::{bookmark, tracks, ui, volume};
+
 pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
-pub enum Kind {
+pub enum Error {
+    #[error("unable to load/save the persistent volume: {0}")]
+    PersistentVolume(#[from] volume::Error),
+
+    #[error("unable to load/save bookmarks: {0}")]
+    Bookmarks(#[from] bookmark::Error),
+
     #[error("unable to fetch data: {0}")]
     Request(#[from] reqwest::Error),
 
@@ -14,75 +22,32 @@ pub enum Kind {
 
     #[error("couldn't send internal message: {0}")]
     Send(#[from] mpsc::error::SendError<crate::Message>),
-}
 
-#[derive(Debug, Default)]
-pub struct Context {
-    track: Option<String>,
-}
+    #[error("couldn't add track to the queue: {0}")]
+    Queue(#[from] mpsc::error::SendError<tracks::Queued>),
 
-impl std::fmt::Display for Context {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(track) = &self.track {
-            write!(f, " ")?;
-            write!(f, "(track: {track})")?;
-        }
-        
-        Ok(())
-    }
-}
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
 
-#[derive(Debug, thiserror::Error)]
-#[error("{kind}{context}")]
-pub struct Error {
-    pub context: Context,
+    #[error("directory not found")]
+    Directory,
 
-    #[source]
-    pub kind: Kind,
-}
+    #[error("couldn't parse integer: {0}")]
+    Parse(#[from] std::num::ParseIntError),
 
-impl<T, E> From<(T, E)> for Error
-where
-    T: Into<String>,
-    Kind: From<E>,
-{
-    fn from((track, err): (T, E)) -> Self {
-        Self {
-            context: Context { track: Some(track.into()) },
-            kind: Kind::from(err),
-        }
-    }
-}
+    #[error("track error: {0}")]
+    Track(#[from] tracks::Error),
 
-impl<E> From<E> for Error
-where
-    Kind: From<E>,
-{
-    fn from(err: E) -> Self {
-        Self {
-            context: Context::default(),
-            kind: Kind::from(err),
-        }
-    }
-}
+    #[error("ui error: {0}")]
+    UI(#[from] ui::Error),
 
-pub trait WithContextExt<T> {
-    fn context(self, name: impl Into<String>) -> std::result::Result<T, Error>;
-}
+    #[cfg(feature = "mpris")]
+    #[error("mpris bus error")]
+    ZBus(#[from] mpris_server::zbus::Error),
 
-impl<T, E> WithContextExt<T> for std::result::Result<T, E>
-where
-    (String, E): Into<Error>,
-    E: Into<Kind>,
-{
-    fn context(self, name: impl Into<String>) -> std::result::Result<T, Error> {
-        self.map_err(|e| {
-            let error = match e.into() {
-                Kind::Request(error) => Kind::Request(error.without_url()),
-                kind => kind,
-            };
-
-            (name.into(), error).into()
-        })
-    }
+    // TODO: This has a terrible error message, mainly because I barely understand
+    // what this error even represents. What does fdo mean?!?!? Why, MPRIS!?!?
+    #[cfg(feature = "mpris")]
+    #[error("mpris fdo (zbus interface) error")]
+    Fdo(#[from] mpris_server::zbus::fdo::Error),
 }

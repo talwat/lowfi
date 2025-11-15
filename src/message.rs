@@ -4,7 +4,7 @@ use crate::ui;
 #[derive(PartialEq, Debug, Clone)]
 pub enum Message {
     /// Sent to update the UI with new information.
-    Render(ui::Render),
+    Render(ui::Update),
 
     /// Notifies the audio server that it should update the track.
     Next,

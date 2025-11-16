@@ -1,9 +1,34 @@
-use crate::ui::{self, components, window::Window};
+use std::time::Duration;
+
+use crate::{
+    ui::{self, components, window::Window},
+    Args,
+};
+
+#[derive(Copy, Clone, Debug)]
+pub struct Params {
+    pub borderless: bool,
+    pub minimalist: bool,
+    pub delta: Duration,
+}
+
+impl From<&Args> for Params {
+    fn from(args: &Args) -> Self {
+        let delta = 1.0 / f32::from(args.fps);
+        let delta = Duration::from_secs_f32(delta);
+
+        Self {
+            delta,
+            minimalist: args.minimalist,
+            borderless: args.borderless,
+        }
+    }
+}
 
 /// The code for the terminal interface itself.
 ///
 /// * `minimalist` - All this does is hide the bottom control bar.
-pub async fn draw(state: &ui::State, window: &mut Window, params: ui::Params) -> super::Result<()> {
+pub async fn draw(state: &ui::State, window: &mut Window, params: Params) -> super::Result<()> {
     let action = components::action(&state, state.width);
 
     let volume = state.sink.volume();
@@ -25,7 +50,7 @@ pub async fn draw(state: &ui::State, window: &mut Window, params: ui::Params) ->
 
     let controls = components::controls(state.width);
 
-    let menu = match (params.minimalist, &state.track) {
+    let menu = match (params.minimalist, &state.current) {
         (true, _) => vec![action, middle],
         // (false, Some(x)) => vec![x.path.clone(), action, middle, controls],
         _ => vec![action, middle, controls],

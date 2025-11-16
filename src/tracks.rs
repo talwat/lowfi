@@ -15,7 +15,7 @@
 //! 2. [`Info`] created from decoded data.
 //! 3. [`Decoded`] made from [`Info`] and the original decoded data.
 
-use std::{io::Cursor, time::Duration};
+use std::{fmt::Debug, io::Cursor, time::Duration};
 
 use bytes::Bytes;
 use rodio::{Decoder, Source as _};
@@ -35,6 +35,7 @@ pub type DecodedData = Decoder<Cursor<Bytes>>;
 /// Tracks which are still waiting in the queue, and can't be played yet.
 ///
 /// This means that only the data & track name are included.
+#[derive(PartialEq)]
 pub struct Queued {
     /// Display name of the track.
     pub display: String,
@@ -45,6 +46,16 @@ pub struct Queued {
     /// The raw data of the track, which is not decoded and
     /// therefore much more memory efficient.
     pub data: Bytes,
+}
+
+impl Debug for Queued {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Queued")
+            .field("display", &self.display)
+            .field("path", &self.path)
+            .field("data", &self.data.len())
+            .finish()
+    }
 }
 
 impl Queued {

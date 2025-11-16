@@ -108,7 +108,7 @@ async fn main() -> eyre::Result<()> {
         }
     } else {
         let player = Player::init(args).await?;
-        player.play().await?;
+        player.run().await?;
     };
 
     Ok(())

@@ -1,4 +1,4 @@
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 
 use crate::{bookmark, tracks, ui, volume};
 
@@ -26,19 +26,25 @@ pub enum Error {
     #[error("couldn't add track to the queue: {0}")]
     Queue(#[from] mpsc::error::SendError<tracks::Queued>),
 
+    #[error("couldn't update UI state: {0}")]
+    Broadcast(#[from] broadcast::error::SendError<ui::Update>),
+
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 
     #[error("directory not found")]
     Directory,
 
+    #[error("couldn't fetch track from downloader")]
+    Download,
+
     #[error("couldn't parse integer: {0}")]
     Parse(#[from] std::num::ParseIntError),
 
-    #[error("track error: {0}")]
+    #[error("track failure")]
     Track(#[from] tracks::Error),
 
-    #[error("ui error: {0}")]
+    #[error("ui failure")]
     UI(#[from] ui::Error),
 
     #[cfg(feature = "mpris")]

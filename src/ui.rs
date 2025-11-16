@@ -1,16 +1,12 @@
-use std::{
-    sync::{atomic::AtomicU8, Arc},
-    time::Duration,
-};
+use std::sync::Arc;
 
 use crate::{
-    tracks,
-    ui::{environment::Environment, window::Window},
-    Args, Message,
+    player::Current,
+    ui::{self, environment::Environment, window::Window},
+    Args,
 };
-use rodio::Sink;
 use tokio::{
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{broadcast, mpsc::Sender},
     task::JoinHandle,
 };
 mod components;
@@ -32,74 +28,64 @@ pub enum Error {
     Write(#[from] std::io::Error),
 
     #[error("sending message to backend from ui failed")]
-    Communication(#[from] tokio::sync::mpsc::error::SendError<Message>),
+    CrateSend(#[from] tokio::sync::mpsc::error::SendError<crate::Message>),
+
+    #[error("sharing state between backend and frontend failed")]
+    UiSend(#[from] tokio::sync::broadcast::error::SendError<Update>),
 }
 
+#[derive(Clone)]
 pub struct State {
     pub sink: Arc<rodio::Sink>,
-    pub progress: Arc<AtomicU8>,
-    pub track: Option<tracks::Info>,
+    pub current: Current,
     pub bookmarked: bool,
     width: usize,
 }
 
 impl State {
-    pub fn update(&mut self, update: Update) {
-        self.track = update.track;
-        self.bookmarked = update.bookmarked;
-    }
-
-    pub fn initial(sink: Arc<rodio::Sink>, width: usize, progress: Arc<AtomicU8>) -> Self {
+    pub fn initial(sink: Arc<rodio::Sink>, args: &Args, current: Current) -> Self {
+        let width = 21 + args.width.min(32) * 2;
         Self {
             width,
             sink,
-            progress,
-            track: None,
+            current,
             bookmarked: false,
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Update {
-    pub track: Option<tracks::Info>,
-    pub bookmarked: bool,
+
+#[derive(Debug, Clone)]
+pub enum Update {
+    Track(Current),
+    Bookmarked(bool),
+    Quit,
 }
 
 #[derive(Debug)]
-struct Handles {
+struct Tasks {
     render: JoinHandle<Result<()>>,
     input: JoinHandle<Result<()>>,
 }
 
-#[derive(Copy, Clone, Debug)]
-struct Params {
-    borderless: bool,
-    minimalist: bool,
-    delta: Duration,
-}
-
 #[derive(Debug)]
-pub struct UI {
-    pub utx: Sender<Message>,
-    handles: Handles,
+pub struct Handle {
+    tasks: Tasks,
     _environment: Environment,
 }
 
-impl Drop for UI {
+impl Drop for Handle {
     fn drop(&mut self) {
-        self.handles.input.abort();
-        self.handles.render.abort();
+        self.tasks.input.abort();
+        self.tasks.render.abort();
     }
 }
 
-impl UI {
-    pub async fn render(&mut self, data: Update) -> Result<()> {
-        self.utx.send(Message::Render(data)).await?;
-
-        Ok(())
-    }
-
-    async fn ui(mut rx: Receiver<Message>, mut state: State, params: Params) -> Result<()> {
+impl Handle {
+    async fn ui(
+        mut rx: broadcast::Receiver<Update>,
+        mut state: State,
+        params: interface::Params,
+    ) -> Result<()> {
         let mut interval = tokio::time::interval(params.delta);
         let mut window = Window::new(state.width, params.borderless);
 
@@ -108,45 +94,29 @@ impl UI {
 
             if let Ok(message) = rx.try_recv() {
                 match message {
-                    Message::Render(update) => state.update(update),
-                    Message::Quit => break,
-                    _ => continue,
+                    Update::Track(track) => state.current = track,
+                    Update::Bookmarked(bookmarked) => state.bookmarked = bookmarked,
+                    Update::Quit => break,
                 }
             };
 
             interval.tick().await;
         }
 
-        // environment.cleanup()?;
         Ok(())
     }
 
     pub async fn init(
-        tx: Sender<Message>,
-        progress: Arc<AtomicU8>,
-        sink: Arc<Sink>,
+        tx: Sender<crate::Message>,
+        updater: broadcast::Receiver<ui::Update>,
+        state: State,
         args: &Args,
     ) -> Result<Self> {
         let environment = Environment::ready(args.alternate)?;
-
-        let (utx, urx) = mpsc::channel(8);
-        let delta = 1.0 / f32::from(args.fps);
-        let delta = Duration::from_secs_f32(delta);
-        let width = 21 + args.width.min(32) * 2;
-
         Ok(Self {
-            utx,
             _environment: environment,
-            handles: Handles {
-                render: tokio::spawn(Self::ui(
-                    urx,
-                    State::initial(sink, width, progress),
-                    Params {
-                        delta,
-                        minimalist: args.minimalist,
-                        borderless: args.borderless,
-                    },
-                )),
+            tasks: Tasks {
+                render: tokio::spawn(Self::ui(updater, state, interface::Params::from(args))),
                 input: tokio::spawn(input::listen(tx)),
             },
         })

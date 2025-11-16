@@ -1,13 +1,11 @@
-use crate::ui;
-
 /// Handles communication between different parts of the program.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Message {
-    /// Sent to update the UI with new information.
-    Render(ui::Update),
-
     /// Notifies the audio server that it should update the track.
     Next,
+
+    /// When a track is loaded after a caller previously being told to wait.
+    Loaded,
 
     /// Similar to Next, but specific to the first track.
     Init,

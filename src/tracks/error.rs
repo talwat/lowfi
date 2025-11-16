@@ -25,8 +25,6 @@ pub enum Kind {
 #[error("{kind} (track: {track:?})")]
 pub struct Error {
     pub track: Option<String>,
-
-    #[source]
     pub kind: Kind,
 }
 

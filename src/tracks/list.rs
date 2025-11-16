@@ -70,16 +70,16 @@ impl List {
         &self,
         track: &str,
         client: &Client,
-        progress: &AtomicU8,
+        progress: Option<&AtomicU8>,
     ) -> tracks::Result<(Bytes, String)> {
         // If the track has a protocol, then we should ignore the base for it.
-        let full_path = if track.contains("://") {
+        let path = if track.contains("://") {
             track.to_owned()
         } else {
             format!("{}{}", self.base(), track)
         };
 
-        let data: Bytes = if let Some(x) = full_path.strip_prefix("file://") {
+        let data: Bytes = if let Some(x) = path.strip_prefix("file://") {
             let path = if x.starts_with('~') {
                 let home_path = dirs::home_dir()
                     .ok_or(error::Kind::InvalidPath)
@@ -97,7 +97,11 @@ impl List {
             let result = tokio::fs::read(path.clone()).await.track(x)?;
             result.into()
         } else {
-            let response = client.get(full_path.clone()).send().await.track(track)?;
+            let response = client.get(path.clone()).send().await.track(track)?;
+            let Some(progress) = progress else {
+                let bytes = response.bytes().await.track(track)?;
+                return Ok((bytes, path));
+            };
 
             let total = response
                 .content_length()
@@ -119,14 +123,18 @@ impl List {
             bytes.into()
         };
 
-        Ok((data, full_path))
+        Ok((data, path))
     }
 
     /// Fetches and downloads a random track from the [List].
     ///
     /// The Result's error is a bool, which is true if a timeout error occured,
     /// and false otherwise. This tells lowfi if it shouldn't wait to try again.
-    pub async fn random(&self, client: &Client, progress: &AtomicU8) -> tracks::Result<Queued> {
+    pub async fn random(
+        &self,
+        client: &Client,
+        progress: Option<&AtomicU8>,
+    ) -> tracks::Result<Queued> {
         let (path, display) = self.random_path();
         let (data, path) = self.download(&path, client, progress).await?;
 

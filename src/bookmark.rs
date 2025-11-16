@@ -21,10 +21,6 @@ pub enum Error {
 pub struct Bookmarks {
     /// The different entries in the bookmarks file.
     entries: Vec<String>,
-
-    /// The internal bookmarked register, which keeps track
-    /// of whether a track is bookmarked or not.
-    bookmarked: bool,
 }
 
 impl Bookmarks {
@@ -55,10 +51,7 @@ impl Bookmarks {
             })
             .collect();
 
-        Ok(Self {
-            entries,
-            bookmarked: false,
-        })
+        Ok(Self { entries })
     }
 
     // Saves the bookmarks to the `bookmarks.txt` file.
@@ -71,7 +64,7 @@ impl Bookmarks {
     /// Bookmarks a given track with a full path and optional custom name.
     ///
     /// Returns whether the track is now bookmarked, or not.
-    pub async fn bookmark(&mut self, track: &tracks::Info) -> Result<()> {
+    pub async fn bookmark(&mut self, track: &tracks::Info) -> Result<bool> {
         let entry = track.to_entry();
         let idx = self.entries.iter().position(|x| **x == entry);
 
@@ -81,19 +74,12 @@ impl Bookmarks {
             self.entries.push(entry);
         };
 
-        self.bookmarked = idx.is_none();
-        Ok(())
-    }
-
-    /// Returns whether a track is bookmarked or not by using the internal
-    /// bookmarked register.
-    pub fn bookmarked(&self) -> bool {
-        self.bookmarked
+        Ok(idx.is_none())
     }
 
     /// Sets the internal bookmarked register by checking against
     /// the current track's info.
-    pub async fn set_bookmarked(&mut self, track: &tracks::Info) {
-        self.bookmarked = self.entries.contains(&track.to_entry());
+    pub fn bookmarked(&mut self, track: &tracks::Info) -> bool {
+        self.entries.contains(&track.to_entry())
     }
 }

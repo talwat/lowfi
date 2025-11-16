@@ -1,5 +1,5 @@
 use std::{
-    sync::{atomic::AtomicU8, Arc},
+    sync::atomic::{self, AtomicU8},
     time::Duration,
 };
 
@@ -11,61 +11,90 @@ use tokio::{
 
 use crate::tracks;
 
+static PROGRESS: AtomicU8 = AtomicU8::new(0);
+pub type Progress = &'static AtomicU8;
+
+pub fn progress() -> Progress {
+    &PROGRESS
+}
+
 pub struct Downloader {
-    /// TODO: Actually have a track type here.
-    pub progress: Arc<AtomicU8>,
-    queue: Receiver<tracks::Queued>,
-    handle: JoinHandle<crate::Result<()>>,
+    queue: Sender<tracks::Queued>,
+    tx: Sender<crate::Message>,
+    tracks: tracks::List,
+    client: Client,
+    timeout: Duration,
 }
 
 impl Downloader {
-    pub async fn track(&mut self) -> Option<tracks::Queued> {
-        return self.queue.recv().await;
+    pub async fn init(size: usize, tracks: tracks::List, tx: Sender<crate::Message>) -> Handle {
+        let client = Client::new();
+
+        let (qtx, qrx) = mpsc::channel(size);
+        let downloader = Self {
+            queue: qtx,
+            tx,
+            tracks,
+            client,
+            timeout: Duration::from_secs(1),
+        };
+
+        Handle {
+            queue: qrx,
+            handle: tokio::spawn(downloader.run()),
+        }
     }
 
-    async fn downloader(
-        tx: Sender<tracks::Queued>,
-        tracks: tracks::List,
-        client: Client,
-        progress: Arc<AtomicU8>,
-        timeout: Duration,
-    ) -> crate::Result<()> {
+    async fn run(self) -> crate::Result<()> {
         loop {
-            let result = tracks.random(&client, progress.as_ref()).await;
+            let progress = if PROGRESS.load(atomic::Ordering::Relaxed) == 0 {
+                Some(&PROGRESS)
+            } else {
+                None
+            };
+
+            let result = self.tracks.random(&self.client, progress).await;
             match result {
-                Ok(track) => tx.send(track).await?,
+                Ok(track) => {
+                    self.queue.send(track).await?;
+
+                    if progress.is_some() {
+                        self.tx.send(crate::Message::Loaded).await?;
+                    }
+                }
                 Err(error) => {
+                    PROGRESS.store(0, atomic::Ordering::Relaxed);
                     if !error.timeout() {
-                        tokio::time::sleep(timeout).await;
+                        tokio::time::sleep(self.timeout).await;
                     }
                 }
             }
         }
     }
+}
+pub struct Handle {
+    queue: Receiver<tracks::Queued>,
+    handle: JoinHandle<crate::Result<()>>,
+}
 
-    pub async fn init(
-        size: usize,
-        tracks: tracks::List,
-        client: Client,
-        progress: Arc<AtomicU8>,
-    ) -> Self {
-        let (tx, rx) = mpsc::channel(size);
+pub enum Output {
+    Loading(Progress),
+    Queued(tracks::Queued),
+}
 
-        Self {
-            queue: rx,
-            progress: progress.clone(),
-            handle: tokio::spawn(Self::downloader(
-                tx,
-                tracks,
-                client,
-                progress,
-                Duration::from_secs(1),
-            )),
+impl Handle {
+    pub async fn track(&mut self) -> Output {
+        match self.queue.try_recv() {
+            Ok(queued) => Output::Queued(queued),
+            Err(_) => {
+                PROGRESS.store(0, atomic::Ordering::Relaxed);
+                Output::Loading(&PROGRESS)
+            }
         }
     }
 }
 
-impl Drop for Downloader {
+impl Drop for Handle {
     fn drop(&mut self) {
         self.handle.abort();
     }

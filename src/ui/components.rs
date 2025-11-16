@@ -6,7 +6,7 @@ use std::time::Duration;
 use crossterm::style::Stylize as _;
 use unicode_segmentation::UnicodeSegmentation as _;
 
-use crate::{tracks, ui};
+use crate::{player::Current, tracks, ui};
 
 /// Small helper function to format durations.
 pub fn format_duration(duration: &Duration) -> String {
@@ -19,14 +19,14 @@ pub fn format_duration(duration: &Duration) -> String {
 /// Creates the progress bar, as well as all the padding needed.
 pub fn progress_bar(state: &ui::State, width: usize) -> String {
     let mut duration = Duration::new(0, 0);
-    let elapsed = if state.track.is_some() {
+    let elapsed = if matches!(&state.current, Current::Track(_)) {
         state.sink.get_pos()
     } else {
         Duration::new(0, 0)
     };
 
     let mut filled = 0;
-    if let Some(current) = &state.track {
+    if let Current::Track(current) = &state.current {
         if let Some(x) = current.duration {
             duration = x;
 
@@ -106,33 +106,22 @@ impl ActionBar {
 /// Creates the top/action bar, which has the name of the track and it's status.
 /// This also creates all the needed padding.
 pub fn action(state: &ui::State, width: usize) -> String {
-    let (main, len) = state
-        .track
-        .as_ref()
-        .map_or_else(
-            || {
-                ActionBar::Loading(
-                    state
-                        .progress
-                        .load(std::sync::atomic::Ordering::Acquire)
-                        .into(),
-                )
-            },
-            |info| {
-                if state.sink.volume() < 0.01 {
-                    return ActionBar::Muted;
-                }
+    let action = match state.current.clone() {
+        Current::Loading(progress) => {
+            ActionBar::Loading(progress.load(std::sync::atomic::Ordering::Relaxed))
+        }
+        Current::Track(info) => {
+            if state.sink.volume() < 0.01 {
+                ActionBar::Muted
+            } else if state.sink.is_paused() {
+                ActionBar::Paused(info)
+            } else {
+                ActionBar::Playing(info)
+            }
+        }
+    };
 
-                let info = info.clone();
-                if state.sink.is_paused() {
-                    ActionBar::Paused(info)
-                } else {
-                    ActionBar::Playing(info)
-                }
-            },
-        )
-        .format(state.bookmarked);
-
+    let (main, len) = action.format(state.bookmarked);
     if len > width {
         let chopped: String = main.graphemes(true).take(width + 1).collect();
 

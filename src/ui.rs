@@ -8,6 +8,7 @@ use crate::{
 use tokio::{
     sync::{broadcast, mpsc::Sender},
     task::JoinHandle,
+    time::Instant,
 };
 mod components;
 mod environment;
@@ -39,6 +40,7 @@ pub struct State {
     pub sink: Arc<rodio::Sink>,
     pub current: Current,
     pub bookmarked: bool,
+    timer: Option<Instant>,
     width: usize,
 }
 
@@ -50,6 +52,7 @@ impl State {
             sink,
             current,
             bookmarked: false,
+            timer: None,
         }
     }
 }
@@ -90,7 +93,7 @@ impl Handle {
         let mut window = Window::new(state.width, params.borderless);
 
         loop {
-            interface::draw(&state, &mut window, params).await?;
+            interface::draw(&mut state, &mut window, params).await?;
 
             if let Ok(message) = rx.try_recv() {
                 match message {

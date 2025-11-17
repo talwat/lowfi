@@ -21,7 +21,6 @@ pub enum Current {
 }
 
 pub struct Player {
-    ui: ui::Handle,
     downloader: download::Handle,
     volume: PersistentVolume,
     bookmarks: Bookmarks,
@@ -29,6 +28,7 @@ pub struct Player {
     rx: Receiver<crate::Message>,
     broadcast: broadcast::Sender<ui::Update>,
     current: Current,
+    _ui: ui::Handle,
     _tx: Sender<crate::Message>,
     _stream: rodio::OutputStream,
 }
@@ -84,12 +84,12 @@ impl Player {
         Ok(Self {
             current,
             downloader,
-            ui,
             broadcast: utx,
             rx,
             sink,
             bookmarks,
             volume,
+            _ui: ui,
             _stream: stream,
             _tx: tx,
         })

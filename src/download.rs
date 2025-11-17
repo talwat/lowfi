@@ -88,7 +88,7 @@ impl Handle {
             Ok(queued) => Output::Queued(queued),
             Err(_) => {
                 PROGRESS.store(0, atomic::Ordering::Relaxed);
-                Output::Loading(&PROGRESS)
+                Output::Loading(progress())
             }
         }
     }

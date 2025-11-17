@@ -1,4 +1,4 @@
-use std::io::stdout;
+use std::{io::stdout, panic};
 
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
@@ -8,7 +8,7 @@ use crossterm::{
 
 /// Represents the terminal environment, and is used to properly
 /// initialize and clean up the terminal.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Environment {
     /// Whether keyboard enhancements are enabled.
     enhancement: bool,
@@ -38,15 +38,22 @@ impl Environment {
             )?;
         }
 
-        Ok(Self {
+        let environment = Self {
             enhancement,
             alternate,
-        })
+        };
+
+        panic::set_hook(Box::new(move |info| {
+            let _ = environment.cleanup(false);
+            eprintln!("panic: {}", info);
+        }));
+
+        Ok(environment)
     }
 
     /// Uses the information collected from initialization to safely close down
     /// the terminal & restore it to it's previous state.
-    pub fn cleanup(&self) -> super::Result<()> {
+    pub fn cleanup(&self, elegant: bool) -> super::Result<()> {
         let mut lock = stdout().lock();
 
         if self.alternate {
@@ -60,16 +67,10 @@ impl Environment {
         }
 
         terminal::disable_raw_mode()?;
-        eprintln!("bye! :)");
+        if elegant {
+            eprintln!("bye! :)");
+        }
 
         Ok(())
-    }
-}
-
-impl Drop for Environment {
-    /// Just a wrapper for [`Environment::cleanup`] which ignores any errors thrown.
-    fn drop(&mut self) {
-        // Well, we're dropping it, so it doesn't really matter if there's an error.
-        let _ = self.cleanup();
     }
 }

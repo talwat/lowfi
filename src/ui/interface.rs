@@ -31,17 +31,17 @@ impl From<&Args> for Params {
 pub async fn draw(state: &mut ui::State, window: &mut Window, params: Params) -> super::Result<()> {
     let action = components::action(&state, state.width);
 
-    let volume = state.sink.volume();
-    let percentage = format!("{}%", (volume * 100.0).round().abs());
-
     let middle = match state.timer {
         Some(timer) => {
-            if timer.elapsed() > Duration::from_secs(3) {
+            let volume = state.sink.volume();
+            let percentage = format!("{}%", (volume * 100.0).round().abs());
+            if timer.elapsed() > Duration::from_secs(1) {
                 state.timer = None;
             };
-            components::progress_bar(&state, state.width - 16)
+
+            components::audio_bar(state.width - 17, volume, &percentage)
         }
-        None => components::audio_bar(state.width - 17, volume, &percentage),
+        None => components::progress_bar(&state, state.width - 16),
     };
 
     let controls = components::controls(state.width);

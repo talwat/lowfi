@@ -15,11 +15,11 @@ pub mod audio;
 pub mod bookmark;
 pub mod download;
 pub mod player;
-#[allow(clippy::all, clippy::pedantic, clippy::nursery, clippy::restriction)]
-#[cfg(feature = "scrape")]
-mod scrapers;
 pub mod tracks;
 pub mod volume;
+
+#[cfg(feature = "scrape")]
+mod scrapers;
 
 #[cfg(feature = "scrape")]
 use crate::scrapers::Source;
@@ -108,7 +108,11 @@ async fn main() -> eyre::Result<()> {
         }
     } else {
         let player = Player::init(args).await?;
-        player.run().await?;
+        let environment = player.environment();
+        let result = player.run().await;
+
+        environment.cleanup(result.is_ok())?;
+        result?;
     };
 
     Ok(())

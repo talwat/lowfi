@@ -62,7 +62,7 @@ impl PersistentVolume {
     }
 
     /// Saves `volume` to `volume.txt`.
-    pub async fn save(&self) -> Result<()> {
+    pub async fn save(volume: f32) -> Result<()> {
         let config = Self::config().await?;
         let path = config.join(PathBuf::from("volume.txt"));
 
@@ -72,7 +72,8 @@ impl PersistentVolume {
             clippy::cast_sign_loss,
             clippy::cast_possible_truncation
         )]
-        fs::write(path, self.inner.to_string()).await?;
+        let percentage = (volume * 100.0).abs().round() as u16;
+        fs::write(path, percentage.to_string()).await?;
 
         Ok(())
     }

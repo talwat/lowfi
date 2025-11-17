@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     player::Current,
-    ui::{self, environment::Environment, window::Window},
+    ui::{self, window::Window},
     Args,
 };
 use tokio::{
@@ -12,9 +12,13 @@ use tokio::{
 };
 mod components;
 mod environment;
+pub use environment::Environment;
 mod input;
 mod interface;
 mod window;
+
+#[cfg(feature = "mpris")]
+pub mod mpris;
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -33,6 +37,14 @@ pub enum Error {
 
     #[error("sharing state between backend and frontend failed")]
     UiSend(#[from] tokio::sync::broadcast::error::SendError<Update>),
+
+    #[cfg(feature = "mpris")]
+    #[error("mpris bus error")]
+    ZBus(#[from] mpris_server::zbus::Error),
+
+    #[cfg(feature = "mpris")]
+    #[error("mpris fdo (zbus interface) error")]
+    Fdo(#[from] mpris_server::zbus::fdo::Error),
 }
 
 #[derive(Clone)]
@@ -40,17 +52,19 @@ pub struct State {
     pub sink: Arc<rodio::Sink>,
     pub current: Current,
     pub bookmarked: bool,
+    list: String,
     timer: Option<Instant>,
     width: usize,
 }
 
 impl State {
-    pub fn initial(sink: Arc<rodio::Sink>, args: &Args, current: Current) -> Self {
+    pub fn initial(sink: Arc<rodio::Sink>, args: &Args, current: Current, list: String) -> Self {
         let width = 21 + args.width.min(32) * 2;
         Self {
             width,
             sink,
             current,
+            list,
             bookmarked: false,
             timer: None,
         }
@@ -61,6 +75,7 @@ impl State {
 pub enum Update {
     Track(Current),
     Bookmarked(bool),
+    Volume,
     Quit,
 }
 
@@ -70,10 +85,11 @@ struct Tasks {
     input: JoinHandle<Result<()>>,
 }
 
-#[derive(Debug)]
 pub struct Handle {
     tasks: Tasks,
-    _environment: Environment,
+    pub environment: Environment,
+    #[cfg(feature = "mpris")]
+    pub mpris: mpris::Server,
 }
 
 impl Drop for Handle {
@@ -99,6 +115,7 @@ impl Handle {
                 match message {
                     Update::Track(track) => state.current = track,
                     Update::Bookmarked(bookmarked) => state.bookmarked = bookmarked,
+                    Update::Volume => state.timer = Some(Instant::now()),
                     Update::Quit => break,
                 }
             };
@@ -117,7 +134,9 @@ impl Handle {
     ) -> Result<Self> {
         let environment = Environment::ready(args.alternate)?;
         Ok(Self {
-            _environment: environment,
+            #[cfg(feature = "mpris")]
+            mpris: mpris::Server::new(state.clone(), tx.clone(), updater.resubscribe()).await?,
+            environment,
             tasks: Tasks {
                 render: tokio::spawn(Self::ui(updater, state, interface::Params::from(args))),
                 input: tokio::spawn(input::listen(tx)),

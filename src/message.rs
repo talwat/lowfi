@@ -1,17 +1,22 @@
 /// Handles communication between different parts of the program.
+#[allow(dead_code, reason = "this code may not be dead depending on features")]
 #[derive(PartialEq, Debug, Clone)]
 pub enum Message {
-    /// Notifies the audio server that it should update the track.
+    /// Deliberate user request to go to the next song.
     Next,
 
-    /// When a track is loaded after a caller previously being told to wait.
+    /// Sent by the audio waiter whenever it believes a track has ended.
+    End,
+
+    /// When a track is loaded after the caller previously being told to wait.
+    /// If a track is taken from the queue, then there is no waiting, so this
+    /// is never actually sent.
     Loaded,
 
     /// Similar to Next, but specific to the first track.
     Init,
 
     /// Unpause the [Sink].
-    #[allow(dead_code, reason = "this code may not be dead depending on features")]
     Play,
 
     /// Pauses the [Sink].
@@ -22,6 +27,9 @@ pub enum Message {
 
     /// Change the volume of playback.
     ChangeVolume(f32),
+
+    /// Set the volume of playback, rather than changing it.
+    SetVolume(f32),
 
     /// Bookmark the current track.
     Bookmark,

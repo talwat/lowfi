@@ -46,14 +46,4 @@ pub enum Error {
 
     #[error("ui failure")]
     UI(#[from] ui::Error),
-
-    #[cfg(feature = "mpris")]
-    #[error("mpris bus error")]
-    ZBus(#[from] mpris_server::zbus::Error),
-
-    // TODO: This has a terrible error message, mainly because I barely understand
-    // what this error even represents. What does fdo mean?!?!? Why, MPRIS!?!?
-    #[cfg(feature = "mpris")]
-    #[error("mpris fdo (zbus interface) error")]
-    Fdo(#[from] mpris_server::zbus::fdo::Error),
 }

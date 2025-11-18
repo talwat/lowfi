@@ -55,6 +55,10 @@ pub fn playing(status: bool) {
 
 pub fn waiter(sink: Arc<Sink>, tx: mpsc::Sender<crate::Message>) -> crate::Result<()> {
     loop {
+        if Arc::strong_count(&sink) == 1 {
+            break Ok(());
+        }
+
         sleep(Duration::from_millis(100));
         sink.sleep_until_end();
 

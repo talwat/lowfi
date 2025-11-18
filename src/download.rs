@@ -30,7 +30,7 @@ impl Downloader {
     pub async fn init(size: usize, tracks: tracks::List, tx: Sender<crate::Message>) -> Handle {
         let client = Client::new();
 
-        let (qtx, qrx) = mpsc::channel(size);
+        let (qtx, qrx) = mpsc::channel(size - 1);
         let downloader = Self {
             queue: qtx,
             tx,

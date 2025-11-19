@@ -5,6 +5,24 @@ It'll do this as simply as it can: no albums, no ads, just lofi.
 
 ![example image](media/example1.png)
 
+## The Rewrite
+
+This branch serves as a rewrite for lowfi. The main focus is to make the code more
+maintainable. This includes such things as:
+
+* Replacing `Mutex` & `Arc` with channels, massively improving performance.
+* More clearly handling tracks in different phases of loading, instead of having
+a mess of different structs.
+* Making the UI code cleaner and easier to follow.
+* Rethinking input & control of the player, especially with MPRIS in mind.
+* Making track loading simpler and more consistent.
+
+This is an *internal rewrite*, and the goal is to retain every single feature.
+If there is a feature present in the original version of lowfi that is not present
+in the rewrite, then it is a bug and must be implemented.
+
+Currently, it is in an extremely early and non-functional state.
+
 ## Disclaimer
 
 As of the 1.7.0 version of lowfi, **all** of the audio files embedded

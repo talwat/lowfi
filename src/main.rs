@@ -1,16 +1,23 @@
 //! An extremely simple lofi player.
-
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
-use clap::{Parser, Subcommand};
+pub mod error;
 use std::path::PathBuf;
 
-mod messages;
-mod play;
-mod player;
-mod tracks;
+use clap::{Parser, Subcommand};
+pub use error::{Error, Result};
+pub mod message;
+pub mod ui;
+pub use message::Message;
 
-#[allow(clippy::all, clippy::pedantic, clippy::nursery, clippy::restriction)]
+use crate::player::Player;
+pub mod audio;
+pub mod bookmark;
+pub mod download;
+pub mod player;
+pub mod tracks;
+pub mod volume;
+
 #[cfg(feature = "scrape")]
 mod scrapers;
 
@@ -21,7 +28,7 @@ use crate::scrapers::Source;
 #[derive(Parser, Clone)]
 #[command(about, version)]
 #[allow(clippy::struct_excessive_bools)]
-struct Args {
+pub struct Args {
     /// Use an alternate terminal screen.
     #[clap(long, short)]
     alternate: bool,
@@ -54,9 +61,9 @@ struct Args {
     #[clap(long, short, default_value_t = 3)]
     width: usize,
 
-    /// Use a custom track list
-    #[clap(long, short, alias = "list", alias = "tracks", short_alias = 'l')]
-    track_list: Option<String>,
+    /// Track list to play music from
+    #[clap(long, short, alias = "list", alias = "tracks", short_alias = 'l', default_value_t = String::from("chillhop"))]
+    track_list: String,
 
     /// Internal song buffer size.
     #[clap(long, short = 's', alias = "buffer", default_value_t = 5)]
@@ -80,21 +87,17 @@ enum Commands {
 }
 
 /// Gets lowfi's data directory.
-pub fn data_dir() -> eyre::Result<PathBuf, player::Error> {
-    let dir = dirs::data_dir()
-        .ok_or(player::Error::DataDir)?
-        .join("lowfi");
+pub fn data_dir() -> crate::Result<PathBuf> {
+    let dir = dirs::data_dir().unwrap().join("lowfi");
 
     Ok(dir)
 }
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    color_eyre::install()?;
+    let args = Args::parse();
 
-    let cli = Args::parse();
-
-    if let Some(command) = cli.command {
+    if let Some(command) = args.command {
         match command {
             #[cfg(feature = "scrape")]
             Commands::Scrape { source } => match source {
@@ -104,7 +107,12 @@ async fn main() -> eyre::Result<()> {
             },
         }
     } else {
-        play::play(cli).await?;
+        let player = Player::init(args).await?;
+        let environment = player.environment();
+        let result = player.run().await;
+
+        environment.cleanup(result.is_ok())?;
+        result?;
     };
 
     Ok(())

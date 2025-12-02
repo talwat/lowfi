@@ -52,9 +52,11 @@ pub struct State {
     pub sink: Arc<rodio::Sink>,
     pub current: Current,
     pub bookmarked: bool,
-    list: String,
     timer: Option<Instant>,
     pub(crate) width: usize,
+
+    #[allow(dead_code)]
+    list: String,
 }
 
 impl State {

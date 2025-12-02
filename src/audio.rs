@@ -1,11 +1,4 @@
-use std::{
-    sync::{atomic::AtomicBool, Arc},
-    thread::sleep,
-    time::Duration,
-};
-
-use rodio::Sink;
-use tokio::sync::mpsc;
+pub mod waiter;
 
 /// This gets the output stream while also shutting up alsa with [libc].
 /// Uses raw libc calls, and therefore is functional only on Linux.
@@ -46,24 +39,4 @@ pub fn silent_get_output_stream() -> eyre::Result<rodio::OutputStream, crate::Er
     }
 
     Ok(stream)
-}
-
-static LISTEN: AtomicBool = AtomicBool::new(false);
-pub fn playing(status: bool) {
-    LISTEN.store(status, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub fn waiter(sink: Arc<Sink>, tx: mpsc::Sender<crate::Message>) -> crate::Result<()> {
-    loop {
-        if Arc::strong_count(&sink) == 1 {
-            break Ok(());
-        }
-
-        sleep(Duration::from_millis(100));
-        sink.sleep_until_end();
-
-        if LISTEN.load(std::sync::atomic::Ordering::Relaxed) {
-            tx.blocking_send(crate::Message::Next)?;
-        }
-    }
 }

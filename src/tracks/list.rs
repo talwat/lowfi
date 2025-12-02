@@ -94,6 +94,10 @@ impl List {
                 x.to_owned()
             };
 
+            if let Some(progress) = progress {
+                progress.store(100, Ordering::Relaxed);
+            }
+
             let result = tokio::fs::read(path.clone()).await.track(x)?;
             result.into()
         } else {

@@ -1,15 +1,12 @@
 use std::sync::Arc;
 
-use tokio::{
-    sync::{
-        broadcast,
-        mpsc::{self, Receiver},
-    },
-    task::JoinHandle,
+use tokio::sync::{
+    broadcast,
+    mpsc::{self, Receiver, Sender},
 };
 
 use crate::{
-    audio,
+    audio::waiter,
     bookmark::Bookmarks,
     download::{self, Downloader},
     tracks::{self, List},
@@ -38,14 +35,15 @@ pub struct Player {
     broadcast: broadcast::Sender<ui::Update>,
     current: Current,
     ui: ui::Handle,
-    waiter: JoinHandle<crate::Result<()>>,
+    _tx: Sender<crate::Message>,
+    _waiter: waiter::Handle,
     _stream: rodio::OutputStream,
 }
 
 impl Drop for Player {
     fn drop(&mut self) {
         self.sink.stop();
-        self.waiter.abort();
+        self.broadcast.send(ui::Update::Quit).unwrap();
     }
 }
 
@@ -88,25 +86,20 @@ impl Player {
 
         let list = List::load(args.track_list.as_ref()).await?;
         let state = ui::State::initial(sink.clone(), &args, current.clone(), list.name.clone());
-        let ui = ui::Handle::init(tx.clone(), urx, state.clone(), &args).await?;
 
         let volume = PersistentVolume::load().await?;
         sink.set_volume(volume.float());
-        let bookmarks = Bookmarks::load().await?;
-        let downloader = Downloader::init(args.buffer_size, list, tx.clone()).await;
-
-        let clone = sink.clone();
-        let waiter = tokio::task::spawn_blocking(move || audio::waiter(clone, tx));
 
         Ok(Self {
+            downloader: Downloader::init(args.buffer_size, list, tx.clone()).await,
+            ui: ui::Handle::init(tx.clone(), urx.resubscribe(), state.clone(), &args).await?,
+            _waiter: waiter::Handle::new(sink.clone(), tx.clone(), urx),
+            bookmarks: Bookmarks::load().await?,
             current,
-            downloader,
             broadcast: utx,
             rx,
             sink,
-            bookmarks,
-            ui,
-            waiter,
+            _tx: tx,
             _stream: stream,
         })
     }
@@ -129,21 +122,18 @@ impl Player {
     pub async fn run(mut self) -> crate::Result<()> {
         while let Some(message) = self.rx.recv().await {
             match message {
-                Message::Next | Message::Init | Message::Loaded | Message::End => {
+                Message::Next | Message::Init | Message::Loaded => {
                     if message == Message::Next && self.current.loading() {
                         continue;
                     }
 
-                    audio::playing(false);
                     self.sink.stop();
-
                     match self.downloader.track().await {
                         download::Output::Loading(progress) => {
                             self.set_current(Current::Loading(progress)).await?;
                         }
                         download::Output::Queued(queued) => {
                             self.play(queued).await?;
-                            audio::playing(true);
                         }
                     };
                 }

@@ -46,4 +46,7 @@ pub enum Error {
 
     #[error("ui failure")]
     UI(#[from] ui::Error),
+
+    #[error("join error")]
+    JoinError(#[from] tokio::task::JoinError),
 }

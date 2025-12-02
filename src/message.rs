@@ -5,9 +5,6 @@ pub enum Message {
     /// Deliberate user request to go to the next song.
     Next,
 
-    /// Sent by the audio waiter whenever it believes a track has ended.
-    End,
-
     /// When a track is loaded after the caller previously being told to wait.
     /// If a track is taken from the queue, then there is no waiting, so this
     /// is never actually sent.

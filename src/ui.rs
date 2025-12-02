@@ -10,12 +10,12 @@ use tokio::{
     task::JoinHandle,
     time::Instant,
 };
-mod components;
-mod environment;
+pub mod components;
+pub mod environment;
 pub use environment::Environment;
-mod input;
-mod interface;
-mod window;
+pub mod input;
+pub mod interface;
+pub mod window;
 
 #[cfg(feature = "mpris")]
 pub mod mpris;
@@ -54,7 +54,7 @@ pub struct State {
     pub bookmarked: bool,
     list: String,
     timer: Option<Instant>,
-    width: usize,
+    pub(crate) width: usize,
 }
 
 impl State {

@@ -20,7 +20,7 @@ pub enum Error {
 /// Manages the bookmarks in the current player.
 pub struct Bookmarks {
     /// The different entries in the bookmarks file.
-    entries: Vec<String>,
+    pub(crate) entries: Vec<String>,
 }
 
 impl Bookmarks {

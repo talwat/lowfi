@@ -5,6 +5,7 @@ pub mod error;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+mod tests;
 pub use error::{Error, Result};
 pub mod message;
 pub mod ui;
@@ -66,8 +67,8 @@ pub struct Args {
     track_list: String,
 
     /// Internal song buffer size.
-    #[clap(long, short = 's', alias = "buffer", default_value_t = 5)]
-    buffer_size: usize,
+    #[clap(long, short = 's', alias = "buffer", default_value_t = 5, value_parser = clap::value_parser!(u32).range(2..))]
+    buffer_size: u32,
 
     /// The command that was ran.
     /// This is [None] if no command was specified.

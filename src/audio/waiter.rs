@@ -1,14 +1,21 @@
-use std::{sync::Arc, thread::sleep, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use rodio::Sink;
 use tokio::{
     sync::{mpsc, Notify},
     task::{self, JoinHandle},
+    time,
 };
 
 pub struct Handle {
-    _task: JoinHandle<()>,
+    task: JoinHandle<()>,
     notify: Arc<Notify>,
+}
+
+impl Drop for Handle {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
 }
 
 impl Handle {
@@ -16,7 +23,7 @@ impl Handle {
         let notify = Arc::new(Notify::new());
 
         Self {
-            _task: task::spawn(Self::waiter(sink, tx, notify.clone())),
+            task: task::spawn(Self::waiter(sink, tx, notify.clone())),
             notify,
         }
     }
@@ -26,15 +33,11 @@ impl Handle {
     }
 
     async fn waiter(sink: Arc<Sink>, tx: mpsc::Sender<crate::Message>, notify: Arc<Notify>) {
-        'main: loop {
+        loop {
             notify.notified().await;
 
             while !sink.empty() {
-                if Arc::strong_count(&notify) <= 1 {
-                    break 'main;
-                }
-
-                sleep(Duration::from_millis(8));
+                time::sleep(Duration::from_millis(8)).await;
             }
 
             if let Err(_) = tx.try_send(crate::Message::Next) {

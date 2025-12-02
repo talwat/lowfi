@@ -20,7 +20,7 @@ pub enum Error {
 #[derive(Clone, Copy)]
 pub struct PersistentVolume {
     /// The volume, as a percentage.
-    inner: u16,
+    pub(crate) inner: u16,
 }
 
 impl PersistentVolume {

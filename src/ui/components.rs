@@ -80,7 +80,10 @@ impl ActionBar {
             Self::Playing(x) => ("playing", Some((x.display.clone(), x.width))),
             Self::Paused(x) => ("paused", Some((x.display.clone(), x.width))),
             Self::Loading(progress) => {
-                let progress = progress.map(|progress| (format!("{: <2.0}%", progress.min(99)), 3));
+                let progress = match *progress {
+                    None | Some(0) => None,
+                    Some(progress) => Some((format!("{: <2.0}%", progress.min(99)), 3)),
+                };
 
                 ("loading", progress)
             }

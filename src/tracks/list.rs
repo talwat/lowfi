@@ -32,7 +32,7 @@ pub struct List {
 
     /// Just the raw file, but seperated by `/n` (newlines).
     /// `lines[0]` is the base/heaeder, with the rest being tracks.
-    lines: Vec<String>,
+    pub lines: Vec<String>,
 
     /// The file path which the list was read from.
     #[allow(dead_code)]
@@ -49,7 +49,7 @@ impl List {
     ///
     /// The second value in the tuple specifies whether the
     /// track has a custom display name.
-    fn random_path(&self) -> (String, Option<String>) {
+    pub fn random_path(&self) -> (String, Option<String>) {
         // We're getting from 1 here, since the base is at `self.lines[0]`.
         //
         // We're also not pre-trimming `self.lines` into `base` & `tracks` due to
@@ -94,10 +94,6 @@ impl List {
                 x.to_owned()
             };
 
-            if let Some(progress) = progress {
-                progress.store(100, Ordering::Relaxed);
-            }
-
             let result = tokio::fs::read(path.clone()).await.track(x)?;
             result.into()
         } else {
@@ -134,13 +130,9 @@ impl List {
     ///
     /// The Result's error is a bool, which is true if a timeout error occured,
     /// and false otherwise. This tells lowfi if it shouldn't wait to try again.
-    pub async fn random(
-        &self,
-        client: &Client,
-        progress: Option<&AtomicU8>,
-    ) -> tracks::Result<Queued> {
+    pub async fn random(&self, client: &Client, progress: &AtomicU8) -> tracks::Result<Queued> {
         let (path, display) = self.random_path();
-        let (data, path) = self.download(&path, client, progress).await?;
+        let (data, path) = self.download(&path, client, Some(progress)).await?;
 
         Queued::new(path, data, display)
     }

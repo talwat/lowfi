@@ -45,10 +45,10 @@ pub async fn draw(state: &mut ui::State, window: &mut Window, params: Params) ->
     };
 
     let controls = components::controls(state.width);
-    let menu = match (params.minimalist, &state.current) {
-        (true, _) => vec![action, middle],
-        // (false, Some(x)) => vec![x.path.clone(), action, middle, controls],
-        _ => vec![action, middle, controls],
+    let menu = if params.minimalist {
+        vec![action, middle]
+    } else {
+        vec![action, middle, controls]
     };
 
     window.draw(menu, false)?;

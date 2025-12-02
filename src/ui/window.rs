@@ -20,7 +20,7 @@ pub struct Window {
     /// prerendered, as they don't change from window to window.
     ///
     /// If the option to not include borders is set, these will just be empty [String]s.
-    borders: [String; 2],
+    pub(crate) borders: [String; 2],
 
     /// The width of the window.
     width: usize,

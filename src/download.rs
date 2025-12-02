@@ -1,5 +1,5 @@
 use std::{
-    sync::atomic::{self, AtomicU8},
+    sync::atomic::{self, AtomicBool, AtomicU8},
     time::Duration,
 };
 
@@ -11,12 +11,9 @@ use tokio::{
 
 use crate::tracks;
 
+static LOADING: AtomicBool = AtomicBool::new(false);
 static PROGRESS: AtomicU8 = AtomicU8::new(0);
 pub type Progress = &'static AtomicU8;
-
-pub fn progress() -> Progress {
-    &PROGRESS
-}
 
 pub struct Downloader {
     queue: Sender<tracks::Queued>,
@@ -47,19 +44,14 @@ impl Downloader {
 
     async fn run(self) -> crate::Result<()> {
         loop {
-            let progress = if PROGRESS.load(atomic::Ordering::Relaxed) == 0 {
-                Some(&PROGRESS)
-            } else {
-                None
-            };
-
-            let result = self.tracks.random(&self.client, progress).await;
+            let result = self.tracks.random(&self.client, &PROGRESS).await;
             match result {
                 Ok(track) => {
                     self.queue.send(track).await?;
 
-                    if progress.is_some() {
+                    if LOADING.load(atomic::Ordering::Relaxed) {
                         self.tx.send(crate::Message::Loaded).await?;
+                        LOADING.store(false, atomic::Ordering::Relaxed);
                     }
                 }
                 Err(error) => {
@@ -87,8 +79,8 @@ impl Handle {
         match self.queue.try_recv() {
             Ok(queued) => Output::Queued(queued),
             Err(_) => {
-                PROGRESS.store(0, atomic::Ordering::Relaxed);
-                Output::Loading(Some(progress()))
+                LOADING.store(true, atomic::Ordering::Relaxed);
+                Output::Loading(Some(&PROGRESS))
             }
         }
     }

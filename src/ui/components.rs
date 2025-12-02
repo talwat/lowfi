@@ -66,7 +66,7 @@ enum ActionBar {
     Playing(tracks::Info),
 
     /// When the app is loading.
-    Loading(u8),
+    Loading(Option<u8>),
 
     /// When the app is muted.
     Muted,
@@ -80,9 +80,9 @@ impl ActionBar {
             Self::Playing(x) => ("playing", Some((x.display.clone(), x.width))),
             Self::Paused(x) => ("paused", Some((x.display.clone(), x.width))),
             Self::Loading(progress) => {
-                let progress = format!("{: <2.0}%", progress.min(&99));
+                let progress = progress.map(|progress| (format!("{: <2.0}%", progress.min(99)), 3));
 
-                ("loading", Some((progress, 3)))
+                ("loading", progress)
             }
             Self::Muted => {
                 let msg = "+ to increase volume";
@@ -108,7 +108,7 @@ impl ActionBar {
 pub fn action(state: &ui::State, width: usize) -> String {
     let action = match state.current.clone() {
         Current::Loading(progress) => {
-            ActionBar::Loading(progress.load(std::sync::atomic::Ordering::Relaxed))
+            ActionBar::Loading(progress.map(|x| x.load(std::sync::atomic::Ordering::Relaxed)))
         }
         Current::Track(info) => {
             if state.sink.volume() < 0.01 {

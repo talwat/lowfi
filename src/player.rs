@@ -17,8 +17,14 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub enum Current {
-    Loading(download::Progress),
+    Loading(Option<download::Progress>),
     Track(tracks::Info),
+}
+
+impl Default for Current {
+    fn default() -> Self {
+        Current::Loading(None)
+    }
 }
 
 impl Current {
@@ -35,15 +41,14 @@ pub struct Player {
     broadcast: broadcast::Sender<ui::Update>,
     current: Current,
     ui: ui::Handle,
+    waiter: waiter::Handle,
     _tx: Sender<crate::Message>,
-    _waiter: waiter::Handle,
     _stream: rodio::OutputStream,
 }
 
 impl Drop for Player {
     fn drop(&mut self) {
         self.sink.stop();
-        self.broadcast.send(ui::Update::Quit).unwrap();
     }
 }
 
@@ -82,7 +87,7 @@ impl Player {
         let (tx, rx) = mpsc::channel(8);
         tx.send(Message::Init).await?;
         let (utx, urx) = broadcast::channel(8);
-        let current = Current::Loading(download::progress());
+        let current = Current::Loading(None);
 
         let list = List::load(args.track_list.as_ref()).await?;
         let state = ui::State::initial(sink.clone(), &args, current.clone(), list.name.clone());
@@ -92,8 +97,8 @@ impl Player {
 
         Ok(Self {
             downloader: Downloader::init(args.buffer_size, list, tx.clone()).await,
-            ui: ui::Handle::init(tx.clone(), urx.resubscribe(), state.clone(), &args).await?,
-            _waiter: waiter::Handle::new(sink.clone(), tx.clone(), urx),
+            ui: ui::Handle::init(tx.clone(), urx, state, &args).await?,
+            waiter: waiter::Handle::new(sink.clone(), tx.clone()),
             bookmarks: Bookmarks::load().await?,
             current,
             broadcast: utx,
@@ -115,6 +120,7 @@ impl Player {
         let decoded = queued.decode()?;
         self.sink.append(decoded.data);
         self.set_current(Current::Track(decoded.info)).await?;
+        self.waiter.notify();
 
         Ok(())
     }

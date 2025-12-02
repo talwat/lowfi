@@ -78,7 +78,7 @@ pub struct Handle {
 }
 
 pub enum Output {
-    Loading(Progress),
+    Loading(Option<Progress>),
     Queued(tracks::Queued),
 }
 
@@ -88,7 +88,7 @@ impl Handle {
             Ok(queued) => Output::Queued(queued),
             Err(_) => {
                 PROGRESS.store(0, atomic::Ordering::Relaxed);
-                Output::Loading(progress())
+                Output::Loading(Some(progress()))
             }
         }
     }

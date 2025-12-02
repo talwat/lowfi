@@ -2,39 +2,35 @@ use std::{sync::Arc, thread::sleep, time::Duration};
 
 use rodio::Sink;
 use tokio::{
-    sync::{broadcast, mpsc},
+    sync::{mpsc, Notify},
     task::{self, JoinHandle},
 };
 
-use crate::ui::{self, Update};
-
 pub struct Handle {
     _task: JoinHandle<()>,
+    notify: Arc<Notify>,
 }
 
 impl Handle {
-    pub fn new(
-        sink: Arc<Sink>,
-        tx: mpsc::Sender<crate::Message>,
-        rx: broadcast::Receiver<ui::Update>,
-    ) -> Self {
+    pub fn new(sink: Arc<Sink>, tx: mpsc::Sender<crate::Message>) -> Self {
+        let notify = Arc::new(Notify::new());
+
         Self {
-            _task: task::spawn_blocking(|| Self::waiter(sink, tx, rx)),
+            _task: task::spawn(Self::waiter(sink, tx, notify.clone())),
+            notify,
         }
     }
 
-    fn waiter(
-        sink: Arc<Sink>,
-        tx: mpsc::Sender<crate::Message>,
-        mut rx: broadcast::Receiver<ui::Update>,
-    ) {
+    pub fn notify(&self) {
+        self.notify.notify_one();
+    }
+
+    async fn waiter(sink: Arc<Sink>, tx: mpsc::Sender<crate::Message>, notify: Arc<Notify>) {
         'main: loop {
-            if !matches!(rx.blocking_recv(), Ok(Update::Track(_))) {
-                continue;
-            }
+            notify.notified().await;
 
             while !sink.empty() {
-                if matches!(rx.try_recv(), Ok(Update::Quit)) {
+                if Arc::strong_count(&notify) <= 1 {
                     break 'main;
                 }
 

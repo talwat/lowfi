@@ -16,8 +16,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Setup Rust
+      - name: Install dependencies
+        run: sudo apt install libasound2-dev
+
+      - name: Setup rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
-        
+
       - name: Run tests
         run: cargo test --all --verbose

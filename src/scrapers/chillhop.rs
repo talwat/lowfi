@@ -118,11 +118,11 @@ pub async fn scrape() -> eyre::Result<()> {
     const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
     const TRACK_COUNT: u64 = 1625;
 
-    const IGNORED_TRACKS: [u32; 20] = [
+    const IGNORED_TRACKS: [u32; 28] = [
         // 404
         74707, // Lyrics
         21655, 21773, 8172, 55397, 75135, 24827, 8141, 8157, 64052, 31612, 41956, 8001, 9217, 8730,
-        55372, 9262, 30131, 9372, // Abnormal
+        55372, 9262, 30131, 9372, 20561, 21652, 9306, 21646, // Abnormal
         8469, 7832, 10448, 9446, 9396,
     ];
 

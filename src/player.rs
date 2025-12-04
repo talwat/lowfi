@@ -97,8 +97,8 @@ impl Player {
         sink.set_volume(volume.float());
 
         Ok(Self {
-            downloader: Downloader::init(args.buffer_size as usize, list, tx.clone()).await,
             ui: ui::Handle::init(tx.clone(), urx, state, &args).await?,
+            downloader: Downloader::init(args.buffer_size as usize, list, tx.clone()).await,
             waiter: waiter::Handle::new(sink.clone(), tx.clone()),
             bookmarks: Bookmarks::load().await?,
             current,

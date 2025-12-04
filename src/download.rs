@@ -12,7 +12,7 @@ use tokio::{
 use crate::tracks;
 
 static LOADING: AtomicBool = AtomicBool::new(false);
-static PROGRESS: AtomicU8 = AtomicU8::new(0);
+pub(crate) static PROGRESS: AtomicU8 = AtomicU8::new(0);
 pub type Progress = &'static AtomicU8;
 
 pub struct Downloader {

@@ -89,7 +89,7 @@ mod info {
     }
 
     #[test]
-    fn info_width_counts_graphemes() {
+    fn width_counts_graphemes() {
         // We cannot create a valid decoder for arbitrary bytes here, so test width through constructor logic directly.
         let display = "a̐é"; // multiple-grapheme clusters
         let width = display.graphemes(true).count();
@@ -126,17 +126,18 @@ mod decoded {
 
 #[cfg(test)]
 mod list {
-    use crate::tracks::List;
+    use crate::{download::PROGRESS, tracks::List};
+    use reqwest::Client;
 
     #[test]
-    fn list_base_works() {
+    fn base_works() {
         let text = "http://base/\ntrack1\ntrack2";
         let list = List::new("test", text, None);
-        assert_eq!(list.base(), "http://base/");
+        assert_eq!(list.header(), "http://base/");
     }
 
     #[test]
-    fn list_random_path_parses_custom_display() {
+    fn random_path_parses_custom_display() {
         let text = "http://x/\npath!Display";
         let list = List::new("t", text, None);
 
@@ -146,7 +147,7 @@ mod list {
     }
 
     #[test]
-    fn list_random_path_no_display() {
+    fn random_path_no_display() {
         let text = "http://x/\ntrackA";
         let list = List::new("t", text, None);
 
@@ -160,21 +161,13 @@ mod list {
         let text = "base\na  \nb ";
         let list = List::new("name", text, None);
 
-        assert_eq!(list.base(), "base");
+        assert_eq!(list.header(), "base");
         assert_eq!(list.lines[1], "a");
         assert_eq!(list.lines[2], "b");
     }
 
     #[test]
-    fn list_noheader_base() {
-        let text = "noheader\nhttps://example.com/track.mp3";
-        let list = List::new("test", text, None);
-        // noheader means the first line should be treated as base
-        assert_eq!(list.base(), "noheader");
-    }
-
-    #[test]
-    fn list_custom_display_with_exclamation() {
+    fn custom_display_with_exclamation() {
         let text = "http://base/\nfile.mp3!My Custom Name";
         let list = List::new("t", text, None);
         let (path, display) = list.random_path();
@@ -183,10 +176,25 @@ mod list {
     }
 
     #[test]
-    fn list_single_track() {
+    fn single_track() {
         let text = "base\nonly_track.mp3";
         let list = List::new("name", text, None);
         let (path, _) = list.random_path();
         assert_eq!(path, "only_track.mp3");
+    }
+
+    #[tokio::test]
+    async fn download() {
+        let text = "https://stream.chillhop.com/mp3/\n9476!Apple Juice";
+        let list = List::new("name", text, None);
+
+        let client = Client::new();
+        let track = list.random(&client, &PROGRESS).await.unwrap();
+        assert_eq!(track.display, "Apple Juice");
+        assert_eq!(track.path, "https://stream.chillhop.com/mp3/9476");
+        assert_eq!(track.data.len(), 3150424);
+
+        let decoded = track.decode().unwrap();
+        assert_eq!(decoded.info.duration.unwrap().as_secs(), 143);
     }
 }

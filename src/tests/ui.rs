@@ -1,3 +1,11 @@
+/* The lowfi UI:
+┌─────────────────────────────┐
+│ loading                     │
+│  [           ] 00:00/00:00  │
+│ [s]kip    [p]ause    [q]uit │
+└─────────────────────────────┘
+*/
+
 #[cfg(test)]
 mod components {
     use crate::ui;
@@ -65,18 +73,161 @@ mod window {
         assert!(w2.borders[1].is_empty());
     }
 
+    fn sided(text: &str) -> String {
+        return format!("│ {text} │");
+    }
+
     #[test]
-    fn border_width_consistency() {
-        let w = Window::new(20, false);
-        // borders should have consistent format with width encoded
-        assert!(w.borders[0].len() > 0);
+    fn simple() {
+        let mut w = Window::new(3, false);
+        let (render, height) = w.render(vec![String::from("abc")], false, true).unwrap();
+
+        const MIDDLE: &str = "─────";
+        assert_eq!(format!("┌{MIDDLE}┐\n{}\n└{MIDDLE}┘", sided("abc")), render);
+        assert_eq!(height, 3);
+    }
+
+    #[test]
+    fn spaced() {
+        let mut w = Window::new(3, false);
+        let (render, height) = w
+            .render(
+                vec![String::from("abc"), String::from(" b"), String::from("c")],
+                true,
+                true,
+            )
+            .unwrap();
+
+        const MIDDLE: &str = "─────";
+        assert_eq!(
+            format!(
+                "┌{MIDDLE}┐\n{}\n{}\n{}\n└{MIDDLE}┘",
+                sided("abc"),
+                sided(" b "),
+                sided("c  "),
+            ),
+            render
+        );
+        assert_eq!(height, 5);
     }
 
     #[test]
     fn zero_width_window() {
         let w = Window::new(0, false);
-        // Should handle zero-width gracefully
         assert!(!w.borders[0].is_empty());
+    }
+}
+
+#[cfg(test)]
+mod interface {
+    use crossterm::style::Stylize;
+    use std::{sync::Arc, time::Duration};
+    use tokio::time::Instant;
+
+    use crate::{
+        download::PROGRESS,
+        player::Current,
+        tracks,
+        ui::{
+            interface::{self, Params},
+            State,
+        },
+    };
+
+    #[test]
+    fn loading() {
+        let sink = Arc::new(rodio::Sink::new().0);
+        let mut state = State::initial(sink, 3, Current::Loading(None), String::from("test"));
+        let menu = interface::menu(&mut state, Params::default());
+
+        assert_eq!(menu[0], "loading                    ");
+        assert_eq!(menu[1], " [           ] 00:00/00:00 ");
+        assert_eq!(
+            menu[2],
+            format!(
+                "{}kip    {}ause    {}uit",
+                "[s]".bold(),
+                "[p]".bold(),
+                "[q]".bold()
+            )
+        );
+    }
+
+    #[test]
+    fn volume() {
+        let sink = Arc::new(rodio::Sink::new().0);
+        sink.set_volume(0.5);
+        let mut state = State::initial(sink, 3, Current::Loading(None), String::from("test"));
+        state.timer = Some(Instant::now());
+
+        let menu = interface::menu(&mut state, Params::default());
+
+        assert_eq!(menu[0], "loading                    ");
+        assert_eq!(menu[1], " volume: [/////     ]  50% ");
+        assert_eq!(
+            menu[2],
+            format!(
+                "{}kip    {}ause    {}uit",
+                "[s]".bold(),
+                "[p]".bold(),
+                "[q]".bold()
+            )
+        );
+    }
+
+    #[test]
+    fn progress() {
+        let sink = Arc::new(rodio::Sink::new().0);
+        PROGRESS.store(50, std::sync::atomic::Ordering::Relaxed);
+        let mut state = State::initial(
+            sink,
+            3,
+            Current::Loading(Some(&PROGRESS)),
+            String::from("test"),
+        );
+        let menu = interface::menu(&mut state, Params::default());
+
+        assert_eq!(menu[0], format!("loading {}                ", "50%".bold()));
+        assert_eq!(menu[1], " [           ] 00:00/00:00 ");
+        assert_eq!(
+            menu[2],
+            format!(
+                "{}kip    {}ause    {}uit",
+                "[s]".bold(),
+                "[p]".bold(),
+                "[q]".bold()
+            )
+        );
+    }
+
+    #[test]
+    fn track() {
+        let sink = Arc::new(rodio::Sink::new().0);
+        let track = tracks::Info {
+            path: "/path".to_owned(),
+            display: "Test Track".to_owned(),
+            width: 4 + 1 + 5,
+            duration: Some(Duration::from_secs(8)),
+        };
+
+        let current = Current::Track(track.clone());
+        let mut state = State::initial(sink, 3, current, String::from("test"));
+        let menu = interface::menu(&mut state, Params::default());
+
+        assert_eq!(
+            menu[0],
+            format!("playing {}         ", track.display.bold())
+        );
+        assert_eq!(menu[1], " [           ] 00:00/00:08 ");
+        assert_eq!(
+            menu[2],
+            format!(
+                "{}kip    {}ause    {}uit",
+                "[s]".bold(),
+                "[p]".bold(),
+                "[q]".bold()
+            )
+        );
     }
 }
 
@@ -99,66 +250,5 @@ mod environment {
         if let Ok(env) = Environment::ready(true) {
             let _ = env.cleanup(false);
         }
-    }
-}
-
-#[cfg(test)]
-mod integration {
-    use std::sync::Arc;
-
-    use rodio::OutputStreamBuilder;
-
-    use crate::{player::Current, Args};
-
-    fn try_make_state() -> Option<crate::ui::State> {
-        let stream = OutputStreamBuilder::open_default_stream();
-        if stream.is_err() {
-            return None;
-        }
-
-        let mut stream = stream.unwrap();
-        stream.log_on_drop(false);
-        let sink = Arc::new(rodio::Sink::connect_new(stream.mixer()));
-
-        let args = Args {
-            alternate: false,
-            minimalist: false,
-            borderless: false,
-            paused: false,
-            fps: 12,
-            timeout: 3,
-            debug: false,
-            width: 3,
-            track_list: String::from("chillhop"),
-            buffer_size: 5,
-            command: None,
-        };
-
-        let current = Current::default();
-        Some(crate::ui::State::initial(
-            sink,
-            &args,
-            current,
-            String::from("list"),
-        ))
-    }
-
-    #[test]
-    fn progress_bar_runs() -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(state) = try_make_state() {
-            // ensure we can call progress_bar without panic
-            let _ = crate::ui::components::progress_bar(&state, state.width);
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn action_runs() -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(state) = try_make_state() {
-            let _ = crate::ui::components::action(&state, state.width);
-        }
-
-        Ok(())
     }
 }

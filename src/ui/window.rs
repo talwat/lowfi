@@ -22,7 +22,7 @@ pub struct Window {
     /// If the option to not include borders is set, these will just be empty [String]s.
     pub(crate) borders: [String; 2],
 
-    /// The width of the window.
+    /// The inner width of the window.
     width: usize,
 
     /// The output, currently just an [`Stdout`].
@@ -32,7 +32,7 @@ pub struct Window {
 impl Window {
     /// Initializes a new [Window].
     ///
-    /// * `width` - Width of the windows.
+    /// * `width` - Inner width of the window.
     /// * `borderless` - Whether to include borders in the window, or not.
     pub fn new(width: usize, borderless: bool) -> Self {
         let borders = if borderless {
@@ -51,8 +51,13 @@ impl Window {
         }
     }
 
-    /// Actually draws the window, with each element in `content` being on a new line.
-    pub fn draw(&mut self, content: Vec<String>, space: bool) -> super::Result<()> {
+    pub(crate) fn render(
+        &mut self,
+        content: Vec<String>,
+        space: bool,
+        testing: bool,
+    ) -> super::Result<(String, u16)> {
+        let linefeed = if testing { "\n" } else { "\r\n" };
         let len: u16 = content.len().try_into()?;
 
         // Note that this will have a trailing newline, which we use later.
@@ -64,7 +69,9 @@ impl Window {
             } else {
                 String::new()
             };
-            write!(output, "{padding} {}{space} {padding}\r\n", x.reset()).unwrap();
+
+            let center = if testing { x } else { x.reset().to_string() };
+            write!(output, "{padding} {center}{space} {padding}{linefeed}").unwrap();
 
             output
         });
@@ -72,12 +79,23 @@ impl Window {
         // We're doing this because Windows is stupid and can't stand
         // writing to the last line repeatedly.
         #[cfg(windows)]
-        let (height, suffix) = (len + 2, "\r\n");
+        let (height, suffix) = (len + 3, linefeed);
         #[cfg(not(windows))]
-        let (height, suffix) = (len + 1, "");
+        let (height, suffix) = (len + 2, "");
 
         // There's no need for another newline after the main menu content, because it already has one.
-        let rendered = format!("{}\r\n{menu}{}{suffix}", self.borders[0], self.borders[1]);
+        Ok((
+            format!(
+                "{}{linefeed}{menu}{}{suffix}",
+                self.borders[0], self.borders[1]
+            ),
+            height,
+        ))
+    }
+
+    /// Actually draws the window, with each element in `content` being on a new line.
+    pub fn draw(&mut self, content: Vec<String>, space: bool) -> super::Result<()> {
+        let (rendered, height) = self.render(content, space, false)?;
 
         crossterm::execute!(
             self.out,
@@ -85,7 +103,7 @@ impl Window {
             MoveToColumn(0),
             Print(rendered),
             MoveToColumn(0),
-            MoveUp(height),
+            MoveUp(height - 1),
         )?;
 
         Ok(())

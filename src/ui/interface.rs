@@ -5,7 +5,7 @@ use crate::{
     Args,
 };
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Params {
     pub borderless: bool,
     pub minimalist: bool,
@@ -25,10 +25,7 @@ impl From<&Args> for Params {
     }
 }
 
-/// The code for the terminal interface itself.
-///
-/// * `minimalist` - All this does is hide the bottom control bar.
-pub async fn draw(state: &mut ui::State, window: &mut Window, params: Params) -> super::Result<()> {
+pub(crate) fn menu(state: &mut ui::State, params: Params) -> Vec<String> {
     let action = components::action(&state, state.width);
 
     let middle = match state.timer {
@@ -45,12 +42,18 @@ pub async fn draw(state: &mut ui::State, window: &mut Window, params: Params) ->
     };
 
     let controls = components::controls(state.width);
-    let menu = if params.minimalist {
+    if params.minimalist {
         vec![action, middle]
     } else {
         vec![action, middle, controls]
-    };
+    }
+}
 
+/// The code for the terminal interface itself.
+///
+/// * `minimalist` - All this does is hide the bottom control bar.
+pub fn draw(state: &mut ui::State, window: &mut Window, params: Params) -> super::Result<()> {
+    let menu = menu(state, params);
     window.draw(menu, false)?;
     Ok(())
 }

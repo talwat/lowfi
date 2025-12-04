@@ -52,7 +52,7 @@ pub struct State {
     pub sink: Arc<rodio::Sink>,
     pub current: Current,
     pub bookmarked: bool,
-    timer: Option<Instant>,
+    pub(crate) timer: Option<Instant>,
     pub(crate) width: usize,
 
     #[allow(dead_code)]
@@ -60,8 +60,8 @@ pub struct State {
 }
 
 impl State {
-    pub fn initial(sink: Arc<rodio::Sink>, args: &Args, current: Current, list: String) -> Self {
-        let width = 21 + args.width.min(32) * 2;
+    pub fn initial(sink: Arc<rodio::Sink>, width: usize, current: Current, list: String) -> Self {
+        let width = 21 + width.min(32) * 2;
         Self {
             width,
             sink,
@@ -111,7 +111,7 @@ impl Handle {
         let mut window = Window::new(state.width, params.borderless);
 
         loop {
-            interface::draw(&mut state, &mut window, params).await?;
+            interface::draw(&mut state, &mut window, params)?;
 
             if let Ok(message) = rx.try_recv() {
                 match message {

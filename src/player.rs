@@ -90,7 +90,8 @@ impl Player {
         let current = Current::Loading(None);
 
         let list = List::load(args.track_list.as_ref()).await?;
-        let state = ui::State::initial(sink.clone(), &args, current.clone(), list.name.clone());
+        let state =
+            ui::State::initial(sink.clone(), args.width, current.clone(), list.name.clone());
 
         let volume = PersistentVolume::load().await?;
         sink.set_volume(volume.float());

@@ -41,7 +41,7 @@ pub struct List {
 
 impl List {
     /// Gets the base URL of the [List].
-    pub fn base(&self) -> &str {
+    pub fn header(&self) -> &str {
         self.lines[0].trim()
     }
 
@@ -66,7 +66,7 @@ impl List {
     }
 
     /// Downloads a raw track, but doesn't decode it.
-    async fn download(
+    pub(crate) async fn download(
         &self,
         track: &str,
         client: &Client,
@@ -76,7 +76,7 @@ impl List {
         let path = if track.contains("://") {
             track.to_owned()
         } else {
-            format!("{}{}", self.base(), track)
+            format!("{}{}", self.header(), track)
         };
 
         let data: Bytes = if let Some(x) = path.strip_prefix("file://") {

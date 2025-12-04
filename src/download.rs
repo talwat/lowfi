@@ -15,6 +15,8 @@ static LOADING: AtomicBool = AtomicBool::new(false);
 pub(crate) static PROGRESS: AtomicU8 = AtomicU8::new(0);
 pub type Progress = &'static AtomicU8;
 
+/// The downloader, which has all of the state necessary
+/// to download tracks and add them to the queue.
 pub struct Downloader {
     queue: Sender<tracks::Queued>,
     tx: Sender<crate::Message>,
@@ -24,7 +26,10 @@ pub struct Downloader {
 }
 
 impl Downloader {
-    pub async fn init(size: usize, tracks: tracks::List, tx: Sender<crate::Message>) -> Handle {
+    /// Initializes the downloader with a track list.
+    ///
+    /// `tx` specifies the [`Sender`] to be notified with [`crate::Message::Loaded`].
+    pub fn init(size: usize, tracks: tracks::List, tx: Sender<crate::Message>) -> Handle {
         let client = Client::new();
 
         let (qtx, qrx) = mpsc::channel(size - 1);
@@ -64,25 +69,30 @@ impl Downloader {
         }
     }
 }
+
+/// Downloader handle, responsible for managing
+/// the downloader task and internal buffer.
 pub struct Handle {
     queue: Receiver<tracks::Queued>,
     handle: JoinHandle<crate::Result<()>>,
 }
 
+/// The output when a track is requested from the downloader.
 pub enum Output {
     Loading(Option<Progress>),
     Queued(tracks::Queued),
 }
 
 impl Handle {
-    pub async fn track(&mut self) -> Output {
-        match self.queue.try_recv() {
-            Ok(queued) => Output::Queued(queued),
-            Err(_) => {
+    /// Gets either a queued track, or a progress report,
+    /// depending on the state of the internal download buffer.
+    #[rustfmt::skip]
+    pub fn track(&mut self) -> Output {
+        self.queue.try_recv().map_or_else(|_| {
                 LOADING.store(true, atomic::Ordering::Relaxed);
                 Output::Loading(Some(&PROGRESS))
-            }
-        }
+            }, Output::Queued,
+        )
     }
 }
 

@@ -26,7 +26,7 @@ impl From<&Args> for Params {
 }
 
 pub(crate) fn menu(state: &mut ui::State, params: Params) -> Vec<String> {
-    let action = components::action(&state, state.width);
+    let action = components::action(state, state.width);
 
     let middle = match state.timer {
         Some(timer) => {
@@ -38,7 +38,7 @@ pub(crate) fn menu(state: &mut ui::State, params: Params) -> Vec<String> {
 
             components::audio_bar(state.width - 17, volume, &percentage)
         }
-        None => components::progress_bar(&state, state.width - 16),
+        None => components::progress_bar(state, state.width - 16),
     };
 
     let controls = components::controls(state.width);

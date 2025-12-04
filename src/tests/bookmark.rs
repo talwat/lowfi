@@ -11,8 +11,8 @@ mod bookmark {
         }
     }
 
-    #[tokio::test]
-    async fn toggle_and_check() {
+    #[test]
+    fn toggle_and_check() {
         let mut bm = Bookmarks { entries: vec![] };
         let info = test_info("p.mp3", "Nice Track");
 
@@ -20,37 +20,37 @@ mod bookmark {
         assert!(!bm.bookmarked(&info));
 
         // bookmark it
-        let added = bm.bookmark(&info).await.unwrap();
+        let added = bm.bookmark(&info).unwrap();
         assert!(added);
         assert!(bm.bookmarked(&info));
 
         // un-bookmark it
-        let removed = bm.bookmark(&info).await.unwrap();
+        let removed = bm.bookmark(&info).unwrap();
         assert!(!removed);
         assert!(!bm.bookmarked(&info));
     }
 
-    #[tokio::test]
-    async fn multiple_bookmarks() {
+    #[test]
+    fn multiple_bookmarks() {
         let mut bm = Bookmarks { entries: vec![] };
         let info1 = test_info("track1.mp3", "Track One");
         let info2 = test_info("track2.mp3", "Track Two");
 
-        bm.bookmark(&info1).await.unwrap();
-        bm.bookmark(&info2).await.unwrap();
+        bm.bookmark(&info1).unwrap();
+        bm.bookmark(&info2).unwrap();
 
         assert!(bm.bookmarked(&info1));
         assert!(bm.bookmarked(&info2));
         assert_eq!(bm.entries.len(), 2);
     }
 
-    #[tokio::test]
-    async fn duplicate_bookmark_removes() {
+    #[test]
+    fn duplicate_bookmark_removes() {
         let mut bm = Bookmarks { entries: vec![] };
         let info = test_info("x.mp3", "X");
 
-        bm.bookmark(&info).await.unwrap();
-        let is_added = bm.bookmark(&info).await.unwrap();
+        bm.bookmark(&info).unwrap();
+        let is_added = bm.bookmark(&info).unwrap();
 
         assert!(!is_added);
         assert!(bm.entries.is_empty());

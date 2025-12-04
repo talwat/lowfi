@@ -46,7 +46,7 @@ impl Bookmarks {
                 if x.is_empty() {
                     None
                 } else {
-                    Some(x.to_string())
+                    Some(x.to_owned())
                 }
             })
             .collect();
@@ -64,7 +64,7 @@ impl Bookmarks {
     /// Bookmarks a given track with a full path and optional custom name.
     ///
     /// Returns whether the track is now bookmarked, or not.
-    pub async fn bookmark(&mut self, track: &tracks::Info) -> Result<bool> {
+    pub fn bookmark(&mut self, track: &tracks::Info) -> Result<bool> {
         let entry = track.to_entry();
         let idx = self.entries.iter().position(|x| **x == entry);
 

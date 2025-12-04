@@ -23,13 +23,13 @@ pub enum Current {
 
 impl Default for Current {
     fn default() -> Self {
-        Current::Loading(None)
+        Self::Loading(None)
     }
 }
 
 impl Current {
-    pub fn loading(&self) -> bool {
-        return matches!(self, Current::Loading(_));
+    pub const fn loading(&self) -> bool {
+        matches!(self, Self::Loading(_))
     }
 }
 
@@ -53,25 +53,25 @@ impl Drop for Player {
 }
 
 impl Player {
-    pub fn environment(&self) -> ui::Environment {
+    pub const fn environment(&self) -> ui::Environment {
         self.ui.environment
     }
 
-    pub async fn set_current(&mut self, current: Current) -> crate::Result<()> {
+    pub fn set_current(&mut self, current: Current) -> crate::Result<()> {
         self.current = current.clone();
-        self.update(ui::Update::Track(current)).await?;
+        self.update(ui::Update::Track(current))?;
 
         let Current::Track(track) = &self.current else {
             return Ok(());
         };
 
-        let bookmarked = self.bookmarks.bookmarked(&track);
-        self.update(ui::Update::Bookmarked(bookmarked)).await?;
+        let bookmarked = self.bookmarks.bookmarked(track);
+        self.update(ui::Update::Bookmarked(bookmarked))?;
 
         Ok(())
     }
 
-    pub async fn update(&mut self, update: ui::Update) -> crate::Result<()> {
+    pub fn update(&mut self, update: ui::Update) -> crate::Result<()> {
         self.broadcast.send(update)?;
         Ok(())
     }
@@ -87,21 +87,19 @@ impl Player {
         let (tx, rx) = mpsc::channel(8);
         tx.send(Message::Init).await?;
         let (utx, urx) = broadcast::channel(8);
-        let current = Current::Loading(None);
 
         let list = List::load(args.track_list.as_ref()).await?;
-        let state =
-            ui::State::initial(sink.clone(), args.width, current.clone(), list.name.clone());
+        let state = ui::State::initial(Arc::clone(&sink), args.width, list.name.clone());
 
         let volume = PersistentVolume::load().await?;
         sink.set_volume(volume.float());
 
         Ok(Self {
             ui: ui::Handle::init(tx.clone(), urx, state, &args).await?,
-            downloader: Downloader::init(args.buffer_size as usize, list, tx.clone()).await,
-            waiter: waiter::Handle::new(sink.clone(), tx.clone()),
+            downloader: Downloader::init(args.buffer_size as usize, list, tx.clone()),
+            waiter: waiter::Handle::new(Arc::clone(&sink), tx.clone()),
             bookmarks: Bookmarks::load().await?,
-            current,
+            current: Current::default(),
             broadcast: utx,
             rx,
             sink,
@@ -112,15 +110,15 @@ impl Player {
 
     pub async fn close(&self) -> crate::Result<()> {
         self.bookmarks.save().await?;
-        PersistentVolume::save(self.sink.volume() as f32).await?;
+        PersistentVolume::save(self.sink.volume()).await?;
 
         Ok(())
     }
 
-    pub async fn play(&mut self, queued: tracks::Queued) -> crate::Result<()> {
+    pub fn play(&mut self, queued: tracks::Queued) -> crate::Result<()> {
         let decoded = queued.decode()?;
         self.sink.append(decoded.data);
-        self.set_current(Current::Track(decoded.info)).await?;
+        self.set_current(Current::Track(decoded.info))?;
         self.waiter.notify();
 
         Ok(())
@@ -135,12 +133,12 @@ impl Player {
                     }
 
                     self.sink.stop();
-                    match self.downloader.track().await {
+                    match self.downloader.track() {
                         download::Output::Loading(progress) => {
-                            self.set_current(Current::Loading(progress)).await?;
+                            self.set_current(Current::Loading(progress))?;
                         }
                         download::Output::Queued(queued) => {
-                            self.play(queued).await?;
+                            self.play(queued)?;
                         }
                     };
                 }
@@ -160,19 +158,19 @@ impl Player {
                 Message::ChangeVolume(change) => {
                     self.sink
                         .set_volume((self.sink.volume() + change).clamp(0.0, 1.0));
-                    self.update(ui::Update::Volume).await?;
+                    self.update(ui::Update::Volume)?;
                 }
                 Message::SetVolume(set) => {
                     self.sink.set_volume(set.clamp(0.0, 1.0));
-                    self.update(ui::Update::Volume).await?;
+                    self.update(ui::Update::Volume)?;
                 }
                 Message::Bookmark => {
                     let Current::Track(current) = &self.current else {
                         continue;
                     };
 
-                    let bookmarked = self.bookmarks.bookmark(current).await?;
-                    self.update(ui::Update::Bookmarked(bookmarked)).await?;
+                    let bookmarked = self.bookmarks.bookmark(current)?;
+                    self.update(ui::Update::Bookmarked(bookmarked))?;
                 }
                 Message::Quit => break,
             }

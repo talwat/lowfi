@@ -79,7 +79,7 @@ mod window {
 
     #[test]
     fn simple() {
-        let mut w = Window::new(3, false);
+        let w = Window::new(3, false);
         let (render, height) = w.render(vec![String::from("abc")], false, true).unwrap();
 
         const MIDDLE: &str = "─────";
@@ -89,7 +89,7 @@ mod window {
 
     #[test]
     fn spaced() {
-        let mut w = Window::new(3, false);
+        let w = Window::new(3, false);
         let (render, height) = w
             .render(
                 vec![String::from("abc"), String::from(" b"), String::from("c")],
@@ -137,7 +137,7 @@ mod interface {
     #[test]
     fn loading() {
         let sink = Arc::new(rodio::Sink::new().0);
-        let mut state = State::initial(sink, 3, Current::Loading(None), String::from("test"));
+        let mut state = State::initial(sink, 3, String::from("test"));
         let menu = interface::menu(&mut state, Params::default());
 
         assert_eq!(menu[0], "loading                    ");
@@ -157,7 +157,7 @@ mod interface {
     fn volume() {
         let sink = Arc::new(rodio::Sink::new().0);
         sink.set_volume(0.5);
-        let mut state = State::initial(sink, 3, Current::Loading(None), String::from("test"));
+        let mut state = State::initial(sink, 3, String::from("test"));
         state.timer = Some(Instant::now());
 
         let menu = interface::menu(&mut state, Params::default());
@@ -179,12 +179,9 @@ mod interface {
     fn progress() {
         let sink = Arc::new(rodio::Sink::new().0);
         PROGRESS.store(50, std::sync::atomic::Ordering::Relaxed);
-        let mut state = State::initial(
-            sink,
-            3,
-            Current::Loading(Some(&PROGRESS)),
-            String::from("test"),
-        );
+        let mut state = State::initial(sink, 3, String::from("test"));
+        state.current = Current::Loading(Some(&PROGRESS));
+
         let menu = interface::menu(&mut state, Params::default());
 
         assert_eq!(menu[0], format!("loading {}                ", "50%".bold()));
@@ -210,8 +207,8 @@ mod interface {
             duration: Some(Duration::from_secs(8)),
         };
 
-        let current = Current::Track(track.clone());
-        let mut state = State::initial(sink, 3, current, String::from("test"));
+        let mut state = State::initial(sink, 3, String::from("test"));
+        state.current = Current::Track(track.clone());
         let menu = interface::menu(&mut state, Params::default());
 
         assert_eq!(

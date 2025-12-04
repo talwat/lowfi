@@ -45,7 +45,7 @@ impl Environment {
 
         panic::set_hook(Box::new(move |info| {
             let _ = environment.cleanup(false);
-            eprintln!("panic: {}", info);
+            eprintln!("panic: {info}");
         }));
 
         Ok(environment)

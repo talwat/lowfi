@@ -25,7 +25,7 @@ pub fn silent_get_output_stream() -> eyre::Result<rodio::OutputStream, crate::Er
     // SAFETY: Simple enough to be impossible to fail. Hopefully.
     unsafe {
         freopen(null.as_ptr(), mode.as_ptr(), stderr);
-    }
+    };
 
     // Make the OutputStream while stderr is still redirected to /dev/null.
     let stream = OutputStreamBuilder::open_default_stream()?;
@@ -36,7 +36,7 @@ pub fn silent_get_output_stream() -> eyre::Result<rodio::OutputStream, crate::Er
     // SAFETY: See the first call to `freopen`.
     unsafe {
         freopen(tty.as_ptr(), mode.as_ptr(), stderr);
-    }
+    };
 
     Ok(stream)
 }

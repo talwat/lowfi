@@ -2,24 +2,18 @@
 //! of tracks, as well as downloading them & finding new ones.
 //!
 //! There are several structs which represent the different stages
-//! that go on in downloading and playing tracks. The proccess for fetching tracks,
-//! and what structs are relevant in each step, are as follows.
+//! that go on in downloading and playing tracks. When first queued,
+//! the downloader will return a [`Queued`] track.
 //!
-//! First Stage, when a track is initially fetched.
-//! 1. Raw entry selected from track list.
-//! 2. Raw entry split into path & display name.
-//! 3. Track data fetched, and [`QueuedTrack`] is created which includes a [`TrackName`] that may be raw.
-//!
-//! Second Stage, when a track is played.
-//! 1. Track data is decoded.
-//! 2. [`Info`] created from decoded data.
-//! 3. [`Decoded`] made from [`Info`] and the original decoded data.
+//! Then, when it's time to play the track, it is decoded into
+//! a [`Decoded`] track, which includes all the information
+//! in the form of [`Info`].
 
 use std::{fmt::Debug, io::Cursor, time::Duration};
 
 use bytes::Bytes;
 use rodio::{Decoder, Source as _};
-use unicode_segmentation::UnicodeSegmentation;
+use unicode_segmentation::UnicodeSegmentation as _;
 
 pub mod list;
 pub use list::List;
@@ -27,7 +21,7 @@ pub mod error;
 pub mod format;
 pub use error::{Error, Result};
 
-use crate::tracks::error::WithTrackContext;
+use crate::tracks::error::WithTrackContext as _;
 
 /// Just a shorthand for a decoded [Bytes].
 pub type DecodedData = Decoder<Cursor<Bytes>>;
@@ -35,7 +29,7 @@ pub type DecodedData = Decoder<Cursor<Bytes>>;
 /// Tracks which are still waiting in the queue, and can't be played yet.
 ///
 /// This means that only the data & track name are included.
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct Queued {
     /// Display name of the track.
     pub display: String,
@@ -66,6 +60,7 @@ impl Queued {
         Decoded::new(self)
     }
 
+    /// Creates a new queued track.
     pub fn new(path: String, data: Bytes, display: Option<String>) -> Result<Self> {
         let display = match display {
             None => self::format::name(&path)?,
@@ -73,8 +68,8 @@ impl Queued {
         };
 
         Ok(Self {
-            path,
             display,
+            path,
             data,
         })
     }
@@ -122,7 +117,7 @@ impl Info {
     }
 }
 
-/// This struct is seperate from [Track] since it is generated lazily from
+/// This struct is separate from [Track] since it is generated lazily from
 /// a track, and not when the track is first downloaded.
 pub struct Decoded {
     /// Has both the formatted name and some information from the decoded data.
@@ -138,7 +133,7 @@ impl Decoded {
     pub fn new(track: Queued) -> Result<Self> {
         let (path, display) = (track.path.clone(), track.display.clone());
         let data = Decoder::builder()
-            .with_byte_len(track.data.len().try_into().unwrap())
+            .with_byte_len(track.data.len().try_into()?)
             .with_data(Cursor::new(track.data))
             .build()
             .track(track.display)?;

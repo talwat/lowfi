@@ -1,6 +1,4 @@
 //! An extremely simple lofi player.
-#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
-
 pub mod error;
 use std::path::PathBuf;
 
@@ -98,23 +96,21 @@ pub fn data_dir() -> crate::Result<PathBuf> {
 async fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
-    if let Some(command) = args.command {
+    #[cfg(feature = "scrape")]
+    if let Some(command) = &args.command {
         match command {
-            #[cfg(feature = "scrape")]
             Commands::Scrape { source } => match source {
                 Source::Archive => scrapers::archive::scrape().await?,
                 Source::Lofigirl => scrapers::lofigirl::scrape().await?,
                 Source::Chillhop => scrapers::chillhop::scrape().await?,
             },
         }
-    } else {
-        let player = Player::init(args).await?;
-        let environment = player.environment();
-        let result = player.run().await;
+    }
 
-        environment.cleanup(result.is_ok())?;
-        result?;
-    };
+    let player = Player::init(args).await?;
+    let environment = player.environment();
+    let result = player.run().await;
 
-    Ok(())
+    environment.cleanup(result.is_ok())?;
+    Ok(result?)
 }

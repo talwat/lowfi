@@ -22,8 +22,8 @@ pub mod mpris;
 
 type Result<T> = std::result::Result<T, Error>;
 
-/// The error type for the UI, which is used to handle errors that occur
-/// while drawing the UI or handling input.
+/// The error type for the UI, which is used to handle errors
+/// that occur while drawing the UI or handling input.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("unable to convert number")]
@@ -36,7 +36,7 @@ pub enum Error {
     CrateSend(#[from] tokio::sync::mpsc::error::SendError<crate::Message>),
 
     #[error("sharing state between backend and frontend failed")]
-    UiSend(#[from] tokio::sync::broadcast::error::SendError<Update>),
+    Send(#[from] tokio::sync::broadcast::error::SendError<Update>),
 
     #[cfg(feature = "mpris")]
     #[error("mpris bus error")]
@@ -47,6 +47,11 @@ pub enum Error {
     Fdo(#[from] mpris_server::zbus::fdo::Error),
 }
 
+/// The UI state, which is all of the information that
+/// the user interface needs to display to the user.
+///
+/// It should be noted that this is also used by MPRIS to keep
+/// track of state.
 #[derive(Clone)]
 pub struct State {
     pub sink: Arc<rodio::Sink>,
@@ -60,19 +65,26 @@ pub struct State {
 }
 
 impl State {
-    pub fn initial(sink: Arc<rodio::Sink>, width: usize, current: Current, list: String) -> Self {
+    /// Creates an initial UI state.
+    pub fn initial(sink: Arc<rodio::Sink>, width: usize, list: String) -> Self {
         let width = 21 + width.min(32) * 2;
         Self {
             width,
             sink,
-            current,
             list,
+            current: Current::default(),
             bookmarked: false,
             timer: None,
         }
     }
 }
 
+/// A UI update sent out by the main player thread, which may
+/// not be immediately applied by the UI.
+///
+/// This corresponds to user actions, like bookmarking a track,
+/// skipping, or changing the volume. The difference is that it also
+/// contains the new information about the track.
 #[derive(Debug, Clone)]
 pub enum Update {
     Track(Current),
@@ -81,12 +93,16 @@ pub enum Update {
     Quit,
 }
 
+/// Just a simple wrapper for the two primary tasks that the UI
+/// requires to function.
 #[derive(Debug)]
 struct Tasks {
     render: JoinHandle<Result<()>>,
     input: JoinHandle<Result<()>>,
 }
 
+/// The UI handle for controlling the state of the UI, as well as
+/// updating MPRIS information and other small interfacing tasks.
 pub struct Handle {
     tasks: Tasks,
     pub environment: Environment,
@@ -102,6 +118,14 @@ impl Drop for Handle {
 }
 
 impl Handle {
+    /// The main UI process, which will both render the UI to the terminal
+    /// and also update state.
+    ///
+    /// It does both of these things at a fixed interval, due to things
+    /// like the track duration changing too frequently.
+    ///
+    /// `rx` is the receiver for state updates, `state` the initial state,
+    /// and `params` specifies aesthetic options that are specified by the user.
     async fn ui(
         mut rx: broadcast::Receiver<Update>,
         mut state: State,
@@ -111,8 +135,6 @@ impl Handle {
         let mut window = Window::new(state.width, params.borderless);
 
         loop {
-            interface::draw(&mut state, &mut window, params)?;
-
             if let Ok(message) = rx.try_recv() {
                 match message {
                     Update::Track(track) => state.current = track,
@@ -122,12 +144,15 @@ impl Handle {
                 }
             };
 
+            interface::draw(&mut state, &mut window, params)?;
             interval.tick().await;
         }
 
         Ok(())
     }
 
+    /// Initializes the UI itself, along with all of the tasks that are related to it.
+    #[allow(clippy::unused_async)]
     pub async fn init(
         tx: Sender<crate::Message>,
         updater: broadcast::Receiver<ui::Update>,

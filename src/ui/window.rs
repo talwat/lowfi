@@ -2,11 +2,11 @@ use std::io::{stdout, Stdout};
 
 use crossterm::{
     cursor::{MoveToColumn, MoveUp},
-    style::{Print, Stylize},
+    style::{Print, Stylize as _},
     terminal::{Clear, ClearType},
 };
-use std::fmt::Write;
-use unicode_segmentation::UnicodeSegmentation;
+use std::fmt::Write as _;
+use unicode_segmentation::UnicodeSegmentation as _;
 
 /// Represents an abstraction for drawing the actual lowfi window itself.
 ///
@@ -52,7 +52,7 @@ impl Window {
     }
 
     pub(crate) fn render(
-        &mut self,
+        &self,
         content: Vec<String>,
         space: bool,
         testing: bool,

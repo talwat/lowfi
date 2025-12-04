@@ -6,8 +6,8 @@ use std::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use bytes::{BufMut, Bytes, BytesMut};
-use futures::StreamExt;
+use bytes::{BufMut as _, Bytes, BytesMut};
+use futures::StreamExt as _;
 use reqwest::Client;
 use tokio::fs;
 
@@ -15,7 +15,7 @@ use crate::{
     data_dir,
     tracks::{
         self,
-        error::{self, WithTrackContext},
+        error::{self, WithTrackContext as _},
     },
 };
 
@@ -114,7 +114,7 @@ impl List {
             while let Some(item) = stream.next().await {
                 let chunk = item.track(track)?;
                 downloaded = min(downloaded + (chunk.len() as u64), total);
-                let rounded = ((downloaded as f32) / (total as f32) * 100.0).round() as u8;
+                let rounded = ((downloaded as f64) / (total as f64) * 100.0).round() as u8;
                 progress.store(rounded, Ordering::Relaxed);
 
                 bytes.put(chunk);

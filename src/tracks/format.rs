@@ -1,10 +1,10 @@
-use convert_case::{Case, Casing};
+use convert_case::{Case, Casing as _};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::path::Path;
 use url::form_urlencoded;
 
-use super::error::WithTrackContext;
+use super::error::WithTrackContext as _;
 
 lazy_static! {
     static ref MASTER_PATTERNS: [Regex; 5] = [
@@ -84,7 +84,7 @@ pub fn name(name: &str) -> super::Result<String> {
 
     // If the entire name of the track is a number, then just return it.
     if skip == name.len() {
-        Ok(name.trim().to_string())
+        Ok(name.trim().to_owned())
     } else {
         // We've already checked before that the bound is at an ASCII digit.
         #[allow(clippy::string_slice)]

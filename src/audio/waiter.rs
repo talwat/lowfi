@@ -23,7 +23,7 @@ impl Handle {
         let notify = Arc::new(Notify::new());
 
         Self {
-            task: task::spawn(Self::waiter(sink, tx, notify.clone())),
+            task: task::spawn(Self::waiter(sink, tx, Arc::clone(&notify))),
             notify,
         }
     }
@@ -40,7 +40,7 @@ impl Handle {
                 time::sleep(Duration::from_millis(8)).await;
             }
 
-            if let Err(_) = tx.try_send(crate::Message::Next) {
+            if tx.try_send(crate::Message::Next).is_err() {
                 break;
             };
         }

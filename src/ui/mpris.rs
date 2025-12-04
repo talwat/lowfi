@@ -263,8 +263,8 @@ pub struct Server {
     /// The inner MPRIS server.
     inner: mpris_server::Server<Player>,
 
-    /// Broadcast reciever.
-    reciever: broadcast::Receiver<Update>,
+    /// Broadcast receiver.
+    receiver: broadcast::Receiver<Update>,
 }
 
 impl Server {
@@ -273,16 +273,17 @@ impl Server {
         &mut self,
         properties: impl IntoIterator<Item = mpris_server::Property> + Send + Sync,
     ) -> ui::Result<()> {
-        while let Ok(update) = self.reciever.try_recv() {
+        while let Ok(update) = self.receiver.try_recv() {
             if let Update::Track(current) = update {
                 self.player().current.swap(Arc::new(current));
             }
         }
-        self.inner.properties_changed(properties).await?;
 
+        self.inner.properties_changed(properties).await?;
         Ok(())
     }
 
+    /// Updates the volume with the latest information.
     pub async fn update_volume(&mut self) -> ui::Result<()> {
         self.changed(vec![Property::Volume(self.player().sink.volume().into())])
             .await?;
@@ -290,7 +291,7 @@ impl Server {
         Ok(())
     }
 
-    /// Shorthand to emit a `PropertiesChanged` signal, specifically about playback.
+    /// Updates the playback with the latest information.
     pub async fn update_playback(&mut self) -> ui::Result<()> {
         let status = self.player().playback_status().await?;
         self.changed(vec![Property::PlaybackStatus(status)]).await?;
@@ -298,6 +299,7 @@ impl Server {
         Ok(())
     }
 
+    /// Updates the current track data with the current information.
     pub async fn update_metadata(&mut self) -> ui::Result<()> {
         let metadata = self.player().metadata().await?;
         self.changed(vec![Property::Metadata(metadata)]).await?;
@@ -314,7 +316,7 @@ impl Server {
     pub async fn new(
         state: ui::State,
         sender: mpsc::Sender<Message>,
-        reciever: broadcast::Receiver<Update>,
+        receiver: broadcast::Receiver<Update>,
     ) -> ui::Result<Server> {
         let suffix = if env::var("LOWFI_FIXED_MPRIS_NAME").is_ok_and(|x| x == "1") {
             String::from("lowfi")
@@ -335,7 +337,7 @@ impl Server {
 
         Ok(Self {
             inner: server,
-            reciever,
+            receiver,
         })
     }
 }

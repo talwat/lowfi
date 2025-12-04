@@ -19,6 +19,9 @@ pub enum Kind {
 
     #[error("unable to fetch data: {0}")]
     Request(#[from] reqwest::Error),
+
+    #[error("couldn't handle integer track length: {0}")]
+    Integer(#[from] std::num::TryFromIntError),
 }
 
 #[derive(Debug, thiserror::Error)]

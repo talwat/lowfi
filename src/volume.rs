@@ -1,8 +1,11 @@
+//! Persistent volume management.
 use std::{num::ParseIntError, path::PathBuf};
 use tokio::fs;
 
+/// Shorthand for a [`Result`] with a persistent volume error.
 type Result<T> = std::result::Result<T, Error>;
 
+/// Errors which occur when loading/unloading persistent volume.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("couldn't find config directory")]
@@ -27,7 +30,7 @@ impl PersistentVolume {
     /// Retrieves the config directory.
     async fn config() -> Result<PathBuf> {
         let config = dirs::config_dir()
-            .ok_or_else(|| Error::Directory)?
+            .ok_or(Error::Directory)?
             .join(PathBuf::from("lowfi"));
 
         if !config.exists() {

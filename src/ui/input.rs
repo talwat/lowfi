@@ -1,4 +1,4 @@
-//! Responsible for specifically recieving terminal input
+//! Responsible for specifically receiving terminal input
 //! using [`crossterm`].
 
 use crate::Message;
@@ -6,7 +6,7 @@ use crossterm::event::{self, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use futures::{FutureExt as _, StreamExt as _};
 use tokio::sync::mpsc::Sender;
 
-/// Starts the listener to recieve input from the terminal for various events.
+/// Starts the listener to receive input from the terminal for various events.
 pub async fn listen(sender: Sender<Message>) -> super::Result<()> {
     let mut reader = EventStream::new();
 

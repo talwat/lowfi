@@ -1,36 +1,7 @@
-use convert_case::{Case, Casing as _};
-use regex::Regex;
-use std::{path::Path, sync::LazyLock};
-use url::form_urlencoded;
+use std::path::Path;
 
 use super::error::WithTrackContext as _;
-
-/// Regex patterns for matching and removing the "master" text in some track titles.
-///
-/// These patterns attempt to strip common suffixes such as "(master)",
-/// "master v2", or short forms like "mstr" that are frequently appended
-/// to lofi track names by uploaders.
-static MASTER_PATTERNS: LazyLock<[Regex; 5]> = LazyLock::new(|| {
-    [
-        // (master), (master v2)
-        Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)$").unwrap(),
-        // mstr or - mstr or (mstr) — now also matches "mstr v3", "mstr2", etc.
-        Regex::new(r"\s*[-(]?\s*mstr(?:\s*v?\d+)?\s*\)?$").unwrap(),
-        // - master, master at end without parentheses
-        Regex::new(r"\s*[-]?\s*master(?:\s*v?\d+)?$").unwrap(),
-        // kupla master1, kupla master v2 (without parentheses or separator)
-        Regex::new(r"\s+kupla\s+master(?:\s*v?\d+|\d+)?$").unwrap(),
-        // (kupla master) followed by trailing parenthetical numbers, e.g. "... (kupla master) (1)"
-        Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)(?:\s*\(\d+\))+$").unwrap(),
-    ]
-});
-
-/// Pattern for removing leading short ID prefixes.
-///
-/// Many uploaded lofi tracks have a short identifier prefix like "a1 " or
-/// "b2."; this regex strips those sequences so the title formatting
-/// operates on the real track name.
-static ID_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[a-z]\d[ .]").unwrap());
+use url::form_urlencoded;
 
 /// Decodes a URL string into normal UTF-8.
 fn decode_url(text: &str) -> String {
@@ -55,27 +26,7 @@ pub fn name(name: &str) -> super::Result<String> {
         .ok_or(super::error::Kind::InvalidName)
         .track(name)?;
 
-    let name = decode_url(name).to_lowercase();
-    let mut name = name
-        .replace("masster", "master")
-        .replace("(online-audio-converter.com)", "") // Some of these names, man...
-        .replace('_', " ");
-
-    // Get rid of "master" suffix with a few regex patterns.
-    for regex in MASTER_PATTERNS.iter() {
-        name = regex.replace(&name, "").to_string();
-    }
-
-    name = ID_PATTERN.replace(&name, "").to_string();
-
-    let name = name
-        .replace("13lufs", "")
-        .to_case(Case::Title)
-        .replace(" .", "")
-        .replace(" Ft ", " ft. ")
-        .replace("Ft.", "ft.")
-        .replace("Feat.", "ft.")
-        .replace(" W ", " w/ ");
+    let name = decode_url(name);
 
     // This is incremented for each digit in front of the song name.
     let mut skip = 0;

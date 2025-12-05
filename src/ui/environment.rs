@@ -30,7 +30,7 @@ impl Environment {
 
         terminal::enable_raw_mode()?;
 
-        let enhancement = terminal::supports_keyboard_enhancement()?;
+        let enhancement = terminal::supports_keyboard_enhancement().unwrap_or_default();
         if enhancement {
             crossterm::execute!(
                 lock,

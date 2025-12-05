@@ -1405,7 +1405,6 @@ dependencies = [
  "futures",
  "html-escape",
  "indicatif",
- "lazy_static",
  "libc",
  "mpris-server",
  "regex",

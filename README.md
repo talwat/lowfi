@@ -10,12 +10,12 @@ It'll do this as simply as it can: no albums, no ads, just lofi.
 This branch serves as a rewrite for lowfi. The main focus is to make the code more
 maintainable. This includes such things as:
 
-* Replacing `Mutex` & `Arc` with channels, massively improving performance.
-* More clearly handling tracks in different phases of loading, instead of having
+- Replacing `Mutex` & `Arc` with channels, massively improving readability and flow.
+- More clearly handling tracks in different phases of loading, instead of having
 a mess of different structs.
-* Making the UI code cleaner and easier to follow.
-* Rethinking input & control of the player, especially with MPRIS in mind.
-* Making track loading simpler and more consistent.
+- Making the UI code cleaner and easier to follow.
+- Rethinking input & control of the player, especially with MPRIS in mind.
+- Making track loading simpler and more consistent.
 
 This is an *internal rewrite*, and the goal is to retain every single feature.
 If there is a feature present in the original version of lowfi that is not present
@@ -46,7 +46,7 @@ and as such it buffers 5 whole songs at a time instead of parts of the same song
 
 ### Dependencies
 
-You'll need Rust 1.74.0+.
+You'll need Rust 1.83.0+.
 
 On MacOS & Windows, no extra dependencies are needed.
 
@@ -240,7 +240,7 @@ Each track will be first appended to the header, and then use the combination to
 the track.
 
 > [!NOTE]
-> lowfi _will not_ put a `/` between the base & track for added flexibility,
+> lowfi *will not* put a `/` between the base & track for added flexibility,
 > so for most cases you should have a trailing `/` in your header.
 
 The exception to this is if the track name begins with a protocol like `https://`,

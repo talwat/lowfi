@@ -33,7 +33,7 @@ pub fn progress_bar(state: &ui::State, width: usize) -> String {
             let elapsed = elapsed.as_secs() as f32 / duration.as_secs() as f32;
             filled = (elapsed * width as f32).round() as usize;
         }
-    };
+    }
 
     format!(
         " [{}{}] {}/{} ",

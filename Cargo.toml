@@ -1,6 +1,7 @@
 [package]
 name = "lowfi"
 version = "2.0.0-dev"
+rust-version = "1.83.0"
 edition = "2021"
 description = "An extremely simple lofi player."
 license = "MIT"
@@ -48,7 +49,6 @@ convert_case = "0.8.0"
 unicode-segmentation = "1.12.0"
 url = "2.5.4"
 regex = "1.11.1"
-lazy_static = "1.5.0"
 
 # Scraper
 serde = { version = "1.0.219", features = ["derive"], optional = true }

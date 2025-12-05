@@ -3,16 +3,16 @@
 //! This command is completely optional, and as such isn't subject to the same
 //! quality standards as the rest of the codebase.
 
+use std::sync::LazyLock;
+
 use futures::{stream::FuturesOrdered, StreamExt};
-use lazy_static::lazy_static;
 use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::scrapers::{get, Source};
 
-lazy_static! {
-    static ref SELECTOR: Selector = Selector::parse("html > body > pre > a").unwrap();
-}
+static SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("html > body > pre > a").unwrap());
 
 async fn parse(client: &Client, path: &str) -> eyre::Result<Vec<String>> {
     let document = get(client, path, super::Source::Lofigirl).await?;

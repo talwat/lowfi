@@ -1,4 +1,7 @@
 //! Persistent volume management.
+//!
+//! The module provides a tiny helper that reads and writes the user's
+//! configured volume to `volume.txt` inside the platform config directory.
 use std::{num::ParseIntError, path::PathBuf};
 use tokio::fs;
 
@@ -18,8 +21,11 @@ pub enum Error {
     Parse(#[from] ParseIntError),
 }
 
-/// This is the representation of the persistent volume,
-/// which is loaded at startup and saved on shutdown.
+/// Representation of the persistent volume stored on disk.
+///
+/// The inner value is an integer percentage (0..=100). Use
+/// [`PersistentVolume::float`] to convert to a normalized `f32` in the
+/// range 0.0..=1.0 for playback volume calculations.
 #[derive(Clone, Copy)]
 pub struct PersistentVolume {
     /// The volume, as a percentage.
@@ -27,7 +33,7 @@ pub struct PersistentVolume {
 }
 
 impl PersistentVolume {
-    /// Retrieves the config directory.
+    /// Retrieves the config directory, creating it if necessary.
     async fn config() -> Result<PathBuf> {
         let config = dirs::config_dir()
             .ok_or(Error::Directory)?
@@ -40,12 +46,15 @@ impl PersistentVolume {
         Ok(config)
     }
 
-    /// Returns the volume as a float from 0 to 1.
+    /// Returns the volume as a normalized float in the range 0.0..=1.0.
     pub fn float(self) -> f32 {
         f32::from(self.inner) / 100.0
     }
 
-    /// Loads the [`PersistentVolume`] from [`dirs::config_dir()`].
+    /// Loads the [`PersistentVolume`] from the platform config directory.
+    ///
+    /// If the file does not exist a default of `100` is written and
+    /// returned.
     pub async fn load() -> Result<Self> {
         let config = Self::config().await?;
         let volume = config.join(PathBuf::from("volume.txt"));
@@ -64,7 +73,7 @@ impl PersistentVolume {
         Ok(Self { inner: volume })
     }
 
-    /// Saves `volume` to `volume.txt`.
+    /// Saves `volume` (0.0..=1.0) to `volume.txt` as an integer percent.
     pub async fn save(volume: f32) -> Result<()> {
         let config = Self::config().await?;
         let path = config.join(PathBuf::from("volume.txt"));

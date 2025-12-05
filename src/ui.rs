@@ -20,6 +20,7 @@ pub mod window;
 #[cfg(feature = "mpris")]
 pub mod mpris;
 
+/// Shorthand for a [`Result`] with a [`ui::Error`].
 type Result<T> = std::result::Result<T, Error>;
 
 /// The error type for the UI, which is used to handle errors
@@ -54,12 +55,22 @@ pub enum Error {
 /// track of state.
 #[derive(Clone)]
 pub struct State {
+    /// The audio sink.
     pub sink: Arc<rodio::Sink>,
+
+    /// The current track, which is updated by way of an [`Update`].
     pub current: Current,
+
+    /// Whether the current track is bookmarked.
     pub bookmarked: bool,
+
+    /// The timer, which is used when the user changes volume to briefly display it.
     pub(crate) timer: Option<Instant>,
+
+    /// The full inner width of the terminal window.
     pub(crate) width: usize,
 
+    /// The name of the playing tracklist, for MPRIS.
     #[allow(dead_code)]
     list: String,
 }
@@ -97,17 +108,25 @@ pub enum Update {
 /// requires to function.
 #[derive(Debug)]
 struct Tasks {
+    /// The renderer, responsible for sending output to `stdout`.
     render: JoinHandle<Result<()>>,
+
+    /// The input, which receives data from `stdin` via [`crossterm`].
     input: JoinHandle<Result<()>>,
 }
 
 /// The UI handle for controlling the state of the UI, as well as
 /// updating MPRIS information and other small interfacing tasks.
 pub struct Handle {
-    tasks: Tasks,
-    pub environment: Environment,
+    /// The terminal environment, which can be used for cleanup.
+    pub(crate) environment: Environment,
+
+    /// The MPRIS server, which is more or less a handle to the actual MPRIS thread.
     #[cfg(feature = "mpris")]
     pub mpris: mpris::Server,
+
+    /// The UI's running tasks.
+    tasks: Tasks,
 }
 
 impl Drop for Handle {
@@ -142,7 +161,7 @@ impl Handle {
                     Update::Volume => state.timer = Some(Instant::now()),
                     Update::Quit => break,
                 }
-            };
+            }
 
             interface::draw(&mut state, &mut window, params)?;
             interval.tick().await;

@@ -1,13 +1,17 @@
 use convert_case::{Case, Casing as _};
-use lazy_static::lazy_static;
 use regex::Regex;
-use std::path::Path;
+use std::{path::Path, sync::LazyLock};
 use url::form_urlencoded;
 
 use super::error::WithTrackContext as _;
 
-lazy_static! {
-    static ref MASTER_PATTERNS: [Regex; 5] = [
+/// Regex patterns for matching and removing the "master" text in some track titles.
+///
+/// These patterns attempt to strip common suffixes such as "(master)",
+/// "master v2", or short forms like "mstr" that are frequently appended
+/// to lofi track names by uploaders.
+static MASTER_PATTERNS: LazyLock<[Regex; 5]> = LazyLock::new(|| {
+    [
         // (master), (master v2)
         Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)$").unwrap(),
         // mstr or - mstr or (mstr) — now also matches "mstr v3", "mstr2", etc.
@@ -18,9 +22,15 @@ lazy_static! {
         Regex::new(r"\s+kupla\s+master(?:\s*v?\d+|\d+)?$").unwrap(),
         // (kupla master) followed by trailing parenthetical numbers, e.g. "... (kupla master) (1)"
         Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)(?:\s*\(\d+\))+$").unwrap(),
-    ];
-    static ref ID_PATTERN: Regex = Regex::new(r"^[a-z]\d[ .]").unwrap();
-}
+    ]
+});
+
+/// Pattern for removing leading short ID prefixes.
+///
+/// Many uploaded lofi tracks have a short identifier prefix like "a1 " or
+/// "b2."; this regex strips those sequences so the title formatting
+/// operates on the real track name.
+static ID_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[a-z]\d[ .]").unwrap());
 
 /// Decodes a URL string into normal UTF-8.
 fn decode_url(text: &str) -> String {

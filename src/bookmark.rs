@@ -1,10 +1,14 @@
-//! Module for handling saving, loading, and adding bookmarks.
+//! Bookmark persistence and helpers.
+//!
+//! Bookmarks are persisted to `bookmarks.txt` inside the application data
+//! directory and follow the same track-list entry format (see `tracks::Info::to_entry`).
 
 use std::path::PathBuf;
 use tokio::{fs, io};
 
 use crate::{data_dir, tracks};
 
+/// Result alias for bookmark operations.
 type Result<T> = std::result::Result<T, Error>;
 
 /// Errors that might occur while managing bookmarks.
@@ -24,7 +28,8 @@ pub struct Bookmarks {
 }
 
 impl Bookmarks {
-    /// Gets the path of the bookmarks file.
+    /// Returns the path to `bookmarks.txt`, creating the parent directory
+    /// if necessary.
     pub async fn path() -> Result<PathBuf> {
         let data_dir = data_dir().map_err(|_| Error::Directory)?;
         fs::create_dir_all(data_dir.clone()).await?;
@@ -32,7 +37,7 @@ impl Bookmarks {
         Ok(data_dir.join("bookmarks.txt"))
     }
 
-    /// Loads bookmarks from the `bookmarks.txt` file.
+    /// Loads bookmarks from disk. If no file exists an empty list is returned.
     pub async fn load() -> Result<Self> {
         let text = fs::read_to_string(Self::path().await?)
             .await
@@ -54,16 +59,16 @@ impl Bookmarks {
         Ok(Self { entries })
     }
 
-    // Saves the bookmarks to the `bookmarks.txt` file.
+    /// Saves bookmarks to disk in `bookmarks.txt`.
     pub async fn save(&self) -> Result<()> {
         let text = format!("noheader\n{}", self.entries.join("\n"));
         fs::write(Self::path().await?, text).await?;
         Ok(())
     }
 
-    /// Bookmarks a given track with a full path and optional custom name.
+    /// Toggles bookmarking for `track` and returns whether it is now bookmarked.
     ///
-    /// Returns whether the track is now bookmarked, or not.
+    /// If the track exists it is removed; otherwise it is appended to the list.
     pub fn bookmark(&mut self, track: &tracks::Info) -> Result<bool> {
         let entry = track.to_entry();
         let idx = self.entries.iter().position(|x| **x == entry);
@@ -72,13 +77,12 @@ impl Bookmarks {
             self.entries.remove(idx);
         } else {
             self.entries.push(entry);
-        };
+        }
 
         Ok(idx.is_none())
     }
 
-    /// Sets the internal bookmarked register by checking against
-    /// the current track's info.
+    /// Returns true if `track` is currently bookmarked.
     pub fn bookmarked(&mut self, track: &tracks::Info) -> bool {
         self.entries.contains(&track.to_entry())
     }

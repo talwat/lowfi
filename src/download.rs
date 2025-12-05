@@ -11,17 +11,45 @@ use tokio::{
 
 use crate::tracks;
 
+/// Flag indicating whether the downloader is actively fetching a track.
+///
+/// This is used internally to prevent concurrent downloader starts and to
+/// indicate to the UI that a download is in progress.
 static LOADING: AtomicBool = AtomicBool::new(false);
+
+/// Global download progress in the range 0..=100 updated atomically.
+///
+/// The UI can read this `AtomicU8` to render a global progress indicator
+/// when there isn't an immediately queued track available.
 pub(crate) static PROGRESS: AtomicU8 = AtomicU8::new(0);
+
+/// A convenient alias for the progress `AtomicU8` pointer type.
 pub type Progress = &'static AtomicU8;
 
 /// The downloader, which has all of the state necessary
 /// to download tracks and add them to the queue.
 pub struct Downloader {
+    /// The track queue itself, which in this case is actually
+    /// just an asynchronous sender.
+    ///
+    /// It is a [`Sender`] because the tracks will have to be
+    /// received by a completely different thread, so this avoids
+    /// the need to use an explicit [`tokio::sync::Mutex`].
     queue: Sender<tracks::Queued>,
+
+    /// The [`Sender`] which is used to inform the
+    /// [`crate::Player`] with [`crate::Message::Loaded`].
     tx: Sender<crate::Message>,
+
+    /// The list of tracks to download from.
     tracks: tracks::List,
+
+    /// The [`reqwest`] client to use for downloads.
     client: Client,
+
+    /// The timeout to use for both the client,
+    /// and also how long to wait between trying
+    /// again after a failed download.
     timeout: Duration,
 }
 
@@ -43,10 +71,13 @@ impl Downloader {
 
         Handle {
             queue: qrx,
-            handle: tokio::spawn(downloader.run()),
+            task: tokio::spawn(downloader.run()),
         }
     }
 
+    /// Actually runs the downloader, consuming it and beginning
+    /// the cycle of downloading tracks and reporting to the
+    /// rest of the program.
     async fn run(self) -> crate::Result<()> {
         loop {
             let result = self.tracks.random(&self.client, &PROGRESS).await;
@@ -73,13 +104,23 @@ impl Downloader {
 /// Downloader handle, responsible for managing
 /// the downloader task and internal buffer.
 pub struct Handle {
+    /// The queue receiver, which can be used to actually
+    /// fetch a track from the queue.
     queue: Receiver<tracks::Queued>,
-    handle: JoinHandle<crate::Result<()>>,
+
+    /// The downloader task, which can be aborted.
+    task: JoinHandle<crate::Result<()>>,
 }
 
 /// The output when a track is requested from the downloader.
 pub enum Output {
+    /// No track was immediately available from the downloader. When present,
+    /// the `Option<Progress>` provides a reference to the global download
+    /// progress so callers can show a loading indicator.
     Loading(Option<Progress>),
+
+    /// A successfully downloaded (but not yet decoded) track ready to be
+    /// enqueued for decoding/playback.
     Queued(tracks::Queued),
 }
 
@@ -98,6 +139,6 @@ impl Handle {
 
 impl Drop for Handle {
     fn drop(&mut self) {
-        self.handle.abort();
+        self.task.abort();
     }
 }

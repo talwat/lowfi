@@ -25,6 +25,11 @@ impl From<&Args> for Params {
     }
 }
 
+/// Creates a full "menu" from the [`ui::State`], which can be
+/// easily put into a window for display.
+///
+/// The menu really is just a [`Vec`] of the different components,
+/// with padding already added.
 pub(crate) fn menu(state: &mut ui::State, params: Params) -> Vec<String> {
     let action = components::action(state, state.width);
 
@@ -34,7 +39,7 @@ pub(crate) fn menu(state: &mut ui::State, params: Params) -> Vec<String> {
             let percentage = format!("{}%", (volume * 100.0).round().abs());
             if timer.elapsed() > Duration::from_secs(1) {
                 state.timer = None;
-            };
+            }
 
             components::audio_bar(state.width - 17, volume, &percentage)
         }

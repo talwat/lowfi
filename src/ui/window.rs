@@ -51,6 +51,13 @@ impl Window {
         }
     }
 
+    /// Renders the window itself, but doesn't actually draw it.
+    ///
+    /// `testing` just determines whether to add special features
+    /// like color resets and carriage returns.
+    ///
+    /// This returns both the final rendered window and also the full
+    /// height of the rendered window.
     pub(crate) fn render(
         &self,
         content: Vec<String>,

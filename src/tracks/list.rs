@@ -173,7 +173,7 @@ impl List {
         // Get rid of special noheader case for tracklists without a header.
         let raw = raw
             .strip_prefix("noheader")
-            .map_or(raw.as_ref(), |stripped| stripped);
+            .map_or_else(|| raw.as_ref(), |stripped| stripped);
 
         let name = path
             .file_stem()

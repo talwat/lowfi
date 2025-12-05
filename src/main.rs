@@ -85,13 +85,22 @@ enum Commands {
     },
 }
 
-/// Gets lowfi's data directory.
+/// Returns the application data directory used for persistency.
+///
+/// The function returns the platform-specific user data directory with
+/// a `lowfi` subfolder. Callers may use this path to store config,
+/// bookmarks, and other persistent files.
 pub fn data_dir() -> crate::Result<PathBuf> {
     let dir = dirs::data_dir().unwrap().join("lowfi");
 
     Ok(dir)
 }
 
+/// Program entry point.
+///
+/// Parses CLI arguments, initializes the audio stream and player, then
+/// runs the main event loop. On exit it performs cleanup of the UI and
+/// returns the inner result.
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let args = Args::parse();
@@ -107,7 +116,8 @@ async fn main() -> eyre::Result<()> {
         }
     }
 
-    let player = Player::init(args).await?;
+    let stream = audio::stream()?;
+    let player = Player::init(args, stream.mixer()).await?;
     let environment = player.environment();
     let result = player.run().await;
 

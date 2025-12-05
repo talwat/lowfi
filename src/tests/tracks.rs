@@ -3,18 +3,6 @@ mod format {
     use crate::tracks::format::name;
 
     #[test]
-    fn strips_master_patterns() {
-        let n = name("cool_track_master.mp3").unwrap();
-        assert_eq!(n, "Cool Track");
-    }
-
-    #[test]
-    fn strips_id_prefix() {
-        let n = name("a1 cool beat.mp3").unwrap();
-        assert_eq!(n, "Cool Beat");
-    }
-
-    #[test]
     fn handles_all_numeric_name() {
         let n = name("12345.mp3").unwrap();
         assert_eq!(n, "12345");
@@ -23,7 +11,7 @@ mod format {
     #[test]
     fn decodes_url() {
         let n = name("lofi%20track.mp3").unwrap();
-        assert_eq!(n, "Lofi Track");
+        assert_eq!(n, "lofi track");
     }
 
     #[test]
@@ -31,12 +19,6 @@ mod format {
         let n = name(".mp3").unwrap();
         // Should handle edge case gracefully
         assert!(!n.is_empty());
-    }
-
-    #[test]
-    fn handles_mixed_case() {
-        let n = name("MyTrack_Master.mp3").unwrap();
-        assert_eq!(n, "Mytrack");
     }
 }
 

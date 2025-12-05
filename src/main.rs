@@ -101,7 +101,7 @@ pub fn data_dir() -> crate::Result<PathBuf> {
 /// Parses CLI arguments, initializes the audio stream and player, then
 /// runs the main event loop. On exit it performs cleanup of the UI and
 /// returns the inner result.
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> eyre::Result<()> {
     let args = Args::parse();
 

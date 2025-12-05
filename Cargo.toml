@@ -30,7 +30,7 @@ fastrand = "2.3.0"
 thiserror = "2.0.12"
 
 # Async
-tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "fs"], default-features = false }
+tokio = { version = "1.41.1", features = ["macros", "rt", "fs"], default-features = false }
 arc-swap = "1.7.1"
 futures = "0.3.31"
 

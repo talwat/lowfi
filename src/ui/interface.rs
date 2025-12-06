@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{env, time::Duration};
 
 use crate::{
     ui::{self, components, window::Window},
@@ -9,19 +9,28 @@ use crate::{
 pub struct Params {
     pub borderless: bool,
     pub minimalist: bool,
+    pub enabled: bool,
     pub delta: Duration,
 }
 
-impl From<&Args> for Params {
-    fn from(args: &Args) -> Self {
+impl TryFrom<&Args> for Params {
+    type Error = ui::Error;
+
+    fn try_from(args: &Args) -> ui::Result<Self> {
         let delta = 1.0 / f32::from(args.fps);
         let delta = Duration::from_secs_f32(delta);
 
-        Self {
+        let disabled = env::var("LOWFI_DISABLE_UI").is_ok_and(|x| x == "1");
+        if disabled && !cfg!(feature = "mpris") {
+            return Err(ui::Error::RejectedDisable);
+        }
+
+        Ok(Self {
             delta,
+            enabled: !disabled,
             minimalist: args.minimalist,
             borderless: args.borderless,
-        }
+        })
     }
 }
 

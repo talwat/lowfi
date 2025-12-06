@@ -96,6 +96,8 @@ pub fn data_dir() -> crate::Result<PathBuf> {
     Ok(dir)
 }
 
+/// Simply creates and runs the player, so that the [`Result`] of both operations
+/// can be easily handled by the [`main`] function.
 async fn player(args: Args, environment: ui::Environment) -> crate::Result<()> {
     let stream = audio::stream()?;
     let mut player = Player::init(args, environment, stream.mixer()).await?;

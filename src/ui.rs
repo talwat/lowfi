@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     player::Current,
@@ -119,6 +119,7 @@ struct Tasks {
 }
 
 impl Tasks {
+    /// Actually takes care of spawning the tasks for the [`ui`].
     pub fn spawn(
         tx: Sender<crate::Message>,
         updater: broadcast::Receiver<ui::Update>,
@@ -196,17 +197,15 @@ impl Handle {
         state: State,
         args: &Args,
     ) -> Result<Self> {
-        let disabled = env::var("LOWFI_DISABLE_UI").is_ok_and(|x| x == "1");
-        if disabled && !cfg!(feature = "mpris") {
-            return Err(Error::RejectedDisable);
-        }
+        let params = interface::Params::try_from(args)?;
 
         Ok(Self {
             #[cfg(feature = "mpris")]
             mpris: mpris::Server::new(state.clone(), tx.clone(), updater.resubscribe()).await?,
             environment,
-            _tasks: (!disabled)
-                .then(|| Tasks::spawn(tx, updater, state, interface::Params::from(args))),
+            _tasks: params
+                .enabled
+                .then(|| Tasks::spawn(tx, updater, state, params)),
         })
     }
 }

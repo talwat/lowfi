@@ -1,21 +1,25 @@
 //! The module containing all of the logic behind track lists,
 //! as well as obtaining track names & downloading the raw audio data
 
-use std::{cmp::min, sync::atomic::Ordering};
+use std::{
+    cmp::min,
+    sync::atomic::{AtomicU8, Ordering},
+};
 
-use atomic_float::AtomicF32;
-use bytes::{BufMut, Bytes, BytesMut};
-use eyre::OptionExt as _;
-use futures::StreamExt;
+use bytes::{BufMut as _, Bytes, BytesMut};
+use futures::StreamExt as _;
 use reqwest::Client;
 use tokio::fs;
 
 use crate::{
     data_dir,
-    tracks::{self, error::Context},
+    tracks::{
+        self,
+        error::{self, WithTrackContext as _},
+    },
 };
 
-use super::QueuedTrack;
+use super::Queued;
 
 /// Represents a list of tracks that can be played.
 ///
@@ -28,7 +32,7 @@ pub struct List {
 
     /// Just the raw file, but seperated by `/n` (newlines).
     /// `lines[0]` is the base/heaeder, with the rest being tracks.
-    lines: Vec<String>,
+    pub lines: Vec<String>,
 
     /// The file path which the list was read from.
     #[allow(dead_code)]
@@ -37,7 +41,7 @@ pub struct List {
 
 impl List {
     /// Gets the base URL of the [List].
-    pub fn base(&self) -> &str {
+    pub fn header(&self) -> &str {
         self.lines[0].trim()
     }
 
@@ -45,7 +49,7 @@ impl List {
     ///
     /// The second value in the tuple specifies whether the
     /// track has a custom display name.
-    fn random_path(&self) -> (String, Option<String>) {
+    pub fn random_path(&self) -> (String, Option<String>) {
         // We're getting from 1 here, since the base is at `self.lines[0]`.
         //
         // We're also not pre-trimming `self.lines` into `base` & `tracks` due to
@@ -62,85 +66,75 @@ impl List {
     }
 
     /// Downloads a raw track, but doesn't decode it.
-    async fn download(
+    pub(crate) async fn download(
         &self,
         track: &str,
         client: &Client,
-        progress: Option<&AtomicF32>,
-    ) -> Result<(Bytes, String), tracks::Error> {
+        progress: Option<&AtomicU8>,
+    ) -> tracks::Result<(Bytes, String)> {
         // If the track has a protocol, then we should ignore the base for it.
-        let full_path = if track.contains("://") {
+        let path = if track.contains("://") {
             track.to_owned()
         } else {
-            format!("{}{}", self.base(), track)
+            format!("{}{}", self.header(), track)
         };
 
-        let data: Bytes = if let Some(x) = full_path.strip_prefix("file://") {
+        let data: Bytes = if let Some(x) = path.strip_prefix("file://") {
             let path = if x.starts_with('~') {
-                let home_path =
-                    dirs::home_dir().ok_or((track, tracks::error::Kind::InvalidPath))?;
+                let home_path = dirs::home_dir()
+                    .ok_or(error::Kind::InvalidPath)
+                    .track(track)?;
                 let home = home_path
                     .to_str()
-                    .ok_or((track, tracks::error::Kind::InvalidPath))?;
+                    .ok_or(error::Kind::InvalidPath)
+                    .track(track)?;
 
                 x.replace('~', home)
             } else {
                 x.to_owned()
             };
 
-            let result = tokio::fs::read(path.clone()).await.track(track)?;
+            let result = tokio::fs::read(path.clone()).await.track(x)?;
             result.into()
         } else {
-            let response = client.get(full_path.clone()).send().await.track(track)?;
+            let response = client.get(path.clone()).send().await.track(track)?;
+            let Some(progress) = progress else {
+                let bytes = response.bytes().await.track(track)?;
+                return Ok((bytes, path));
+            };
 
-            if let Some(progress) = progress {
-                let total = response
-                    .content_length()
-                    .ok_or((track, tracks::error::Kind::UnknownLength))?;
-                let mut stream = response.bytes_stream();
-                let mut bytes = BytesMut::new();
-                let mut downloaded: u64 = 0;
+            let total = response
+                .content_length()
+                .ok_or(error::Kind::UnknownLength)
+                .track(track)?;
+            let mut stream = response.bytes_stream();
+            let mut bytes = BytesMut::new();
+            let mut downloaded: u64 = 0;
 
-                while let Some(item) = stream.next().await {
-                    let chunk = item.track(track)?;
-                    let new = min(downloaded + (chunk.len() as u64), total);
-                    downloaded = new;
-                    progress.store((new as f32) / (total as f32), Ordering::Relaxed);
+            while let Some(item) = stream.next().await {
+                let chunk = item.track(track)?;
+                downloaded = min(downloaded + (chunk.len() as u64), total);
+                let rounded = ((downloaded as f64) / (total as f64) * 100.0).round() as u8;
+                progress.store(rounded, Ordering::Relaxed);
 
-                    bytes.put(chunk);
-                }
-
-                bytes.into()
-            } else {
-                response.bytes().await.track(track)?
+                bytes.put(chunk);
             }
+
+            bytes.into()
         };
 
-        Ok((data, full_path))
+        Ok((data, path))
     }
 
     /// Fetches and downloads a random track from the [List].
     ///
     /// The Result's error is a bool, which is true if a timeout error occured,
     /// and false otherwise. This tells lowfi if it shouldn't wait to try again.
-    pub async fn random(
-        &self,
-        client: &Client,
-        progress: Option<&AtomicF32>,
-    ) -> Result<QueuedTrack, tracks::Error> {
-        let (path, custom_name) = self.random_path();
-        let (data, full_path) = self.download(&path, client, progress).await?;
+    pub async fn random(&self, client: &Client, progress: &AtomicU8) -> tracks::Result<Queued> {
+        let (path, display) = self.random_path();
+        let (data, path) = self.download(&path, client, Some(progress)).await?;
 
-        let name = custom_name.map_or_else(
-            || super::TrackName::Raw(path.clone()),
-            super::TrackName::Formatted,
-        );
-
-        Ok(QueuedTrack {
-            name,
-            full_path,
-            data,
-        })
+        Queued::new(path, data, display)
     }
 
     /// Parses text into a [List].
@@ -159,31 +153,34 @@ impl List {
     }
 
     /// Reads a [List] from the filesystem using the CLI argument provided.
-    pub async fn load(tracks: Option<&String>) -> eyre::Result<Self> {
-        if let Some(arg) = tracks {
-            // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
-            let path = data_dir()?.join(format!("{arg}.txt"));
-            let path = if path.exists() { path } else { arg.into() };
-
-            let raw = fs::read_to_string(path.clone()).await?;
-
-            // Get rid of special noheader case for tracklists without a header.
-            let raw = raw
-                .strip_prefix("noheader")
-                .map_or(raw.as_ref(), |stripped| stripped);
-
-            let name = path
-                .file_stem()
-                .and_then(|x| x.to_str())
-                .ok_or_eyre("invalid track path")?;
-
-            Ok(Self::new(name, raw, path.to_str()))
-        } else {
-            Ok(Self::new(
+    pub async fn load(tracks: &str) -> tracks::Result<Self> {
+        if tracks == "chillhop" {
+            return Ok(Self::new(
                 "chillhop",
                 include_str!("../../data/chillhop.txt"),
                 None,
-            ))
+            ));
         }
+
+        // Check if the track is in ~/.local/share/lowfi, in which case we'll load that.
+        let path = data_dir()
+            .map_err(|_| error::Kind::InvalidPath)?
+            .join(format!("{tracks}.txt"));
+        let path = if path.exists() { path } else { tracks.into() };
+
+        let raw = fs::read_to_string(path.clone()).await?;
+
+        // Get rid of special noheader case for tracklists without a header.
+        let raw = raw
+            .strip_prefix("noheader")
+            .map_or_else(|| raw.as_ref(), |stripped| stripped);
+
+        let name = path
+            .file_stem()
+            .and_then(|x| x.to_str())
+            .ok_or(tracks::error::Kind::InvalidName)
+            .track(tracks)?;
+
+        Ok(Self::new(name, raw, path.to_str()))
     }
 }

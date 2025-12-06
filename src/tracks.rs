@@ -2,74 +2,76 @@
 //! of tracks, as well as downloading them & finding new ones.
 //!
 //! There are several structs which represent the different stages
-//! that go on in downloading and playing tracks. The proccess for fetching tracks,
-//! and what structs are relevant in each step, are as follows.
+//! that go on in downloading and playing tracks. When first queued,
+//! the downloader will return a [`Queued`] track.
 //!
-//! First Stage, when a track is initially fetched.
-//! 1. Raw entry selected from track list.
-//! 2. Raw entry split into path & display name.
-//! 3. Track data fetched, and [`QueuedTrack`] is created which includes a [`TrackName`] that may be raw.
-//!
-//! Second Stage, when a track is played.
-//! 1. Track data is decoded.
-//! 2. [`Info`] created from decoded data.
-//! 3. [`Decoded`] made from [`Info`] and the original decoded data.
+//! Then, when it's time to play the track, it is decoded into
+//! a [`Decoded`] track, which includes all the information
+//! in the form of [`Info`].
 
-use std::{io::Cursor, path::Path, time::Duration};
+use std::{fmt::Debug, io::Cursor, time::Duration};
 
 use bytes::Bytes;
-use convert_case::{Case, Casing};
-use regex::Regex;
 use rodio::{Decoder, Source as _};
-use unicode_segmentation::UnicodeSegmentation;
-use url::form_urlencoded;
+use unicode_segmentation::UnicodeSegmentation as _;
 
-pub mod error;
 pub mod list;
+pub use list::List;
+pub mod error;
+pub mod format;
+pub use error::{Error, Result};
 
-pub use error::Error;
-
-use crate::tracks::error::Context;
-use lazy_static::lazy_static;
+use crate::tracks::error::WithTrackContext as _;
 
 /// Just a shorthand for a decoded [Bytes].
 pub type DecodedData = Decoder<Cursor<Bytes>>;
 
-/// Specifies a track's name, and specifically,
-/// whether it has already been formatted or if it
-/// is still in it's raw path form.
-#[derive(Debug, Clone)]
-pub enum TrackName {
-    /// Pulled straight from the list,
-    /// with no splitting done at all.
-    Raw(String),
-
-    /// If a track has a custom specified name
-    /// in the list, then it should be defined with this variant.
-    Formatted(String),
-}
-
 /// Tracks which are still waiting in the queue, and can't be played yet.
 ///
 /// This means that only the data & track name are included.
-pub struct QueuedTrack {
-    /// Name of the track, which may be raw.
-    pub name: TrackName,
+#[derive(PartialEq, Eq)]
+pub struct Queued {
+    /// Display name of the track.
+    pub display: String,
 
     /// Full downloadable path/url of the track.
-    pub full_path: String,
+    pub path: String,
 
     /// The raw data of the track, which is not decoded and
     /// therefore much more memory efficient.
     pub data: Bytes,
 }
 
-impl QueuedTrack {
+impl Debug for Queued {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Queued")
+            .field("display", &self.display)
+            .field("path", &self.path)
+            .field("data", &self.data.len())
+            .finish()
+    }
+}
+
+impl Queued {
     /// This will actually decode and format the track,
     /// returning a [`DecodedTrack`] which can be played
     /// and also has a duration & formatted name.
-    pub fn decode(self) -> eyre::Result<DecodedTrack, Error> {
-        DecodedTrack::new(self)
+    pub fn decode(self) -> Result<Decoded> {
+        Decoded::new(self)
+    }
+
+    /// Creates a new queued track.
+    pub fn new(path: String, data: Bytes, display: Option<String>) -> Result<Self> {
+        let display = match display {
+            None => self::format::name(&path)?,
+            Some(custom) => custom,
+        };
+
+        Ok(Self {
+            display,
+            path,
+            data,
+        })
     }
 }
 
@@ -80,13 +82,10 @@ impl QueuedTrack {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Info {
     /// The full downloadable path/url of the track.
-    pub full_path: String,
-
-    /// Whether the track entry included a custom name, or not.
-    pub custom_name: bool,
+    pub path: String,
 
     /// This is a formatted name, so it doesn't include the full path.
-    pub display_name: String,
+    pub display: String,
 
     /// This is the *actual* terminal width of the track name, used to make
     /// the UI consistent.
@@ -97,128 +96,30 @@ pub struct Info {
     pub duration: Option<Duration>,
 }
 
-lazy_static! {
-    static ref MASTER_PATTERNS: [Regex; 5] = [
-        // (master), (master v2)
-        Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)$").unwrap(),
-        // mstr or - mstr or (mstr) — now also matches "mstr v3", "mstr2", etc.
-        Regex::new(r"\s*[-(]?\s*mstr(?:\s*v?\d+)?\s*\)?$").unwrap(),
-        // - master, master at end without parentheses
-        Regex::new(r"\s*[-]?\s*master(?:\s*v?\d+)?$").unwrap(),
-        // kupla master1, kupla master v2 (without parentheses or separator)
-        Regex::new(r"\s+kupla\s+master(?:\s*v?\d+|\d+)?$").unwrap(),
-        // (kupla master) followed by trailing parenthetical numbers, e.g. "... (kupla master) (1)"
-        Regex::new(r"\s*\(.*?master(?:\s*v?\d+)?\)(?:\s*\(\d+\))+$").unwrap(),
-    ];
-    static ref ID_PATTERN: Regex = Regex::new(r"^[a-z]\d[ .]").unwrap();
-}
-
 impl Info {
     /// Converts the info back into a full track list entry.
     pub fn to_entry(&self) -> String {
-        let mut entry = self.full_path.clone();
-
-        if self.custom_name {
-            entry.push('!');
-            entry.push_str(&self.display_name);
-        }
+        let mut entry = self.path.clone();
+        entry.push('!');
+        entry.push_str(&self.display);
 
         entry
     }
 
-    /// Decodes a URL string into normal UTF-8.
-    fn decode_url(text: &str) -> String {
-        // The tuple contains smart pointers, so it's not really practical to use `into()`.
-        #[allow(clippy::tuple_array_conversions)]
-        form_urlencoded::parse(text.as_bytes())
-            .map(|(key, val)| [key, val].concat())
-            .collect()
-    }
-
-    /// Formats a name with [`convert_case`].
-    ///
-    /// This will also strip the first few numbers that are
-    /// usually present on most lofi tracks and do some other
-    /// formatting operations.
-    fn format_name(name: &str) -> eyre::Result<String, Error> {
-        let path = Path::new(name);
-
-        let name = path
-            .file_stem()
-            .and_then(|x| x.to_str())
-            .ok_or((name, error::Kind::InvalidName))?;
-
-        let name = Self::decode_url(name).to_lowercase();
-        let mut name = name
-            .replace("masster", "master")
-            .replace("(online-audio-converter.com)", "") // Some of these names, man...
-            .replace('_', " ");
-
-        // Get rid of "master" suffix with a few regex patterns.
-        for regex in MASTER_PATTERNS.iter() {
-            name = regex.replace(&name, "").to_string();
-        }
-
-        name = ID_PATTERN.replace(&name, "").to_string();
-
-        let name = name
-            .replace("13lufs", "")
-            .to_case(Case::Title)
-            .replace(" .", "")
-            .replace(" Ft ", " ft. ")
-            .replace("Ft.", "ft.")
-            .replace("Feat.", "ft.")
-            .replace(" W ", " w/ ");
-
-        // This is incremented for each digit in front of the song name.
-        let mut skip = 0;
-
-        for character in name.as_bytes() {
-            if character.is_ascii_digit()
-                || *character == b'.'
-                || *character == b')'
-                || *character == b'('
-            {
-                skip += 1;
-            } else {
-                break;
-            }
-        }
-
-        // If the entire name of the track is a number, then just return it.
-        if skip == name.len() {
-            Ok(name.trim().to_string())
-        } else {
-            // We've already checked before that the bound is at an ASCII digit.
-            #[allow(clippy::string_slice)]
-            Ok(String::from(name[skip..].trim()))
-        }
-    }
-
-    /// Creates a new [`TrackInfo`] from a possibly raw name & decoded data.
-    pub fn new(
-        name: TrackName,
-        full_path: String,
-        decoded: &DecodedData,
-    ) -> eyre::Result<Self, Error> {
-        let (display_name, custom_name) = match name {
-            TrackName::Raw(raw) => (Self::format_name(&raw)?, false),
-            TrackName::Formatted(custom) => (custom, true),
-        };
-
+    /// Creates a new [`Info`] from decoded data & the queued track.
+    pub fn new(decoded: &DecodedData, path: String, display: String) -> Result<Self> {
         Ok(Self {
             duration: decoded.total_duration(),
-            width: display_name.graphemes(true).count(),
-            full_path,
-            custom_name,
-            display_name,
+            width: display.graphemes(true).count(),
+            path,
+            display,
         })
     }
 }
 
-/// This struct is seperate from [Track] since it is generated lazily from
+/// This struct is separate from [Track] since it is generated lazily from
 /// a track, and not when the track is first downloaded.
-pub struct DecodedTrack {
+pub struct Decoded {
     /// Has both the formatted name and some information from the decoded data.
     pub info: Info,
 
@@ -226,18 +127,18 @@ pub struct DecodedTrack {
     pub data: DecodedData,
 }
 
-impl DecodedTrack {
+impl Decoded {
     /// Creates a new track.
     /// This is equivalent to [`QueuedTrack::decode`].
-    pub fn new(track: QueuedTrack) -> eyre::Result<Self, Error> {
+    pub fn new(track: Queued) -> Result<Self> {
+        let (path, display) = (track.path.clone(), track.display.clone());
         let data = Decoder::builder()
-            .with_byte_len(track.data.len().try_into().unwrap())
+            .with_byte_len(track.data.len().try_into()?)
             .with_data(Cursor::new(track.data))
             .build()
-            .track(track.full_path.clone())?;
+            .track(track.display)?;
 
-        let info = Info::new(track.name, track.full_path, &data)?;
-
+        let info = Info::new(&data, path, display)?;
         Ok(Self { info, data })
     }
 }

@@ -1,27 +1,62 @@
 //! Contains the code for the MPRIS server & other helper functions.
 
-use std::{env, process, sync::Arc};
+use std::{
+    env,
+    hash::{DefaultHasher, Hash, Hasher},
+    process,
+    sync::Arc,
+};
 
+use arc_swap::ArcSwap;
 use mpris_server::{
     zbus::{self, fdo, Result},
     LoopStatus, Metadata, PlaybackRate, PlaybackStatus, PlayerInterface, Property, RootInterface,
     Time, TrackId, Volume,
 };
-use tokio::sync::mpsc::Sender;
+use rodio::Sink;
+use tokio::sync::{broadcast, mpsc};
 
-use super::ui;
-use super::Message;
+use crate::{player::Current, ui::Update};
+use crate::{ui, Message};
 
 const ERROR: fdo::Error = fdo::Error::Failed(String::new());
 
+struct Sender {
+    inner: mpsc::Sender<Message>,
+}
+
+impl Sender {
+    pub fn new(inner: mpsc::Sender<Message>) -> Self {
+        Self { inner }
+    }
+
+    pub async fn send(&self, message: Message) -> fdo::Result<()> {
+        self.inner
+            .send(message)
+            .await
+            .map_err(|x| fdo::Error::Failed(x.to_string()))
+    }
+
+    pub async fn zbus(&self, message: Message) -> zbus::Result<()> {
+        self.inner
+            .send(message)
+            .await
+            .map_err(|x| zbus::Error::Failure(x.to_string()))
+    }
+}
+
+impl Into<fdo::Error> for crate::Error {
+    fn into(self) -> fdo::Error {
+        fdo::Error::Failed(self.to_string())
+    }
+}
+
 /// The actual MPRIS player.
 pub struct Player {
-    /// A reference to the [`super::Player`] itself.
-    pub player: Arc<super::Player>,
-
-    /// The audio server sender, which is used to communicate with
-    /// the audio sender for skips and a few other inputs.
-    pub sender: Sender<Message>,
+    sink: Arc<Sink>,
+    current: ArcSwap<Current>,
+    list: String,
+    sender: Sender,
 }
 
 impl RootInterface for Player {
@@ -30,10 +65,7 @@ impl RootInterface for Player {
     }
 
     async fn quit(&self) -> fdo::Result<()> {
-        self.sender
-            .send(Message::Quit)
-            .await
-            .map_err(|_error| ERROR)
+        self.sender.send(Message::Quit).await
     }
 
     async fn can_quit(&self) -> fdo::Result<bool> {
@@ -79,10 +111,7 @@ impl RootInterface for Player {
 
 impl PlayerInterface for Player {
     async fn next(&self) -> fdo::Result<()> {
-        self.sender
-            .send(Message::Next)
-            .await
-            .map_err(|_error| ERROR)
+        self.sender.send(Message::Next).await
     }
 
     async fn previous(&self) -> fdo::Result<()> {
@@ -90,17 +119,11 @@ impl PlayerInterface for Player {
     }
 
     async fn pause(&self) -> fdo::Result<()> {
-        self.sender
-            .send(Message::Pause)
-            .await
-            .map_err(|_error| ERROR)
+        self.sender.send(Message::Pause).await
     }
 
     async fn play_pause(&self) -> fdo::Result<()> {
-        self.sender
-            .send(Message::PlayPause)
-            .await
-            .map_err(|_error| ERROR)
+        self.sender.send(Message::PlayPause).await
     }
 
     async fn stop(&self) -> fdo::Result<()> {
@@ -108,10 +131,7 @@ impl PlayerInterface for Player {
     }
 
     async fn play(&self) -> fdo::Result<()> {
-        self.sender
-            .send(Message::Play)
-            .await
-            .map_err(|_error| ERROR)
+        self.sender.send(Message::Play).await
     }
 
     async fn seek(&self, _offset: Time) -> fdo::Result<()> {
@@ -127,9 +147,9 @@ impl PlayerInterface for Player {
     }
 
     async fn playback_status(&self) -> fdo::Result<PlaybackStatus> {
-        Ok(if !self.player.current_exists() {
+        Ok(if self.current.load().loading() {
             PlaybackStatus::Stopped
-        } else if self.player.sink.is_paused() {
+        } else if self.sink.is_paused() {
             PlaybackStatus::Paused
         } else {
             PlaybackStatus::Playing
@@ -145,11 +165,11 @@ impl PlayerInterface for Player {
     }
 
     async fn rate(&self) -> fdo::Result<PlaybackRate> {
-        Ok(self.player.sink.speed().into())
+        Ok(self.sink.speed().into())
     }
 
     async fn set_rate(&self, rate: PlaybackRate) -> Result<()> {
-        self.player.sink.set_speed(rate as f32);
+        self.sink.set_speed(rate as f32);
         Ok(())
     }
 
@@ -162,15 +182,23 @@ impl PlayerInterface for Player {
     }
 
     async fn metadata(&self) -> fdo::Result<Metadata> {
-        let metadata = self
-            .player
-            .current
-            .load()
-            .as_ref()
-            .map_or_else(Metadata::new, |track| {
+        Ok(match self.current.load().as_ref() {
+            Current::Loading(_) => Metadata::new(),
+            Current::Track(track) => {
+                let mut hasher = DefaultHasher::new();
+                track.path.hash(&mut hasher);
+
+                let id = mpris_server::zbus::zvariant::ObjectPath::try_from(format!(
+                    "/com/talwat/lowfi/{}/{}",
+                    self.list,
+                    hasher.finish()
+                ))
+                .unwrap();
+
                 let mut metadata = Metadata::builder()
-                    .title(track.display_name.clone())
-                    .album(self.player.list.name.clone())
+                    .trackid(id)
+                    .title(track.display.clone())
+                    .album(self.list.clone())
                     .build();
 
                 metadata.set_length(
@@ -180,26 +208,20 @@ impl PlayerInterface for Player {
                 );
 
                 metadata
-            });
-
-        Ok(metadata)
+            }
+        })
     }
 
     async fn volume(&self) -> fdo::Result<Volume> {
-        Ok(self.player.sink.volume().into())
+        Ok(self.sink.volume().into())
     }
 
     async fn set_volume(&self, volume: Volume) -> Result<()> {
-        self.player.set_volume(volume as f32);
-        ui::flash_audio();
-
-        Ok(())
+        self.sender.zbus(Message::SetVolume(volume as f32)).await
     }
 
     async fn position(&self) -> fdo::Result<Time> {
-        Ok(Time::from_micros(
-            self.player.sink.get_pos().as_micros() as i64
-        ))
+        Ok(Time::from_micros(self.sink.get_pos().as_micros() as i64))
     }
 
     async fn minimum_rate(&self) -> fdo::Result<PlaybackRate> {
@@ -240,22 +262,49 @@ impl PlayerInterface for Player {
 pub struct Server {
     /// The inner MPRIS server.
     inner: mpris_server::Server<Player>,
+
+    /// Broadcast receiver.
+    receiver: broadcast::Receiver<Update>,
 }
 
 impl Server {
     /// Shorthand to emit a `PropertiesChanged` signal, like when pausing/unpausing.
     pub async fn changed(
-        &self,
+        &mut self,
         properties: impl IntoIterator<Item = mpris_server::Property> + Send + Sync,
-    ) -> zbus::Result<()> {
-        self.inner.properties_changed(properties).await
+    ) -> ui::Result<()> {
+        while let Ok(update) = self.receiver.try_recv() {
+            if let Update::Track(current) = update {
+                self.player().current.swap(Arc::new(current));
+            }
+        }
+
+        self.inner.properties_changed(properties).await?;
+        Ok(())
     }
 
-    /// Shorthand to emit a `PropertiesChanged` signal, specifically about playback.
-    pub async fn playback(&self, new: PlaybackStatus) -> zbus::Result<()> {
-        self.inner
-            .properties_changed(vec![Property::PlaybackStatus(new)])
-            .await
+    /// Updates the volume with the latest information.
+    pub async fn update_volume(&mut self) -> ui::Result<()> {
+        self.changed(vec![Property::Volume(self.player().sink.volume().into())])
+            .await?;
+
+        Ok(())
+    }
+
+    /// Updates the playback with the latest information.
+    pub async fn update_playback(&mut self) -> ui::Result<()> {
+        let status = self.player().playback_status().await?;
+        self.changed(vec![Property::PlaybackStatus(status)]).await?;
+
+        Ok(())
+    }
+
+    /// Updates the current track data with the current information.
+    pub async fn update_metadata(&mut self) -> ui::Result<()> {
+        let metadata = self.player().metadata().await?;
+        self.changed(vec![Property::Metadata(metadata)]).await?;
+
+        Ok(())
     }
 
     /// Shorthand to get the inner mpris player object.
@@ -265,17 +314,30 @@ impl Server {
 
     /// Creates a new MPRIS server.
     pub async fn new(
-        player: Arc<super::Player>,
-        sender: Sender<Message>,
-    ) -> eyre::Result<Self, zbus::Error> {
+        state: ui::State,
+        sender: mpsc::Sender<Message>,
+        receiver: broadcast::Receiver<Update>,
+    ) -> ui::Result<Server> {
         let suffix = if env::var("LOWFI_FIXED_MPRIS_NAME").is_ok_and(|x| x == "1") {
             String::from("lowfi")
         } else {
-            format!("lowfi.{}.instance{}", player.list.name, process::id())
+            format!("lowfi.{}.instance{}", state.list, process::id())
         };
 
-        let server = mpris_server::Server::new(&suffix, Player { player, sender }).await?;
+        let server = mpris_server::Server::new(
+            &suffix,
+            Player {
+                sender: Sender::new(sender),
+                sink: state.sink,
+                current: ArcSwap::new(Arc::new(state.current)),
+                list: state.list,
+            },
+        )
+        .await?;
 
-        Ok(Self { inner: server })
+        Ok(Self {
+            inner: server,
+            receiver,
+        })
     }
 }

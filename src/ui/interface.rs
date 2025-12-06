@@ -1,0 +1,64 @@
+use std::time::Duration;
+
+use crate::{
+    ui::{self, components, window::Window},
+    Args,
+};
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct Params {
+    pub borderless: bool,
+    pub minimalist: bool,
+    pub delta: Duration,
+}
+
+impl From<&Args> for Params {
+    fn from(args: &Args) -> Self {
+        let delta = 1.0 / f32::from(args.fps);
+        let delta = Duration::from_secs_f32(delta);
+
+        Self {
+            delta,
+            minimalist: args.minimalist,
+            borderless: args.borderless,
+        }
+    }
+}
+
+/// Creates a full "menu" from the [`ui::State`], which can be
+/// easily put into a window for display.
+///
+/// The menu really is just a [`Vec`] of the different components,
+/// with padding already added.
+pub(crate) fn menu(state: &mut ui::State, params: Params) -> Vec<String> {
+    let action = components::action(state, state.width);
+
+    let middle = match state.timer {
+        Some(timer) => {
+            let volume = state.sink.volume();
+            let percentage = format!("{}%", (volume * 100.0).round().abs());
+            if timer.elapsed() > Duration::from_secs(1) {
+                state.timer = None;
+            }
+
+            components::audio_bar(state.width - 17, volume, &percentage)
+        }
+        None => components::progress_bar(state, state.width - 16),
+    };
+
+    let controls = components::controls(state.width);
+    if params.minimalist {
+        vec![action, middle]
+    } else {
+        vec![action, middle, controls]
+    }
+}
+
+/// The code for the terminal interface itself.
+///
+/// * `minimalist` - All this does is hide the bottom control bar.
+pub fn draw(state: &mut ui::State, window: &mut Window, params: Params) -> super::Result<()> {
+    let menu = menu(state, params);
+    window.draw(menu, false)?;
+    Ok(())
+}

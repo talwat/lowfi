@@ -1,16 +1,22 @@
 //! An extremely simple lofi player.
-
-#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
-
-use clap::{Parser, Subcommand};
+pub mod error;
 use std::path::PathBuf;
 
-mod messages;
-mod play;
-mod player;
-mod tracks;
+use clap::{Parser, Subcommand};
+mod tests;
+pub use error::{Error, Result};
+pub mod message;
+pub mod ui;
+pub use message::Message;
 
-#[allow(clippy::all, clippy::pedantic, clippy::nursery, clippy::restriction)]
+use crate::player::Player;
+pub mod audio;
+pub mod bookmark;
+pub mod download;
+pub mod player;
+pub mod tracks;
+pub mod volume;
+
 #[cfg(feature = "scrape")]
 mod scrapers;
 
@@ -21,7 +27,7 @@ use crate::scrapers::Source;
 #[derive(Parser, Clone)]
 #[command(about, version)]
 #[allow(clippy::struct_excessive_bools)]
-struct Args {
+pub struct Args {
     /// Use an alternate terminal screen.
     #[clap(long, short)]
     alternate: bool,
@@ -43,7 +49,7 @@ struct Args {
     fps: u8,
 
     /// Timeout in seconds for music downloads.
-    #[clap(long, default_value_t = 3)]
+    #[clap(long, default_value_t = 16)]
     timeout: u64,
 
     /// Include ALSA & other logs.
@@ -54,13 +60,13 @@ struct Args {
     #[clap(long, short, default_value_t = 3)]
     width: usize,
 
-    /// Use a custom track list
-    #[clap(long, short, alias = "list", alias = "tracks", short_alias = 'l')]
-    track_list: Option<String>,
+    /// Track list to play music from
+    #[clap(long, short, alias = "list", alias = "tracks", short_alias = 'l', default_value_t = String::from("chillhop"))]
+    track_list: String,
 
     /// Internal song buffer size.
-    #[clap(long, short = 's', alias = "buffer", default_value_t = 5)]
-    buffer_size: usize,
+    #[clap(long, short = 's', alias = "buffer", default_value_t = 5, value_parser = clap::value_parser!(u32).range(2..))]
+    buffer_size: u32,
 
     /// The command that was ran.
     /// This is [None] if no command was specified.
@@ -79,33 +85,41 @@ enum Commands {
     },
 }
 
-/// Gets lowfi's data directory.
-pub fn data_dir() -> eyre::Result<PathBuf, player::Error> {
-    let dir = dirs::data_dir()
-        .ok_or(player::Error::DataDir)?
-        .join("lowfi");
+/// Returns the application data directory used for persistency.
+///
+/// The function returns the platform-specific user data directory with
+/// a `lowfi` subfolder. Callers may use this path to store config,
+/// bookmarks, and other persistent files.
+pub fn data_dir() -> crate::Result<PathBuf> {
+    let dir = dirs::data_dir().unwrap().join("lowfi");
 
     Ok(dir)
 }
 
-#[tokio::main]
+/// Program entry point.
+///
+/// Parses CLI arguments, initializes the audio stream and player, then
+/// runs the main event loop. On exit it performs cleanup of the UI and
+/// returns the inner result.
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> eyre::Result<()> {
-    color_eyre::install()?;
+    let args = Args::parse();
 
-    let cli = Args::parse();
-
-    if let Some(command) = cli.command {
+    #[cfg(feature = "scrape")]
+    if let Some(command) = &args.command {
         match command {
-            #[cfg(feature = "scrape")]
             Commands::Scrape { source } => match source {
                 Source::Archive => scrapers::archive::scrape().await?,
                 Source::Lofigirl => scrapers::lofigirl::scrape().await?,
                 Source::Chillhop => scrapers::chillhop::scrape().await?,
             },
         }
-    } else {
-        play::play(cli).await?;
-    };
+    }
 
-    Ok(())
+    let stream = audio::stream()?;
+    let mut player = Player::init(args, stream.mixer()).await?;
+    let result = player.run().await;
+
+    player.environment().cleanup(result.is_ok())?;
+    Ok(result?)
 }

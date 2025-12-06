@@ -1,314 +1,242 @@
-//! Responsible for playing & queueing audio.
-//! This also has the code for the underlying
-//! audio server which adds new tracks.
+use std::sync::Arc;
 
-use std::{collections::VecDeque, sync::Arc, time::Duration};
-
-use arc_swap::ArcSwapOption;
-use atomic_float::AtomicF32;
-use downloader::Downloader;
-use reqwest::Client;
-use rodio::{OutputStream, OutputStreamBuilder, Sink};
-use tokio::{
-    select,
-    sync::{
-        mpsc::{Receiver, Sender},
-        RwLock,
-    },
-    task,
+use tokio::sync::{
+    broadcast,
+    mpsc::{self, Receiver},
 };
-
-#[cfg(feature = "mpris")]
-use mpris_server::{PlaybackStatus, PlayerInterface, Property};
 
 use crate::{
-    messages::Message,
-    player::{self, bookmark::Bookmarks, persistent_volume::PersistentVolume},
-    tracks::{self, list::List},
-    Args,
+    audio::waiter,
+    bookmark::Bookmarks,
+    download::{self, Downloader},
+    tracks::{self, List},
+    ui,
+    volume::PersistentVolume,
+    Message,
 };
 
-pub mod audio;
-pub mod bookmark;
-pub mod downloader;
-pub mod error;
-pub mod persistent_volume;
-pub mod queue;
-pub mod ui;
+#[derive(Clone, Debug)]
+/// Represents the currently known playback state.
+///
+/// * [`Current::Loading`] indicates the player is waiting for data.
+/// * [`Current::Track`] indicates the player has a decoded track available.
+pub enum Current {
+    /// Waiting for a track to arrive. The optional `Progress` is used to
+    /// indicate global download progress when present.
+    Loading(Option<download::Progress>),
 
-pub use error::Error;
+    /// A decoded track that can be played; contains the track `Info`.
+    Track(tracks::Info),
+}
 
-#[cfg(feature = "mpris")]
-pub mod mpris;
+impl Default for Current {
+    fn default() -> Self {
+        // By default the player starts in a loading state with no progress.
+        Self::Loading(None)
+    }
+}
 
-/// Main struct responsible for queuing up & playing tracks.
-// TODO: Consider refactoring [Player] from being stored in an [Arc], into containing many smaller [Arc]s.
-// TODO: In other words, this would change the type from `Arc<Player>` to just `Player`.
-// TODO:
-// TODO: This is conflicting, since then it'd clone ~10 smaller [Arc]s
-// TODO: every single time, which could be even worse than having an
-// TODO: [Arc] of an [Arc] in some cases (Like with [Sink] & [Client]).
+impl Current {
+    /// Returns `true` if this `Current` value represents a loading state.
+    pub const fn loading(&self) -> bool {
+        matches!(self, Self::Loading(_))
+    }
+}
+
+/// The high-level application player.
+///
+/// `Player` composes the downloader, UI, audio sink and bookkeeping state.
+/// It owns background `Handle`s and drives the main message loop in `run`.
 pub struct Player {
-    /// [rodio]'s [`Sink`] which can control playback.
-    pub sink: Sink,
+    /// Background downloader that fills the internal queue.
+    downloader: download::Handle,
 
-    /// The internal buffer size.
-    pub buffer_size: usize,
+    /// Persistent bookmark storage used by the player.
+    bookmarks: Bookmarks,
 
-    /// The [`TrackInfo`] of the current track.
-    /// This is [`None`] when lowfi is buffering/loading.
-    current: ArcSwapOption<tracks::Info>,
+    /// Shared audio sink used for playback.
+    sink: Arc<rodio::Sink>,
 
-    /// The current progress for downloading tracks, if
-    /// `current` is None.
-    progress: AtomicF32,
+    /// Receiver for incoming `Message` commands.
+    rx: Receiver<crate::Message>,
 
-    /// The tracks, which is a [`VecDeque`] that holds
-    /// *undecoded* [Track]s.
-    ///
-    /// This is populated specifically by the [Downloader].
-    tracks: RwLock<VecDeque<tracks::QueuedTrack>>,
+    /// Broadcast channel used to send UI updates.
+    broadcast: broadcast::Sender<ui::Update>,
 
-    /// The bookmarks, which are saved on quit.
-    pub bookmarks: Bookmarks,
+    /// Current playback state (loading or track).
+    current: Current,
 
-    /// The timeout for track downloads, as a [Duration].
-    timeout: Duration,
+    /// UI handle for rendering and input.
+    ui: ui::Handle,
 
-    /// The actual list of tracks to be played.
-    list: List,
+    /// Notifies when a play head has been appended.
+    waiter: waiter::Handle,
+}
 
-    /// The initial volume level.
-    volume: PersistentVolume,
-
-    /// The web client, which can contain a `UserAgent` & some
-    /// settings that help lowfi work more effectively.
-    client: Client,
+impl Drop for Player {
+    fn drop(&mut self) {
+        // Ensure playback is stopped when the player is dropped.
+        self.sink.stop();
+    }
 }
 
 impl Player {
-    /// Just a shorthand for setting `current`.
-    fn set_current(&self, info: tracks::Info) {
-        self.current.store(Some(Arc::new(info)));
+    /// Returns the `Environment` currently used by the UI.
+    pub const fn environment(&self) -> ui::Environment {
+        self.ui.environment
     }
 
-    /// A shorthand for checking if `self.current` is [Some].
-    pub fn current_exists(&self) -> bool {
-        self.current.load().is_some()
-    }
-
-    /// Sets the volume of the sink, and also clamps the value to avoid negative/over 100% values.
-    pub fn set_volume(&self, volume: f32) {
-        self.sink.set_volume(volume.clamp(0.0, 1.0));
-    }
-
-    /// Initializes the entire player, including audio devices & sink.
+    /// Sets the in-memory current state and notifies the UI about the change.
     ///
-    /// This also will load the track list & persistent volume.
-    pub async fn new(args: &Args) -> eyre::Result<(Self, OutputStream), player::Error> {
-        // Load the bookmarks.
-        let bookmarks = Bookmarks::load().await?;
+    /// If the new state is a `Track`, this will also update the bookmarked flag
+    /// based on persistent bookmarks.
+    pub fn set_current(&mut self, current: Current) -> crate::Result<()> {
+        self.current = current.clone();
+        self.update(ui::Update::Track(current))?;
 
-        // Load the volume file.
-        let volume = PersistentVolume::load()
-            .await
-            .map_err(player::Error::PersistentVolumeLoad)?;
-
-        // Load the track list.
-        let list = List::load(args.track_list.as_ref())
-            .await
-            .map_err(player::Error::TrackListLoad)?;
-
-        // We should only shut up alsa forcefully on Linux if we really have to.
-        #[cfg(target_os = "linux")]
-        let mut stream = if !args.alternate && !args.debug {
-            audio::silent_get_output_stream()?
-        } else {
-            OutputStreamBuilder::open_default_stream()?
+        let Current::Track(track) = &self.current else {
+            return Ok(());
         };
 
-        #[cfg(not(target_os = "linux"))]
-        let mut stream = OutputStreamBuilder::open_default_stream()?;
+        let bookmarked = self.bookmarks.bookmarked(track);
+        self.update(ui::Update::Bookmarked(bookmarked))?;
 
-        stream.log_on_drop(false); // Frankly, this is a stupid feature. Stop shoving your crap into my beloved stderr!!!
-        let sink = Sink::connect_new(stream.mixer());
+        Ok(())
+    }
 
+    /// Sends a `ui::Update` to the broadcast channel.
+    pub fn update(&mut self, update: ui::Update) -> crate::Result<()> {
+        self.broadcast.send(update)?;
+        Ok(())
+    }
+
+    /// Initialize a `Player` with the provided CLI `args` and audio `mixer`.
+    ///
+    /// This sets up the audio sink, UI, downloader, bookmarks and persistent
+    /// volume state. The function returns a fully constructed `Player` ready
+    /// to be driven via `run`.
+    pub async fn init(args: crate::Args, mixer: &rodio::mixer::Mixer) -> crate::Result<Self> {
+        let (tx, rx) = mpsc::channel(8);
         if args.paused {
-            sink.pause();
+            tx.send(Message::Pause).await?;
         }
 
-        let client = Client::builder()
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION")
-            ))
-            .timeout(Duration::from_secs(args.timeout * 5))
-            .build()?;
+        tx.send(Message::Init).await?;
 
-        let player = Self {
-            tracks: RwLock::new(VecDeque::with_capacity(args.buffer_size)),
-            buffer_size: args.buffer_size,
-            current: ArcSwapOption::new(None),
-            progress: AtomicF32::new(0.0),
-            timeout: Duration::from_secs(args.timeout),
-            bookmarks,
-            client,
+        let (utx, urx) = broadcast::channel(8);
+        let list = List::load(args.track_list.as_ref()).await?;
+
+        let sink = Arc::new(rodio::Sink::connect_new(mixer));
+        let state = ui::State::initial(Arc::clone(&sink), args.width, list.name.clone());
+
+        let volume = PersistentVolume::load().await?;
+        sink.set_volume(volume.float());
+
+        Ok(Self {
+            ui: ui::Handle::init(tx.clone(), urx, state, &args).await?,
+            downloader: Downloader::init(
+                args.buffer_size as usize,
+                args.timeout,
+                list,
+                tx.clone(),
+            )?,
+            waiter: waiter::Handle::new(Arc::clone(&sink), tx),
+            bookmarks: Bookmarks::load().await?,
+            current: Current::default(),
+            broadcast: utx,
+            rx,
             sink,
-            volume,
-            list,
-        };
-
-        Ok((player, stream))
+        })
     }
 
-    /// This is the main "audio server".
+    /// Persist state that should survive a run (bookmarks and volume).
+    pub async fn close(&self) -> crate::Result<()> {
+        self.bookmarks.save().await?;
+        PersistentVolume::save(self.sink.volume()).await?;
+
+        Ok(())
+    }
+
+    /// Play a queued track by decoding, appending to the sink and notifying
+    /// other subsystems that playback has changed.
+    pub fn play(&mut self, queued: tracks::Queued) -> crate::Result<()> {
+        let decoded = queued.decode()?;
+        self.sink.append(decoded.data);
+        self.set_current(Current::Track(decoded.info))?;
+        self.waiter.notify();
+
+        Ok(())
+    }
+
+    /// Drives the main message loop of the player.
     ///
-    /// `rx` & `tx` are used to communicate with it, for example when to
-    /// skip tracks or pause.
-    ///
-    /// This will also initialize a [Downloader] as well as an MPRIS server if enabled.
-    /// The [Downloader]s internal buffer size is determined by `buf_size`.
-    pub async fn play(
-        player: Arc<Self>,
-        tx: Sender<Message>,
-        mut rx: Receiver<Message>,
-        debug: bool,
-    ) -> eyre::Result<(), player::Error> {
-        // Initialize the mpris player.
-        //
-        // We're initializing here, despite MPRIS being a "user interface",
-        // since we need to be able to *actively* write new information to MPRIS
-        // specifically when it occurs, unlike the UI which passively reads the
-        // information each frame. Blame MPRIS, not me.
-        #[cfg(feature = "mpris")]
-        let mpris = mpris::Server::new(Arc::clone(&player), tx.clone())
-            .await
-            .inspect_err(|x| {
-                dbg!(x);
-            })?;
-
-        // `itx` is used to notify the `Downloader` when it needs to download new tracks.
-        let downloader = Downloader::new(Arc::clone(&player));
-        let (itx, downloader) = downloader.start(debug);
-
-        // Start buffering tracks immediately.
-        Downloader::notify(&itx).await?;
-
-        // Set the initial sink volume to the one specified.
-        player.set_volume(player.volume.float());
-
-        // Whether the last signal was a `NewSong`. This is helpful, since we
-        // only want to autoplay if there hasn't been any manual intervention.
-        //
-        // In other words, this will be `true` after a new track has been fully
-        // loaded and it'll be `false` if a track is still currently loading.
-        let mut new = false;
-
-        loop {
-            let clone = Arc::clone(&player);
-
-            let msg = select! {
-                biased;
-
-                Some(x) = rx.recv() => x,
-                // This future will finish only at the end of the current track.
-                // The condition is a kind-of hack which gets around the quirks
-                // of `sleep_until_end`.
-                //
-                // That's because `sleep_until_end` will return instantly if the sink
-                // is uninitialized. That's why we put a check to make sure that the last
-                // signal we got was `NewSong`, since we shouldn't start waiting for the
-                // song to be over until it has actually started.
-                //
-                // It's also important to note that the condition is only checked at the
-                // beginning of the loop, not throughout.
-                Ok(()) = task::spawn_blocking(move || clone.sink.sleep_until_end()),
-                        if new => Message::Next,
-            };
-
-            match msg {
-                Message::Next | Message::Init | Message::TryAgain => {
-                    // We manually skipped, so we shouldn't actually wait for the song
-                    // to be over until we recieve the `NewSong` signal.
-                    new = false;
-
-                    // This basically just prevents `Next` while a song is still currently loading.
-                    if msg == Message::Next && !player.current_exists() {
+    /// This will return when a `Message::Quit` is received. It handles commands
+    /// coming from the frontend and updates playback/UI state accordingly.
+    pub async fn run(&mut self) -> crate::Result<()> {
+        while let Some(message) = self.rx.recv().await {
+            match message {
+                Message::Next | Message::Init | Message::Loaded => {
+                    if message == Message::Next && self.current.loading() {
                         continue;
                     }
 
-                    // Handle the rest of the signal in the background,
-                    // as to not block the main audio server thread.
-                    task::spawn(Self::next(
-                        Arc::clone(&player),
-                        itx.clone(),
-                        tx.clone(),
-                        debug,
-                    ));
+                    self.sink.stop();
+                    match self.downloader.track() {
+                        download::Output::Loading(progress) => {
+                            self.set_current(Current::Loading(progress))?;
+                        }
+                        download::Output::Queued(queued) => self.play(queued)?,
+                    }
                 }
                 Message::Play => {
-                    player.sink.play();
-
-                    #[cfg(feature = "mpris")]
-                    mpris.playback(PlaybackStatus::Playing).await?;
+                    self.sink.play();
                 }
                 Message::Pause => {
-                    player.sink.pause();
-
-                    #[cfg(feature = "mpris")]
-                    mpris.playback(PlaybackStatus::Paused).await?;
+                    self.sink.pause();
                 }
                 Message::PlayPause => {
-                    if player.sink.is_paused() {
-                        player.sink.play();
+                    if self.sink.is_paused() {
+                        self.sink.play();
                     } else {
-                        player.sink.pause();
+                        self.sink.pause();
                     }
-
-                    #[cfg(feature = "mpris")]
-                    mpris
-                        .playback(mpris.player().playback_status().await?)
-                        .await?;
                 }
                 Message::ChangeVolume(change) => {
-                    player.set_volume(player.sink.volume() + change);
-
-                    #[cfg(feature = "mpris")]
-                    mpris
-                        .changed(vec![Property::Volume(player.sink.volume().into())])
-                        .await?;
+                    self.sink
+                        .set_volume((self.sink.volume() + change).clamp(0.0, 1.0));
+                    self.update(ui::Update::Volume)?;
                 }
-                // This basically just continues, but more importantly, it'll re-evaluate
-                // the select macro at the beginning of the loop.
-                // See the top section to find out why this matters.
-                Message::NewSong => {
-                    // We've recieved `NewSong`, so on the next loop iteration we'll
-                    // begin waiting for the song to be over in order to autoplay.
-                    new = true;
-
-                    #[cfg(feature = "mpris")]
-                    mpris
-                        .changed(vec![
-                            Property::Metadata(mpris.player().metadata().await?),
-                            Property::PlaybackStatus(mpris.player().playback_status().await?),
-                        ])
-                        .await?;
-
-                    continue;
+                Message::SetVolume(set) => {
+                    self.sink.set_volume(set.clamp(0.0, 1.0));
+                    self.update(ui::Update::Volume)?;
                 }
                 Message::Bookmark => {
-                    let current = player.current.load();
-                    let current = current.as_ref().unwrap();
+                    let Current::Track(current) = &self.current else {
+                        continue;
+                    };
 
-                    player.bookmarks.bookmark(current).await?;
+                    let bookmarked = self.bookmarks.bookmark(current)?;
+                    self.update(ui::Update::Bookmarked(bookmarked))?;
                 }
                 Message::Quit => break,
             }
+
+            #[cfg(feature = "mpris")]
+            match message {
+                Message::ChangeVolume(_) | Message::SetVolume(_) => {
+                    self.ui.mpris.update_volume().await?
+                }
+                Message::Play | Message::Pause | Message::PlayPause => {
+                    self.ui.mpris.update_playback().await?
+                }
+                Message::Init | Message::Loaded | Message::Next => {
+                    self.ui.mpris.update_metadata().await?
+                }
+                _ => (),
+            }
         }
 
-        downloader.abort();
-
+        self.close().await?;
         Ok(())
     }
 }

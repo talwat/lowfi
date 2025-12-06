@@ -1,7 +1,9 @@
+pub mod waiter;
+
 /// This gets the output stream while also shutting up alsa with [libc].
 /// Uses raw libc calls, and therefore is functional only on Linux.
 #[cfg(target_os = "linux")]
-pub fn silent_get_output_stream() -> eyre::Result<rodio::OutputStream, crate::player::Error> {
+fn silent_get_output_stream() -> crate::Result<rodio::OutputStream> {
     use libc::freopen;
     use rodio::OutputStreamBuilder;
     use std::ffi::CString;
@@ -23,7 +25,7 @@ pub fn silent_get_output_stream() -> eyre::Result<rodio::OutputStream, crate::pl
     // SAFETY: Simple enough to be impossible to fail. Hopefully.
     unsafe {
         freopen(null.as_ptr(), mode.as_ptr(), stderr);
-    }
+    };
 
     // Make the OutputStream while stderr is still redirected to /dev/null.
     let stream = OutputStreamBuilder::open_default_stream()?;
@@ -34,7 +36,17 @@ pub fn silent_get_output_stream() -> eyre::Result<rodio::OutputStream, crate::pl
     // SAFETY: See the first call to `freopen`.
     unsafe {
         freopen(tty.as_ptr(), mode.as_ptr(), stderr);
-    }
+    };
+
+    Ok(stream)
+}
+
+pub fn stream() -> crate::Result<rodio::OutputStream> {
+    #[cfg(target_os = "linux")]
+    let mut stream = silent_get_output_stream()?;
+    #[cfg(not(target_os = "linux"))]
+    let mut stream = rodio::OutputStreamBuilder::open_default_stream()?;
+    stream.log_on_drop(false);
 
     Ok(stream)
 }

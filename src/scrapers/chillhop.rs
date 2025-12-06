@@ -2,9 +2,8 @@ use eyre::eyre;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use indicatif::ProgressBar;
-use lazy_static::lazy_static;
-use std::fmt;
 use std::str::FromStr;
+use std::{fmt, sync::LazyLock};
 
 use reqwest::Client;
 use scraper::{Html, Selector};
@@ -16,14 +15,13 @@ use tokio::fs;
 
 use crate::scrapers::{get, Source};
 
-lazy_static! {
-    static ref RELEASES: Selector = Selector::parse(".table-body > a").unwrap();
-    static ref RELEASE_LABEL: Selector = Selector::parse("label").unwrap();
-    // static ref RELEASE_DATE: Selector = Selector::parse(".release-feat-props > .text-xs").unwrap();
-    // static ref RELEASE_NAME: Selector = Selector::parse(".release-feat-props > h2").unwrap();
-    static ref RELEASE_AUTHOR: Selector = Selector::parse(".release-feat-props .artist-link").unwrap();
-    static ref RELEASE_TEXTAREA: Selector = Selector::parse("textarea").unwrap();
-}
+static RELEASES: LazyLock<Selector> = LazyLock::new(|| Selector::parse(".table-body > a").unwrap());
+static RELEASE_LABEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("label").unwrap());
+// static ref RELEASE_DATE: LazyLock<Selector> = LazyLock::new(|| Selector::parse(".release-feat-props > .text-xs").unwrap());
+// static ref RELEASE_NAME: LazyLock<Selector> = LazyLock::new(|| Selector::parse(".release-feat-props > h2").unwrap());
+// static RELEASE_AUTHOR: LazyLock<Selector> = LazyLock::new(|| Selector::parse(".release-feat-props .artist-link").unwrap());
+static RELEASE_TEXTAREA: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("textarea").unwrap());
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]

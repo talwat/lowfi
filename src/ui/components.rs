@@ -1,12 +1,12 @@
 //! Various different individual components that
 //! appear in lowfi's UI, like the progress bar.
 
-use std::{ops::Deref as _, sync::Arc, time::Duration};
+use std::time::Duration;
 
 use crossterm::style::Stylize as _;
 use unicode_segmentation::UnicodeSegmentation as _;
 
-use crate::{player::Player, tracks::Info};
+use crate::{player::Current, tracks, ui};
 
 /// Small helper function to format durations.
 pub fn format_duration(duration: &Duration) -> String {
@@ -17,23 +17,23 @@ pub fn format_duration(duration: &Duration) -> String {
 }
 
 /// Creates the progress bar, as well as all the padding needed.
-pub fn progress_bar(player: &Player, current: Option<&Arc<Info>>, width: usize) -> String {
+pub fn progress_bar(state: &ui::State, width: usize) -> String {
     let mut duration = Duration::new(0, 0);
-    let elapsed = if current.is_some() {
-        player.sink.get_pos()
+    let elapsed = if matches!(&state.current, Current::Track(_)) {
+        state.sink.get_pos()
     } else {
         Duration::new(0, 0)
     };
 
     let mut filled = 0;
-    if let Some(current) = current {
+    if let Current::Track(current) = &state.current {
         if let Some(x) = current.duration {
             duration = x;
 
             let elapsed = elapsed.as_secs() as f32 / duration.as_secs() as f32;
             filled = (elapsed * width as f32).round() as usize;
         }
-    };
+    }
 
     format!(
         " [{}{}] {}/{} ",
@@ -45,7 +45,7 @@ pub fn progress_bar(player: &Player, current: Option<&Arc<Info>>, width: usize) 
 }
 
 /// Creates the audio bar, as well as all the padding needed.
-pub fn audio_bar(volume: f32, percentage: &str, width: usize) -> String {
+pub fn audio_bar(width: usize, volume: f32, percentage: &str) -> String {
     let audio = (volume * width as f32).round() as usize;
 
     format!(
@@ -60,13 +60,13 @@ pub fn audio_bar(volume: f32, percentage: &str, width: usize) -> String {
 /// This represents the main "action" bars state.
 enum ActionBar {
     /// When the app is paused.
-    Paused(Info),
+    Paused(tracks::Info),
 
     /// When the app is playing.
-    Playing(Info),
+    Playing(tracks::Info),
 
     /// When the app is loading.
-    Loading(f32),
+    Loading(Option<u8>),
 
     /// When the app is muted.
     Muted,
@@ -77,12 +77,15 @@ impl ActionBar {
     /// The second value is the character length of the result.
     fn format(&self, star: bool) -> (String, usize) {
         let (word, subject) = match self {
-            Self::Playing(x) => ("playing", Some((x.display_name.clone(), x.width))),
-            Self::Paused(x) => ("paused", Some((x.display_name.clone(), x.width))),
+            Self::Playing(x) => ("playing", Some((x.display.clone(), x.width))),
+            Self::Paused(x) => ("paused", Some((x.display.clone(), x.width))),
             Self::Loading(progress) => {
-                let progress = format!("{: <2.0}%", (progress * 100.0).min(99.0));
+                let progress = match *progress {
+                    None | Some(0) => None,
+                    Some(progress) => Some((format!("{: <2.0}%", progress.min(99)), 3)),
+                };
 
-                ("loading", Some((progress, 3)))
+                ("loading", progress)
             }
             Self::Muted => {
                 let msg = "+ to increase volume";
@@ -105,26 +108,23 @@ impl ActionBar {
 
 /// Creates the top/action bar, which has the name of the track and it's status.
 /// This also creates all the needed padding.
-pub fn action(player: &Player, current: Option<&Arc<Info>>, width: usize) -> String {
-    let (main, len) = current
-        .map_or_else(
-            || ActionBar::Loading(player.progress.load(std::sync::atomic::Ordering::Acquire)),
-            |info| {
-                let info = info.deref().clone();
+pub fn action(state: &ui::State, width: usize) -> String {
+    let action = match state.current.clone() {
+        Current::Loading(progress) => {
+            ActionBar::Loading(progress.map(|x| x.load(std::sync::atomic::Ordering::Relaxed)))
+        }
+        Current::Track(info) => {
+            if state.sink.volume() < 0.01 {
+                ActionBar::Muted
+            } else if state.sink.is_paused() {
+                ActionBar::Paused(info)
+            } else {
+                ActionBar::Playing(info)
+            }
+        }
+    };
 
-                if player.sink.volume() < 0.01 {
-                    return ActionBar::Muted;
-                }
-
-                if player.sink.is_paused() {
-                    ActionBar::Paused(info)
-                } else {
-                    ActionBar::Playing(info)
-                }
-            },
-        )
-        .format(player.bookmarks.bookmarked());
-
+    let (main, len) = action.format(state.bookmarked);
     if len > width {
         let chopped: String = main.graphemes(true).take(width + 1).collect();
 

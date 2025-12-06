@@ -7,6 +7,7 @@ mod tests;
 pub use error::{Error, Result};
 pub mod message;
 pub mod ui;
+use futures_util::TryFutureExt;
 pub use message::Message;
 
 use crate::player::Player;
@@ -96,19 +97,6 @@ pub fn data_dir() -> crate::Result<PathBuf> {
     Ok(dir)
 }
 
-/// Simply creates and runs the player, so that the [`Result`] of both operations
-/// can be easily handled by the [`main`] function.
-async fn player(
-    args: Args,
-    environment: ui::Environment,
-    mixer: &rodio::mixer::Mixer,
-) -> crate::Result<()> {
-    let mut player = Player::init(args, environment, mixer).await?;
-    player.run().await?;
-
-    Ok(())
-}
-
 /// Program entry point.
 ///
 /// Parses CLI arguments, initializes the audio stream and player, then
@@ -131,8 +119,10 @@ async fn main() -> eyre::Result<()> {
 
     let stream = audio::stream()?;
     let environment = ui::Environment::ready(args.alternate)?;
-    let result = player(args, environment, stream.mixer()).await;
-    environment.cleanup(result.is_ok())?;
+    let result = Player::init(args, environment, stream.mixer())
+        .and_then(Player::run)
+        .await;
 
+    environment.cleanup(result.is_ok())?;
     Ok(result?)
 }

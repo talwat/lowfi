@@ -176,7 +176,7 @@ impl Player {
     ///
     /// This will return when a `Message::Quit` is received. It handles commands
     /// coming from the frontend and updates playback/UI state accordingly.
-    pub async fn run(&mut self) -> crate::Result<()> {
+    pub async fn run(mut self) -> crate::Result<()> {
         while let Some(message) = self.rx.recv().await {
             match message {
                 Message::Next | Message::Init | Message::Loaded => {

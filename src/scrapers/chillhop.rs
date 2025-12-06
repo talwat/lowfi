@@ -1,7 +1,8 @@
 use eyre::eyre;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use futures_util::stream::FuturesUnordered;
+use futures_util::StreamExt;
 use indicatif::ProgressBar;
+use std::future::Future;
 use std::str::FromStr;
 use std::{fmt, sync::LazyLock};
 
@@ -87,7 +88,7 @@ async fn scan_page(
     number: usize,
     client: &Client,
     bar: ProgressBar,
-) -> eyre::Result<Vec<impl futures::Future<Output = Result<Release, ReleaseError>>>> {
+) -> eyre::Result<Vec<impl Future<Output = Result<Release, ReleaseError>>>> {
     let path = format!("releases/?page={number}");
     let content = get(client, &path, Source::Chillhop).await?;
     let html = Html::parse_document(&content);

@@ -7,7 +7,7 @@ use std::{
 };
 
 use bytes::{BufMut as _, Bytes, BytesMut};
-use futures::StreamExt as _;
+use futures_util::StreamExt as _;
 use reqwest::Client;
 use tokio::fs;
 

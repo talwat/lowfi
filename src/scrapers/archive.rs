@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use futures::{stream::FuturesOrdered, StreamExt};
+use futures_util::{stream::FuturesOrdered, StreamExt};
 use reqwest::Client;
 use scraper::{Html, Selector};
 

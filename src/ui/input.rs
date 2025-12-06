@@ -3,7 +3,7 @@
 
 use crate::Message;
 use crossterm::event::{self, EventStream, KeyCode, KeyEventKind, KeyModifiers};
-use futures::{FutureExt as _, StreamExt as _};
+use futures_util::{FutureExt, StreamExt};
 use tokio::sync::mpsc::Sender;
 
 /// Starts the listener to receive input from the terminal for various events.

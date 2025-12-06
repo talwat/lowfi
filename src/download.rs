@@ -46,19 +46,26 @@ pub struct Downloader {
 
     /// The [`reqwest`] client to use for downloads.
     client: Client,
-
-    /// The timeout to use for both the client,
-    /// and also how long to wait between trying
-    /// again after a failed download.
-    timeout: Duration,
 }
 
 impl Downloader {
     /// Initializes the downloader with a track list.
     ///
     /// `tx` specifies the [`Sender`] to be notified with [`crate::Message::Loaded`].
-    pub fn init(size: usize, tracks: tracks::List, tx: Sender<crate::Message>) -> Handle {
-        let client = Client::new();
+    pub fn init(
+        size: usize,
+        timeout: u64,
+        tracks: tracks::List,
+        tx: Sender<crate::Message>,
+    ) -> crate::Result<Handle> {
+        let client = Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .timeout(Duration::from_secs(timeout))
+            .build()?;
 
         let (qtx, qrx) = mpsc::channel(size - 1);
         let downloader = Self {
@@ -66,19 +73,20 @@ impl Downloader {
             tx,
             tracks,
             client,
-            timeout: Duration::from_secs(1),
         };
 
-        Handle {
+        Ok(Handle {
             queue: qrx,
             task: tokio::spawn(downloader.run()),
-        }
+        })
     }
 
     /// Actually runs the downloader, consuming it and beginning
     /// the cycle of downloading tracks and reporting to the
     /// rest of the program.
     async fn run(self) -> crate::Result<()> {
+        const ERROR_TIMEOUT: Duration = Duration::from_secs(1);
+
         loop {
             let result = self.tracks.random(&self.client, &PROGRESS).await;
             match result {
@@ -93,7 +101,7 @@ impl Downloader {
                 Err(error) => {
                     PROGRESS.store(0, atomic::Ordering::Relaxed);
                     if !error.timeout() {
-                        tokio::time::sleep(self.timeout).await;
+                        tokio::time::sleep(ERROR_TIMEOUT).await;
                     }
                 }
             }

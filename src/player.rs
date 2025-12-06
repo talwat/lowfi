@@ -117,6 +117,10 @@ impl Player {
     /// to be driven via `run`.
     pub async fn init(args: crate::Args, mixer: &rodio::mixer::Mixer) -> crate::Result<Self> {
         let (tx, rx) = mpsc::channel(8);
+        if args.paused {
+            tx.send(Message::Pause).await?;
+        }
+
         tx.send(Message::Init).await?;
 
         let (utx, urx) = broadcast::channel(8);
@@ -130,7 +134,12 @@ impl Player {
 
         Ok(Self {
             ui: ui::Handle::init(tx.clone(), urx, state, &args).await?,
-            downloader: Downloader::init(args.buffer_size as usize, list, tx.clone()),
+            downloader: Downloader::init(
+                args.buffer_size as usize,
+                args.timeout,
+                list,
+                tx.clone(),
+            )?,
             waiter: waiter::Handle::new(Arc::clone(&sink), tx),
             bookmarks: Bookmarks::load().await?,
             current: Current::default(),
@@ -159,10 +168,11 @@ impl Player {
         Ok(())
     }
 
-    /// Drive the main message loop. This function consumes the `Player` and
-    /// will return when a `Message::Quit` is received. It handles commands
+    /// Drives the main message loop of the player.
+    ///
+    /// This will return when a `Message::Quit` is received. It handles commands
     /// coming from the frontend and updates playback/UI state accordingly.
-    pub async fn run(mut self) -> crate::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         while let Some(message) = self.rx.recv().await {
             match message {
                 Message::Next | Message::Init | Message::Loaded => {
@@ -175,9 +185,7 @@ impl Player {
                         download::Output::Loading(progress) => {
                             self.set_current(Current::Loading(progress))?;
                         }
-                        download::Output::Queued(queued) => {
-                            self.play(queued)?;
-                        }
+                        download::Output::Queued(queued) => self.play(queued)?,
                     }
                 }
                 Message::Play => {

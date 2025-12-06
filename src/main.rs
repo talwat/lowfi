@@ -49,7 +49,7 @@ pub struct Args {
     fps: u8,
 
     /// Timeout in seconds for music downloads.
-    #[clap(long, default_value_t = 3)]
+    #[clap(long, default_value_t = 16)]
     timeout: u64,
 
     /// Include ALSA & other logs.
@@ -117,10 +117,9 @@ async fn main() -> eyre::Result<()> {
     }
 
     let stream = audio::stream()?;
-    let player = Player::init(args, stream.mixer()).await?;
-    let environment = player.environment();
+    let mut player = Player::init(args, stream.mixer()).await?;
     let result = player.run().await;
 
-    environment.cleanup(result.is_ok())?;
+    player.environment().cleanup(result.is_ok())?;
     Ok(result?)
 }

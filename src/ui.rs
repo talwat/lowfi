@@ -27,24 +27,24 @@ type Result<T> = std::result::Result<T, Error>;
 /// that occur while drawing the UI or handling input.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("unable to convert number")]
+    #[error("unable to convert number: {0}")]
     Conversion(#[from] std::num::TryFromIntError),
 
-    #[error("unable to write output")]
+    #[error("unable to write output: {0}")]
     Write(#[from] std::io::Error),
 
-    #[error("sending message to backend from ui failed")]
+    #[error("sending message to backend from ui failed: {0}")]
     CrateSend(#[from] tokio::sync::mpsc::error::SendError<crate::Message>),
 
-    #[error("sharing state between backend and frontend failed")]
+    #[error("sharing state between backend and frontend failed: {0}")]
     Send(#[from] tokio::sync::broadcast::error::SendError<Update>),
 
     #[cfg(feature = "mpris")]
-    #[error("mpris bus error")]
+    #[error("mpris bus error: {0}")]
     ZBus(#[from] mpris_server::zbus::Error),
 
     #[cfg(feature = "mpris")]
-    #[error("mpris fdo (zbus interface) error")]
+    #[error("mpris fdo (zbus interface) error: {0}")]
     Fdo(#[from] mpris_server::zbus::fdo::Error),
 }
 

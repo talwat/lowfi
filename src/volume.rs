@@ -77,13 +77,6 @@ impl PersistentVolume {
     pub async fn save(volume: f32) -> Result<()> {
         let config = Self::config().await?;
         let path = config.join(PathBuf::from("volume.txt"));
-
-        // Already rounded & absolute, therefore this should be safe.
-        #[expect(
-            clippy::as_conversions,
-            clippy::cast_sign_loss,
-            clippy::cast_possible_truncation
-        )]
         let percentage = (volume * 100.0).abs().round() as u16;
         fs::write(path, percentage.to_string()).await?;
 

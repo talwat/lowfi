@@ -2,7 +2,8 @@
 #[allow(dead_code, reason = "this code may not be dead depending on features")]
 #[derive(PartialEq, Debug, Clone)]
 pub enum Message {
-    /// Deliberate user request to go to the next song.
+    /// Deliberate user request to go to the next song, also sent when the
+    /// song is over by the waiter.
     Next,
 
     /// When a track is loaded after the caller previously being told to wait.

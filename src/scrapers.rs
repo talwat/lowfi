@@ -6,7 +6,8 @@ use clap::ValueEnum;
 use eyre::bail;
 use reqwest::Client;
 use tokio::{
-    fs::{self, File}, io::AsyncWriteExt,
+    fs::{self, File},
+    io::AsyncWriteExt,
 };
 
 pub mod archive;

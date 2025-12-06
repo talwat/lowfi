@@ -98,9 +98,12 @@ pub fn data_dir() -> crate::Result<PathBuf> {
 
 /// Simply creates and runs the player, so that the [`Result`] of both operations
 /// can be easily handled by the [`main`] function.
-async fn player(args: Args, environment: ui::Environment) -> crate::Result<()> {
-    let stream = audio::stream()?;
-    let mut player = Player::init(args, environment, stream.mixer()).await?;
+async fn player(
+    args: Args,
+    environment: ui::Environment,
+    mixer: &rodio::mixer::Mixer,
+) -> crate::Result<()> {
+    let mut player = Player::init(args, environment, mixer).await?;
     player.run().await?;
 
     Ok(())
@@ -126,8 +129,9 @@ async fn main() -> eyre::Result<()> {
         }
     }
 
+    let stream = audio::stream()?;
     let environment = ui::Environment::ready(args.alternate)?;
-    let result = player(args, environment).await;
+    let result = player(args, environment, stream.mixer()).await;
     environment.cleanup(result.is_ok())?;
 
     Ok(result?)

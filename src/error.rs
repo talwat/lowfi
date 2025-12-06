@@ -15,39 +15,39 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// Errors while loading or saving the persistent volume settings.
-    #[error("unable to load/save the persistent volume: {0}")]
+    #[error("unable to load/save the persistent volume")]
     PersistentVolume(#[from] volume::Error),
 
     /// Errors while loading or saving bookmarks.
-    #[error("unable to load/save bookmarks: {0}")]
+    #[error("unable to load/save bookmarks")]
     Bookmarks(#[from] bookmark::Error),
 
     /// Network request failures from `reqwest`.
-    #[error("unable to fetch data: {0}")]
+    #[error("unable to fetch data")]
     Request(#[from] reqwest::Error),
 
     /// Failure converting to/from a C string (FFI helpers).
-    #[error("C string null error: {0}")]
+    #[error("C string null error")]
     FfiNull(#[from] std::ffi::NulError),
 
     /// Errors coming from the audio backend / stream handling.
-    #[error("audio playing error: {0}")]
+    #[error("audio playing error")]
     Rodio(#[from] rodio::StreamError),
 
     /// Failure to send an internal `Message` over the mpsc channel.
-    #[error("couldn't send internal message: {0}")]
+    #[error("couldn't send internal message")]
     Send(#[from] mpsc::error::SendError<crate::Message>),
 
     /// Failure to enqueue a track into the queue channel.
-    #[error("couldn't add track to the queue: {0}")]
+    #[error("couldn't add track to the queue")]
     Queue(#[from] mpsc::error::SendError<tracks::Queued>),
 
     /// Failure to broadcast UI updates.
-    #[error("couldn't update UI state: {0}")]
+    #[error("couldn't update UI state")]
     Broadcast(#[from] broadcast::error::SendError<ui::Update>),
 
     /// Generic IO error.
-    #[error("io error: {0}")]
+    #[error("io error")]
     Io(#[from] std::io::Error),
 
     /// Data directory was not found or could not be determined.
@@ -59,7 +59,7 @@ pub enum Error {
     Download,
 
     /// Integer parsing errors.
-    #[error("couldn't parse integer: {0}")]
+    #[error("couldn't parse integer")]
     Parse(#[from] std::num::ParseIntError),
 
     /// Track subsystem error.

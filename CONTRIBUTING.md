@@ -3,11 +3,13 @@
 There are a few guidelines outlined here that will make it more likely for your PR to be accepted.
 Only ones that are less obvious are going to be listed. If you need to ask, it's probably a no.
 
-## 1. No AI
+## 1. AI
 
-You can use AI for searching and so on, and if there's something minor and tedious that you'd like
-the AI to write then that's okay, but if it is noticable that you used AI then it is way too much.
-If you used AI, you aren't helping any maintainer by submitting your slop, it's just a hassle for them.
+You can use AI for searching or if there's something minor and tedious (eg. tests) that you'd like
+to avoid having to do manually.
+
+With that said, if it is noticeable that you used AI then it is way too much.
+AI generated PR's do not help maintainers, it's just a hassle and frequently wastes their time.
 
 ## 2. Smaller is better
 

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use crate::{
     player::Current,
@@ -38,6 +38,9 @@ pub enum Error {
 
     #[error("sharing state between backend and frontend failed: {0}")]
     Send(#[from] tokio::sync::broadcast::error::SendError<Update>),
+
+    #[error("you can't disable the UI without MPRIS!")]
+    RejectedDisable,
 
     #[cfg(feature = "mpris")]
     #[error("mpris bus error: {0}")]
@@ -115,6 +118,27 @@ struct Tasks {
     input: JoinHandle<Result<()>>,
 }
 
+impl Tasks {
+    pub fn spawn(
+        tx: Sender<crate::Message>,
+        updater: broadcast::Receiver<ui::Update>,
+        state: State,
+        params: interface::Params,
+    ) -> Self {
+        Self {
+            render: tokio::spawn(Handle::ui(updater, state, params)),
+            input: tokio::spawn(input::listen(tx)),
+        }
+    }
+}
+
+impl Drop for Tasks {
+    fn drop(&mut self) {
+        self.input.abort();
+        self.render.abort();
+    }
+}
+
 /// The UI handle for controlling the state of the UI, as well as
 /// updating MPRIS information and other small interfacing tasks.
 pub struct Handle {
@@ -126,14 +150,7 @@ pub struct Handle {
     pub mpris: mpris::Server,
 
     /// The UI's running tasks.
-    tasks: Tasks,
-}
-
-impl Drop for Handle {
-    fn drop(&mut self) {
-        self.tasks.input.abort();
-        self.tasks.render.abort();
-    }
+    _tasks: Option<Tasks>,
 }
 
 impl Handle {
@@ -174,19 +191,22 @@ impl Handle {
     #[allow(clippy::unused_async)]
     pub async fn init(
         tx: Sender<crate::Message>,
+        environment: Environment,
         updater: broadcast::Receiver<ui::Update>,
         state: State,
         args: &Args,
     ) -> Result<Self> {
-        let environment = Environment::ready(args.alternate)?;
+        let disabled = env::var("LOWFI_DISABLE_UI").is_ok_and(|x| x == "1");
+        if disabled && !cfg!(feature = "mpris") {
+            return Err(Error::RejectedDisable);
+        }
+
         Ok(Self {
             #[cfg(feature = "mpris")]
             mpris: mpris::Server::new(state.clone(), tx.clone(), updater.resubscribe()).await?,
             environment,
-            tasks: Tasks {
-                render: tokio::spawn(Self::ui(updater, state, interface::Params::from(args))),
-                input: tokio::spawn(input::listen(tx)),
-            },
+            _tasks: (!disabled)
+                .then(|| Tasks::spawn(tx, updater, state, interface::Params::from(args))),
         })
     }
 }

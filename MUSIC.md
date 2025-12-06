@@ -58,7 +58,7 @@ I'm not making money on any of this, and I think degrading the experience for my
 fellow nerds who just want to listen to some lowfi without all the crap is not worth it.
 
 At the end of the day, lowfi has a distinct UserAgent. Should chillhop ever take issue with
-it's behaviour, banning it is extremely simple. I don't want that to happen, but I
+it's behavior, banning it is extremely simple. I don't want that to happen, but I
 understand if it does.
 
 ## Well, *I* Hate the Chillhop Music

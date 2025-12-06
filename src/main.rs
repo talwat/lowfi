@@ -96,6 +96,14 @@ pub fn data_dir() -> crate::Result<PathBuf> {
     Ok(dir)
 }
 
+async fn player(args: Args, environment: ui::Environment) -> crate::Result<()> {
+    let stream = audio::stream()?;
+    let mut player = Player::init(args, environment, stream.mixer()).await?;
+    player.run().await?;
+
+    Ok(())
+}
+
 /// Program entry point.
 ///
 /// Parses CLI arguments, initializes the audio stream and player, then
@@ -116,10 +124,9 @@ async fn main() -> eyre::Result<()> {
         }
     }
 
-    let stream = audio::stream()?;
-    let mut player = Player::init(args, stream.mixer()).await?;
-    let result = player.run().await;
+    let environment = ui::Environment::ready(args.alternate)?;
+    let result = player(args, environment).await;
+    environment.cleanup(result.is_ok())?;
 
-    player.environment().cleanup(result.is_ok())?;
     Ok(result?)
 }

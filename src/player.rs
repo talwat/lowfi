@@ -115,7 +115,11 @@ impl Player {
     /// This sets up the audio sink, UI, downloader, bookmarks and persistent
     /// volume state. The function returns a fully constructed `Player` ready
     /// to be driven via `run`.
-    pub async fn init(args: crate::Args, mixer: &rodio::mixer::Mixer) -> crate::Result<Self> {
+    pub async fn init(
+        args: crate::Args,
+        environment: ui::Environment,
+        mixer: &rodio::mixer::Mixer,
+    ) -> crate::Result<Self> {
         let (tx, rx) = mpsc::channel(8);
         if args.paused {
             tx.send(Message::Pause).await?;
@@ -133,7 +137,7 @@ impl Player {
         sink.set_volume(volume.float());
 
         Ok(Self {
-            ui: ui::Handle::init(tx.clone(), urx, state, &args).await?,
+            ui: ui::Handle::init(tx.clone(), environment, urx, state, &args).await?,
             downloader: Downloader::init(
                 args.buffer_size as usize,
                 args.timeout,

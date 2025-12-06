@@ -127,7 +127,7 @@ impl PlayerInterface for Player {
     }
 
     async fn stop(&self) -> fdo::Result<()> {
-        self.pause().await
+        self.sender.send(Message::Quit).await
     }
 
     async fn play(&self) -> fdo::Result<()> {

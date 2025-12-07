@@ -23,7 +23,7 @@ impl Clock {
     /// This is to avoid constant calls to [`chrono::Local::now`], which
     /// is somewhat expensive because of timezones.
     pub fn update(&mut self, window: &mut Window) {
-        if self.0.elapsed().as_secs() >= 1 {
+        if self.0.elapsed().as_millis() >= 500 {
             window.display(Self::now(), 8);
             self.0 = Instant::now();
         }
@@ -80,7 +80,7 @@ pub(crate) fn menu(state: &mut ui::State, params: Params) -> Vec<String> {
         Some(timer) => {
             let volume = state.sink.volume();
             let percentage = format!("{}%", (volume * 100.0).round().abs());
-            if timer.elapsed() > Duration::from_millis(500) {
+            if timer.elapsed() > Duration::from_secs(1) {
                 state.timer = None;
             }
 

@@ -182,7 +182,9 @@ impl Handle {
                 }
             }
 
-            clock.as_mut().map(|x| x.update(&mut window));
+            if let Some(x) = clock.as_mut() {
+                x.update(&mut window)
+            }
             interface::draw(&mut state, &mut window, params)?;
             interval.tick().await;
         }

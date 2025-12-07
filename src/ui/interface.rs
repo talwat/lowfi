@@ -1,11 +1,9 @@
-use std::{env, time::Duration};
-
-use tokio::time::Instant;
-
 use crate::{
     ui::{self, components, window::Window},
     Args,
 };
+use std::{env, time::Duration};
+use tokio::time::Instant;
 
 /// An extremely simple clock to be used alongside the [`Window`].
 pub struct Clock(Instant);

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     player::Current,
-    ui::{self, window::Window},
+    ui::{self, interface::Clock, window::Window},
     Args,
 };
 use tokio::{
@@ -170,6 +170,7 @@ impl Handle {
     ) -> Result<()> {
         let mut interval = tokio::time::interval(params.delta);
         let mut window = Window::new(state.width, params.borderless);
+        let mut clock = params.clock.then(|| Clock::new(&mut window));
 
         loop {
             if let Ok(message) = rx.try_recv() {
@@ -181,6 +182,7 @@ impl Handle {
                 }
             }
 
+            clock.as_mut().map(|x| x.update(&mut window));
             interface::draw(&mut state, &mut window, params)?;
             interval.tick().await;
         }

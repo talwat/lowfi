@@ -41,6 +41,10 @@ pub struct Args {
     #[clap(long, short)]
     borderless: bool,
 
+    /// Include a small clock in the UI.
+    #[clap(long, short)]
+    clock: bool,
+
     /// Start lowfi paused.
     #[clap(long, short)]
     paused: bool,

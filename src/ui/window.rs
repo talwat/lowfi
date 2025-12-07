@@ -1,4 +1,7 @@
-use std::io::{stdout, Stdout};
+use std::{
+    fmt::Display,
+    io::{stdout, Stdout},
+};
 
 use crossterm::{
     cursor::{MoveToColumn, MoveUp},
@@ -17,7 +20,7 @@ pub struct Window {
     borderless: bool,
 
     /// The top & bottom borders, which are here since they can be
-    /// prerendered, as they don't change from window to window.
+    /// prerendered, as they don't change every single draw.
     ///
     /// If the option to not include borders is set, these will just be empty [String]s.
     pub(crate) borders: [String; 2],
@@ -49,6 +52,12 @@ impl Window {
             width,
             out: stdout(),
         }
+    }
+
+    /// Adds text to the top of the window.
+    pub fn display(&mut self, display: impl Display, len: usize) {
+        let new = format!("┌─ {} {}─┐", display, "─".repeat(self.width - len - 2));
+        self.borders[0] = new;
     }
 
     /// Renders the window itself, but doesn't actually draw it.

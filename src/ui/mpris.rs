@@ -268,8 +268,18 @@ pub struct Server {
 }
 
 impl Server {
+    /// Handles a player message to update the state of the MPRIS player.
+    pub async fn handle(&mut self, message: &crate::Message) -> ui::Result<()> {
+        match message {
+            Message::ChangeVolume(_) | Message::SetVolume(_) => self.update_volume().await,
+            Message::Play | Message::Pause | Message::PlayPause => self.update_playback().await,
+            Message::Init | Message::Loaded | Message::Next => self.update_metadata().await,
+            _ => Ok(()),
+        }
+    }
+
     /// Shorthand to emit a `PropertiesChanged` signal, like when pausing/unpausing.
-    pub async fn changed(
+    async fn changed(
         &mut self,
         properties: impl IntoIterator<Item = mpris_server::Property> + Send + Sync,
     ) -> ui::Result<()> {
@@ -284,7 +294,7 @@ impl Server {
     }
 
     /// Updates the volume with the latest information.
-    pub async fn update_volume(&mut self) -> ui::Result<()> {
+    async fn update_volume(&mut self) -> ui::Result<()> {
         self.changed(vec![Property::Volume(self.player().sink.volume().into())])
             .await?;
 
@@ -292,7 +302,7 @@ impl Server {
     }
 
     /// Updates the playback with the latest information.
-    pub async fn update_playback(&mut self) -> ui::Result<()> {
+    async fn update_playback(&mut self) -> ui::Result<()> {
         let status = self.player().playback_status().await?;
         self.changed(vec![Property::PlaybackStatus(status)]).await?;
 
@@ -300,7 +310,7 @@ impl Server {
     }
 
     /// Updates the current track data with the current information.
-    pub async fn update_metadata(&mut self) -> ui::Result<()> {
+    async fn update_metadata(&mut self) -> ui::Result<()> {
         let metadata = self.player().metadata().await?;
         self.changed(vec![Property::Metadata(metadata)]).await?;
 

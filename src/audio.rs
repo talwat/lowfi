@@ -41,6 +41,7 @@ fn silent_get_output_stream() -> crate::Result<rodio::OutputStream> {
     Ok(stream)
 }
 
+/// Creates an audio stream, doing so silently on Linux.
 pub fn stream() -> crate::Result<rodio::OutputStream> {
     #[cfg(target_os = "linux")]
     let mut stream = silent_get_output_stream()?;

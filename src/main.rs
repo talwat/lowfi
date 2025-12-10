@@ -1,28 +1,26 @@
 //! An extremely simple lofi player.
-pub mod error;
+use crate::player::Player;
+use clap::{Parser, Subcommand};
+use futures_util::TryFutureExt;
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
-mod tests;
-pub use error::{Error, Result};
-pub mod message;
-pub mod ui;
-use futures_util::TryFutureExt;
-pub use message::Message;
-
-use crate::player::Player;
 pub mod audio;
 pub mod bookmark;
 pub mod download;
+pub mod error;
+pub mod message;
 pub mod player;
+#[cfg(feature = "scrape")]
+mod scrapers;
+mod tests;
 pub mod tracks;
+pub mod ui;
 pub mod volume;
 
 #[cfg(feature = "scrape")]
-mod scrapers;
-
-#[cfg(feature = "scrape")]
 use crate::scrapers::Source;
+pub use error::{Error, Result};
+pub use message::Message;
 
 /// An extremely simple lofi player.
 #[derive(Parser, Clone)]

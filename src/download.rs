@@ -46,6 +46,9 @@ pub struct Downloader {
 
     /// The [`reqwest`] client to use for downloads.
     client: Client,
+
+    /// The RNG generator to use.
+    rng: fastrand::Rng,
 }
 
 impl Downloader {
@@ -73,6 +76,7 @@ impl Downloader {
             tx,
             tracks,
             client,
+            rng: fastrand::Rng::new(),
         };
 
         Ok(Handle {
@@ -84,15 +88,17 @@ impl Downloader {
     /// Actually runs the downloader, consuming it and beginning
     /// the cycle of downloading tracks and reporting to the
     /// rest of the program.
-    async fn run(self) -> crate::Result<()> {
+    async fn run(mut self) -> crate::Result<()> {
         const ERROR_TIMEOUT: Duration = Duration::from_secs(1);
 
         loop {
-            let result = self.tracks.random(&self.client, &PROGRESS).await;
+            let result = self
+                .tracks
+                .random(&self.client, &PROGRESS, &mut self.rng)
+                .await;
             match result {
                 Ok(track) => {
                     self.queue.send(track).await?;
-
                     if LOADING.load(atomic::Ordering::Relaxed) {
                         self.tx.send(crate::Message::Loaded).await?;
                         LOADING.store(false, atomic::Ordering::Relaxed);

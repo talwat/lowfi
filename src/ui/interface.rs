@@ -5,11 +5,23 @@ use crate::{
     Args,
 };
 
+/// UI-specific parameters and options.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Params {
+    /// Whether to include borders.
     pub borderless: bool,
+
+    /// Whether to include the bottom control bar.
     pub minimalist: bool,
+
+    /// Whether the visual part of the UI should be enabled.
+    /// This only applies if the MPRIS feature is enabled.
     pub enabled: bool,
+
+    /// The total delta between frames, which takes into account
+    /// the time it takes to actually render each frame.
+    ///
+    /// Derived from the FPS.
     pub delta: Duration,
 }
 

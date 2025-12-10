@@ -226,18 +226,7 @@ impl Player {
             }
 
             #[cfg(feature = "mpris")]
-            match message {
-                Message::ChangeVolume(_) | Message::SetVolume(_) => {
-                    self.ui.mpris.update_volume().await?
-                }
-                Message::Play | Message::Pause | Message::PlayPause => {
-                    self.ui.mpris.update_playback().await?
-                }
-                Message::Init | Message::Loaded | Message::Next => {
-                    self.ui.mpris.update_metadata().await?
-                }
-                _ => (),
-            }
+            self.ui.mpris.handle(&message).await?;
         }
 
         self.close().await?;

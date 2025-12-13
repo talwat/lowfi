@@ -1,9 +1,39 @@
-use std::{env, time::Duration};
-
 use crate::{
     ui::{self, components, window::Window},
     Args,
 };
+use std::{env, time::Duration};
+use tokio::time::Instant;
+
+/// An extremely simple clock to be used alongside the [`Window`].
+pub struct Clock(Instant);
+
+impl Clock {
+    /// Small shorthand for getting the local time now, and formatting it.
+    #[inline]
+    fn now() -> chrono::format::DelayedFormat<chrono::format::StrftimeItems<'static>> {
+        chrono::Local::now().format("%H:%M:%S")
+    }
+
+    /// Checks if the last update was long enough ago, and if so,
+    /// updates the displayed clock.
+    ///
+    /// This is to avoid constant calls to [`chrono::Local::now`], which
+    /// is somewhat expensive because of timezones.
+    pub fn update(&mut self, window: &mut Window) {
+        if self.0.elapsed().as_millis() >= 500 {
+            window.display(Self::now(), 8);
+            self.0 = Instant::now();
+        }
+    }
+
+    /// Simply creates a new clock, and renders it's initial state to the window top.
+    pub fn new(window: &mut Window) -> Self {
+        window.display(Self::now(), 8);
+
+        Self(Instant::now())
+    }
+}
 
 /// UI-specific parameters and options.
 #[derive(Copy, Clone, Debug, Default)]
@@ -17,6 +47,9 @@ pub struct Params {
     /// Whether the visual part of the UI should be enabled.
     /// This only applies if the MPRIS feature is enabled.
     pub enabled: bool,
+  
+    /// Whether to include the clock on the top bar.
+    pub clock: bool,
 
     /// The total delta between frames, which takes into account
     /// the time it takes to actually render each frame.
@@ -40,6 +73,7 @@ impl TryFrom<&Args> for Params {
         Ok(Self {
             delta,
             enabled: !disabled,
+            clock: args.clock,
             minimalist: args.minimalist,
             borderless: args.borderless,
         })

@@ -49,13 +49,13 @@ impl List {
     ///
     /// The second value in the tuple specifies whether the
     /// track has a custom display name.
-    pub fn random_path(&self) -> (String, Option<String>) {
+    pub fn random_path(&self, rng: &mut fastrand::Rng) -> (String, Option<String>) {
         // We're getting from 1 here, since the base is at `self.lines[0]`.
         //
         // We're also not pre-trimming `self.lines` into `base` & `tracks` due to
         // how rust vectors work, since it is slower to drain only a single element from
         // the start, so it's faster to just keep it in & work around it.
-        let random = fastrand::usize(1..self.lines.len());
+        let random = rng.usize(1..self.lines.len());
         let line = self.lines[random].clone();
 
         if let Some((first, second)) = line.split_once('!') {
@@ -128,10 +128,15 @@ impl List {
 
     /// Fetches and downloads a random track from the [List].
     ///
-    /// The Result's error is a bool, which is true if a timeout error occured,
+    /// The Result's error is a bool, which is true if a timeout error occurred,
     /// and false otherwise. This tells lowfi if it shouldn't wait to try again.
-    pub async fn random(&self, client: &Client, progress: &AtomicU8) -> tracks::Result<Queued> {
-        let (path, display) = self.random_path();
+    pub async fn random(
+        &self,
+        client: &Client,
+        progress: &AtomicU8,
+        rng: &mut fastrand::Rng,
+    ) -> tracks::Result<Queued> {
+        let (path, display) = self.random_path(rng);
         let (data, path) = self.download(&path, client, Some(progress)).await?;
 
         Queued::new(path, data, display)

@@ -123,7 +123,7 @@ mod list {
         let text = "http://x/\npath!Display";
         let list = List::new("t", text, None);
 
-        let (p, d) = list.random_path();
+        let (p, d) = list.random_path(&mut fastrand::Rng::new());
         assert_eq!(p, "path");
         assert_eq!(d, Some("Display".into()));
     }
@@ -133,7 +133,7 @@ mod list {
         let text = "http://x/\ntrackA";
         let list = List::new("t", text, None);
 
-        let (p, d) = list.random_path();
+        let (p, d) = list.random_path(&mut fastrand::Rng::new());
         assert_eq!(p, "trackA");
         assert!(d.is_none());
     }
@@ -152,7 +152,7 @@ mod list {
     fn custom_display_with_exclamation() {
         let text = "http://base/\nfile.mp3!My Custom Name";
         let list = List::new("t", text, None);
-        let (path, display) = list.random_path();
+        let (path, display) = list.random_path(&mut fastrand::Rng::new());
         assert_eq!(path, "file.mp3");
         assert_eq!(display, Some("My Custom Name".into()));
     }
@@ -161,7 +161,7 @@ mod list {
     fn single_track() {
         let text = "base\nonly_track.mp3";
         let list = List::new("name", text, None);
-        let (path, _) = list.random_path();
+        let (path, _) = list.random_path(&mut fastrand::Rng::new());
         assert_eq!(path, "only_track.mp3");
     }
 
@@ -171,7 +171,10 @@ mod list {
         let list = List::new("name", text, None);
 
         let client = Client::new();
-        let track = list.random(&client, &PROGRESS).await.unwrap();
+        let track = list
+            .random(&client, &PROGRESS, &mut fastrand::Rng::new())
+            .await
+            .unwrap();
         assert_eq!(track.display, "Apple Juice");
         assert_eq!(track.path, "https://stream.chillhop.com/mp3/9476");
         assert_eq!(track.data.len(), 3150424);

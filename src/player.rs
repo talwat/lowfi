@@ -131,7 +131,7 @@ impl Player {
         let list = List::load(args.track_list.as_ref()).await?;
 
         let sink = Arc::new(rodio::Sink::connect_new(mixer));
-        let state = ui::State::initial(Arc::clone(&sink), args.width, list.name.clone());
+        let state = ui::State::initial(Arc::clone(&sink), list.name.clone());
 
         let volume = PersistentVolume::load().await?;
         sink.set_volume(volume.float());

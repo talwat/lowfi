@@ -128,17 +128,14 @@ mod interface {
         download::PROGRESS,
         player::Current,
         tracks,
-        ui::{
-            interface::{self, Params},
-            State,
-        },
+        ui::{Interface, State},
     };
 
     #[test]
     fn loading() {
         let sink = Arc::new(rodio::Sink::new().0);
-        let mut state = State::initial(sink, 3, String::from("test"));
-        let menu = interface::menu(&mut state, Params::default());
+        let mut state = State::initial(sink, String::from("test"));
+        let menu = Interface::default().menu(&mut state);
 
         assert_eq!(menu[0], "loading                    ");
         assert_eq!(menu[1], " [           ] 00:00/00:00 ");
@@ -157,11 +154,11 @@ mod interface {
     fn volume() {
         let sink = Arc::new(rodio::Sink::new().0);
         sink.set_volume(0.5);
-        let mut state = State::initial(sink, 3, String::from("test"));
+
+        let mut state = State::initial(sink, String::from("test"));
         state.timer = Some(Instant::now());
 
-        let menu = interface::menu(&mut state, Params::default());
-
+        let menu = Interface::default().menu(&mut state);
         assert_eq!(menu[0], "loading                    ");
         assert_eq!(menu[1], " volume: [/////     ]  50% ");
         assert_eq!(
@@ -179,10 +176,10 @@ mod interface {
     fn progress() {
         let sink = Arc::new(rodio::Sink::new().0);
         PROGRESS.store(50, std::sync::atomic::Ordering::Relaxed);
-        let mut state = State::initial(sink, 3, String::from("test"));
+        let mut state = State::initial(sink, String::from("test"));
         state.current = Current::Loading(Some(&PROGRESS));
 
-        let menu = interface::menu(&mut state, Params::default());
+        let menu = Interface::default().menu(&mut state);
 
         assert_eq!(menu[0], format!("loading {}                ", "50%".bold()));
         assert_eq!(menu[1], " [           ] 00:00/00:00 ");
@@ -207,9 +204,9 @@ mod interface {
             duration: Some(Duration::from_secs(8)),
         };
 
-        let mut state = State::initial(sink, 3, String::from("test"));
+        let mut state = State::initial(sink, String::from("test"));
         state.current = Current::Track(track.clone());
-        let menu = interface::menu(&mut state, Params::default());
+        let menu = Interface::default().menu(&mut state);
 
         assert_eq!(
             menu[0],

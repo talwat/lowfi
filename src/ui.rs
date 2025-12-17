@@ -11,6 +11,7 @@ pub mod environment;
 pub use environment::Environment;
 pub mod input;
 pub mod interface;
+pub use interface::Interface;
 
 #[cfg(feature = "mpris")]
 pub mod mpris;
@@ -65,9 +66,6 @@ pub struct State {
     /// The timer, which is used when the user changes volume to briefly display it.
     pub(crate) timer: Option<Instant>,
 
-    /// The full inner width of the terminal window.
-    pub(crate) width: usize,
-
     /// The name of the playing tracklist, for MPRIS.
     #[allow(dead_code)]
     list: String,
@@ -75,10 +73,8 @@ pub struct State {
 
 impl State {
     /// Creates an initial UI state.
-    pub fn initial(sink: Arc<rodio::Sink>, width: usize, list: String) -> Self {
-        let width = 21 + width.min(32) * 2;
+    pub fn initial(sink: Arc<rodio::Sink>, list: String) -> Self {
         Self {
-            width,
             sink,
             list,
             current: Current::default(),
@@ -163,9 +159,7 @@ impl Handle {
         mut state: State,
         params: interface::Params,
     ) -> Result<()> {
-        let mut interval = tokio::time::interval(params.delta);
-        let mut window = interface::Window::new(state.width, params.borderless);
-        let mut clock = params.clock.then(|| interface::Clock::new(&mut window));
+        let mut interface = Interface::new(params);
 
         loop {
             if let Ok(message) = rx.try_recv() {
@@ -177,9 +171,7 @@ impl Handle {
                 }
             }
 
-            clock.as_mut().map(|x| x.update(&mut window));
-            interface::draw(&mut state, &mut window, params)?;
-            interval.tick().await;
+            interface.draw(&mut state).await?;
         }
 
         Ok(())

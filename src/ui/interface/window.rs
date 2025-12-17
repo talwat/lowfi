@@ -1,8 +1,6 @@
-use std::{
-    fmt::Display,
-    io::{stdout, Stdout},
-};
+use std::io::{stdout, Stdout};
 
+use crate::ui::{self, interface::TitleBar};
 use crossterm::{
     cursor::{MoveToColumn, MoveUp},
     style::{Print, Stylize as _},
@@ -10,8 +8,6 @@ use crossterm::{
 };
 use std::fmt::Write as _;
 use unicode_segmentation::UnicodeSegmentation as _;
-
-use crate::ui;
 
 /// Represents an abstraction for drawing the actual lowfi window itself.
 ///
@@ -21,11 +17,11 @@ pub struct Window {
     /// Whether or not to include borders in the output.
     borderless: bool,
 
-    /// The top & bottom borders, which are here since they can be
-    /// prerendered, as they don't change every single draw.
-    ///
-    /// If the option to not include borders is set, these will just be empty [String]s.
-    pub(crate) borders: [String; 2],
+    /// The titlebar of this window.
+    pub titlebar: TitleBar,
+
+    /// The status (bottom) bar of the window, which for now shouldn't change since initialization.
+    pub(crate) statusbar: String,
 
     /// The inner width of the window.
     width: usize,
@@ -40,26 +36,20 @@ impl Window {
     /// * `width` - Inner width of the window.
     /// * `borderless` - Whether to include borders in the window, or not.
     pub fn new(width: usize, borderless: bool) -> Self {
-        let borders = if borderless {
-            [String::new(), String::new()]
+        let statusbar = if borderless {
+            String::new()
         } else {
             let middle = "─".repeat(width + 2);
-
-            [format!("┌{middle}┐"), format!("└{middle}┘")]
+            format!("└{middle}┘")
         };
 
         Self {
-            borders,
+            statusbar,
             borderless,
             width,
+            titlebar: TitleBar::new(width, borderless),
             out: stdout(),
         }
-    }
-
-    /// Adds text to the top of the window.
-    pub fn display(&mut self, display: impl Display, len: usize) {
-        let new = format!("┌─ {} {}─┐", display, "─".repeat(self.width - len - 2));
-        self.borders[0] = new;
     }
 
     /// Renders the window itself, but doesn't actually draw it.
@@ -105,7 +95,7 @@ impl Window {
         Ok((
             format!(
                 "{}{linefeed}{menu}{}{suffix}",
-                self.borders[0], self.borders[1]
+                self.titlebar.content, self.statusbar,
             ),
             height,
         ))

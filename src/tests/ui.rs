@@ -65,12 +65,12 @@ mod window {
     #[test]
     fn new_border_strings() {
         let w = Window::new(10, false);
-        assert!(w.borders[0].starts_with('┌'));
-        assert!(w.borders[1].starts_with('└'));
+        assert!(w.titlebar.content.starts_with('┌'));
+        assert!(w.statusbar.starts_with('└'));
 
         let w2 = Window::new(5, true);
-        assert!(w2.borders[0].is_empty());
-        assert!(w2.borders[1].is_empty());
+        assert!(w2.titlebar.content.is_empty());
+        assert!(w2.statusbar.is_empty());
     }
 
     fn sided(text: &str) -> String {
@@ -114,7 +114,7 @@ mod window {
     #[test]
     fn zero_width_window() {
         let w = Window::new(0, false);
-        assert!(!w.borders[0].is_empty());
+        assert!(!w.titlebar.content.is_empty());
     }
 }
 

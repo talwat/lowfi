@@ -19,15 +19,14 @@ impl Clock {
     /// is somewhat expensive because of timezones.
     pub fn update(&mut self, window: &mut Window) {
         if self.0.elapsed().as_millis() >= 200 {
-            window.display(Self::now(), 8);
+            window.titlebar.display(Self::now());
             self.0 = Instant::now();
         }
     }
 
     /// Simply creates a new clock, and renders it's initial state to the top of the window.
     pub fn new(window: &mut Window) -> Self {
-        window.display(Self::now(), 8);
-
+        window.titlebar.display(Self::now());
         Self(Instant::now())
     }
 }

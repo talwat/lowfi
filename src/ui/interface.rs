@@ -6,9 +6,11 @@ use std::{env, time::Duration};
 
 pub mod clock;
 pub mod components;
+pub mod titlebar;
 pub mod window;
 
 pub use clock::Clock;
+pub use titlebar::TitleBar;
 pub use window::Window;
 
 /// UI-specific parameters and options.
@@ -76,11 +78,11 @@ impl TryFrom<&Args> for Params {
 /// All of the state related to the interface itself,
 /// which is displayed each frame to the standard output.
 pub struct Interface {
+    /// The [`Window`] to render to.
+    pub(crate) window: Window,
+
     /// The interval to wait between frames.
     interval: tokio::time::Interval,
-
-    /// The [`Window`] to render to.
-    window: Window,
 
     /// The visual clock, which is [`None`] if it has
     /// been disabled by the [`Params`].

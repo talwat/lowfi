@@ -1,6 +1,6 @@
 /// Handles communication between different parts of the program.
 #[allow(dead_code, reason = "this code may not be dead depending on features")]
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Message {
     /// Deliberate user request to go to the next song, also sent when the
     /// song is over by the waiter.

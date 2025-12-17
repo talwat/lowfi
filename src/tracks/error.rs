@@ -25,7 +25,7 @@ pub enum Kind {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("{kind} (track: {track:?})")]
+#[error("{kind}{}", self.track.as_ref().map_or(String::new(), |t| format!(" (track: {t:?}) ")))]
 pub struct Error {
     pub track: Option<String>,
     pub kind: Kind,

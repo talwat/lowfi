@@ -12,7 +12,7 @@ pub use clock::Clock;
 pub use window::Window;
 
 /// UI-specific parameters and options.
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug)]
 pub struct Params {
     /// Whether to include borders.
     pub borderless: bool,
@@ -35,6 +35,19 @@ pub struct Params {
     ///
     /// Derived from the FPS.
     pub delta: Duration,
+}
+
+impl Default for Params {
+    fn default() -> Self {
+        Self {
+            borderless: false,
+            minimalist: false,
+            enabled: true,
+            clock: false,
+            width: 27,
+            delta: Duration::from_secs_f32(1.0 / 12.0),
+        }
+    }
 }
 
 impl TryFrom<&Args> for Params {

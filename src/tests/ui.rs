@@ -131,8 +131,8 @@ mod interface {
         ui::{Interface, State},
     };
 
-    #[test]
-    fn loading() {
+    #[tokio::test]
+    async fn loading() {
         let sink = Arc::new(rodio::Sink::new().0);
         let mut state = State::initial(sink, String::from("test"));
         let menu = Interface::default().menu(&mut state);
@@ -150,8 +150,8 @@ mod interface {
         );
     }
 
-    #[test]
-    fn volume() {
+    #[tokio::test]
+    async fn volume() {
         let sink = Arc::new(rodio::Sink::new().0);
         sink.set_volume(0.5);
 
@@ -172,8 +172,8 @@ mod interface {
         );
     }
 
-    #[test]
-    fn progress() {
+    #[tokio::test]
+    async fn progress() {
         let sink = Arc::new(rodio::Sink::new().0);
         PROGRESS.store(50, std::sync::atomic::Ordering::Relaxed);
         let mut state = State::initial(sink, String::from("test"));
@@ -194,8 +194,8 @@ mod interface {
         );
     }
 
-    #[test]
-    fn track() {
+    #[tokio::test]
+    async fn track() {
         let sink = Arc::new(rodio::Sink::new().0);
         let track = tracks::Info {
             path: "/path".to_owned(),

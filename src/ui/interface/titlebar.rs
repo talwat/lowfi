@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use unicode_segmentation::UnicodeSegmentation;
 
-/// The titlebar, which is essentially the entire top of the window.
+/// The titlebar, which is the entire top row of the window.
 ///
 /// The struct offers a basic API for displaying messages to it.
 pub struct TitleBar {

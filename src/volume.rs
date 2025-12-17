@@ -12,7 +12,7 @@ type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("couldn't find config directory")]
-    Directory,
+    DirectoryNotFound,
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
@@ -33,17 +33,17 @@ pub struct PersistentVolume {
 }
 
 impl PersistentVolume {
-    /// Retrieves the config directory, creating it if necessary.
-    async fn config() -> Result<PathBuf> {
+    /// Retrieves the config file path, creating it if necessary.
+    async fn path() -> Result<PathBuf> {
         let config = dirs::config_dir()
-            .ok_or(Error::Directory)?
+            .ok_or(Error::DirectoryNotFound)?
             .join(PathBuf::from("lowfi"));
 
         if !config.exists() {
             fs::create_dir_all(&config).await?;
         }
 
-        Ok(config)
+        Ok(config.join(PathBuf::from("volume.txt")))
     }
 
     /// Returns the volume as a normalized float in the range 0.0..=1.0.
@@ -56,17 +56,16 @@ impl PersistentVolume {
     /// If the file does not exist a default of `100` is written and
     /// returned.
     pub async fn load() -> Result<Self> {
-        let config = Self::config().await?;
-        let volume = config.join(PathBuf::from("volume.txt"));
+        let path = Self::path().await?;
 
         // Basically just read from the volume file if it exists, otherwise return 100.
-        let volume = if volume.exists() {
-            let contents = fs::read_to_string(volume).await?;
+        let volume = if path.exists() {
+            let contents = fs::read_to_string(path).await?;
             let trimmed = contents.trim();
             let stripped = trimmed.strip_suffix("%").unwrap_or(trimmed);
             stripped.parse()?
         } else {
-            fs::write(&volume, "100").await?;
+            fs::write(&path, "100").await?;
             100u16
         };
 
@@ -75,10 +74,8 @@ impl PersistentVolume {
 
     /// Saves `volume` (0.0..=1.0) to `volume.txt` as an integer percent.
     pub async fn save(volume: f32) -> Result<()> {
-        let config = Self::config().await?;
-        let path = config.join(PathBuf::from("volume.txt"));
         let percentage = (volume * 100.0).abs().round() as u16;
-        fs::write(path, percentage.to_string()).await?;
+        fs::write(Self::path().await?, percentage.to_string()).await?;
 
         Ok(())
     }

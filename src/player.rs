@@ -61,7 +61,7 @@ pub struct Player {
     rx: Receiver<crate::Message>,
 
     /// Broadcast channel used to send UI updates.
-    broadcast: broadcast::Sender<ui::Update>,
+    updater: broadcast::Sender<ui::Update>,
 
     /// Current playback state (loading or track).
     current: Current,
@@ -106,7 +106,7 @@ impl Player {
 
     /// Sends a `ui::Update` to the broadcast channel.
     pub fn update(&mut self, update: ui::Update) -> crate::Result<()> {
-        self.broadcast.send(update)?;
+        self.updater.send(update)?;
         Ok(())
     }
 
@@ -147,7 +147,7 @@ impl Player {
             waiter: waiter::Handle::new(Arc::clone(&sink), tx),
             bookmarks: Bookmarks::load().await?,
             current: Current::default(),
-            broadcast: utx,
+            updater: utx,
             rx,
             sink,
         })

@@ -156,7 +156,7 @@ mod interface {
         sink.set_volume(0.5);
 
         let mut state = State::initial(sink, String::from("test"));
-        state.timer = Some(Instant::now());
+        state.volume_timer = Some(Instant::now());
 
         let menu = Interface::default().menu(&mut state);
         assert_eq!(menu[0], "loading                    ");

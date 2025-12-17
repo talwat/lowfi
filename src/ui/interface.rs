@@ -121,12 +121,12 @@ impl Interface {
     pub(crate) fn menu(&self, state: &mut State) -> Vec<String> {
         let action = components::action(state, self.params.width);
 
-        let middle = match state.timer {
+        let middle = match state.volume_timer {
             Some(timer) => {
                 let volume = state.sink.volume();
                 let percentage = format!("{}%", (volume * 100.0).round().abs());
                 if timer.elapsed() > Duration::from_secs(1) {
-                    state.timer = None;
+                    state.volume_timer = None;
                 }
 
                 components::audio_bar(self.params.width - 17, volume, &percentage)

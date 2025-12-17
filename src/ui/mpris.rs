@@ -331,7 +331,7 @@ impl Server {
         let suffix = if env::var("LOWFI_FIXED_MPRIS_NAME").is_ok_and(|x| x == "1") {
             String::from("lowfi")
         } else {
-            format!("lowfi.{}.instance{}", state.list, process::id())
+            format!("lowfi.{}.instance{}", state.tracklist, process::id())
         };
 
         let server = mpris_server::Server::new(
@@ -340,7 +340,7 @@ impl Server {
                 sender: Sender::new(sender),
                 sink: state.sink,
                 current: ArcSwap::new(Arc::new(state.current)),
-                list: state.list,
+                list: state.tracklist,
             },
         )
         .await?;

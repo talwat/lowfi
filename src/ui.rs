@@ -29,11 +29,11 @@ pub enum Error {
     #[error("unable to write output: {0}")]
     Write(#[from] std::io::Error),
 
-    #[error("sending message to backend from ui failed: {0}")]
-    CrateSend(#[from] tokio::sync::mpsc::error::SendError<crate::Message>),
+    #[error("sending signal message to backend from ui failed: {0}")]
+    SignalSend(#[from] tokio::sync::mpsc::error::SendError<crate::Message>),
 
     #[error("sharing state between backend and frontend failed: {0}")]
-    Send(#[from] tokio::sync::broadcast::error::SendError<Update>),
+    StateSend(#[from] tokio::sync::broadcast::error::SendError<Update>),
 
     #[error("you can't disable the UI without MPRIS!")]
     RejectedDisable,
@@ -64,11 +64,11 @@ pub struct State {
     pub bookmarked: bool,
 
     /// The timer, which is used when the user changes volume to briefly display it.
-    pub(crate) timer: Option<Instant>,
+    pub(crate) volume_timer: Option<Instant>,
 
-    /// The name of the playing tracklist, for MPRIS.
+    /// The name of the playing tracklist, mainly for MPRIS.
     #[allow(dead_code)]
-    list: String,
+    tracklist: String,
 }
 
 impl State {
@@ -76,10 +76,10 @@ impl State {
     pub fn initial(sink: Arc<rodio::Sink>, list: String) -> Self {
         Self {
             sink,
-            list,
+            tracklist: list,
             current: Current::default(),
             bookmarked: false,
-            timer: None,
+            volume_timer: None,
         }
     }
 }
@@ -155,18 +155,18 @@ impl Handle {
     /// `rx` is the receiver for state updates, `state` the initial state,
     /// and `params` specifies aesthetic options that are specified by the user.
     async fn ui(
-        mut rx: broadcast::Receiver<Update>,
+        mut updater: broadcast::Receiver<Update>,
         mut state: State,
         params: interface::Params,
     ) -> Result<()> {
         let mut interface = Interface::new(params);
 
         loop {
-            if let Ok(message) = rx.try_recv() {
+            if let Ok(message) = updater.try_recv() {
                 match message {
                     Update::Track(track) => state.current = track,
                     Update::Bookmarked(bookmarked) => state.bookmarked = bookmarked,
-                    Update::Volume => state.timer = Some(Instant::now()),
+                    Update::Volume => state.volume_timer = Some(Instant::now()),
                     Update::Quit => break,
                 }
             }

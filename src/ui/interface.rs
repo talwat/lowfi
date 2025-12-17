@@ -1,9 +1,12 @@
+use crate::{ui, Args};
 use std::{env, time::Duration};
 
-use crate::{
-    ui::{self, components, window::Window},
-    Args,
-};
+pub mod clock;
+pub mod components;
+pub mod window;
+
+pub use clock::Clock;
+pub use window::Window;
 
 /// UI-specific parameters and options.
 #[derive(Copy, Clone, Debug, Default)]
@@ -17,6 +20,9 @@ pub struct Params {
     /// Whether the visual part of the UI should be enabled.
     /// This only applies if the MPRIS feature is enabled.
     pub enabled: bool,
+
+    /// Whether to include the clock on the top bar.
+    pub clock: bool,
 
     /// The total delta between frames, which takes into account
     /// the time it takes to actually render each frame.
@@ -40,6 +46,7 @@ impl TryFrom<&Args> for Params {
         Ok(Self {
             delta,
             enabled: !disabled,
+            clock: args.clock,
             minimalist: args.minimalist,
             borderless: args.borderless,
         })

@@ -8,50 +8,50 @@
 
 #[cfg(test)]
 mod components {
-    use crate::ui;
+    use crate::ui::interface;
 
     use std::time::Duration;
 
     #[test]
     fn format_duration_works() {
         let d = Duration::from_secs(62);
-        assert_eq!(ui::components::format_duration(&d), "01:02");
+        assert_eq!(interface::components::format_duration(&d), "01:02");
     }
 
     #[test]
     fn format_duration_zero() {
         let d = Duration::from_secs(0);
-        assert_eq!(ui::components::format_duration(&d), "00:00");
+        assert_eq!(interface::components::format_duration(&d), "00:00");
     }
 
     #[test]
     fn format_duration_hours_wrap() {
         let d = Duration::from_secs(3661); // 1:01:01
-        assert_eq!(ui::components::format_duration(&d), "61:01");
+        assert_eq!(interface::components::format_duration(&d), "61:01");
     }
 
     #[test]
     fn audio_bar_contains_percentage() {
-        let s = ui::components::audio_bar(10, 0.5, "50%");
+        let s = interface::components::audio_bar(10, 0.5, "50%");
         assert!(s.contains("50%"));
         assert!(s.starts_with(" volume:"));
     }
 
     #[test]
     fn audio_bar_muted_volume() {
-        let s = ui::components::audio_bar(8, 0.0, "0%");
+        let s = interface::components::audio_bar(8, 0.0, "0%");
         assert!(s.contains("0%"));
     }
 
     #[test]
     fn audio_bar_full_volume() {
-        let s = ui::components::audio_bar(10, 1.0, "100%");
+        let s = interface::components::audio_bar(10, 1.0, "100%");
         assert!(s.contains("100%"));
     }
 
     #[test]
     fn controls_has_items() {
-        let s = ui::components::controls(30);
+        let s = interface::components::controls(30);
         assert!(s.contains("[s]"));
         assert!(s.contains("[p]"));
         assert!(s.contains("[q]"));
@@ -60,7 +60,7 @@ mod components {
 
 #[cfg(test)]
 mod window {
-    use crate::ui::window::Window;
+    use crate::ui::interface::Window;
 
     #[test]
     fn new_border_strings() {

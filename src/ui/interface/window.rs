@@ -1,4 +1,7 @@
-use std::io::{stdout, Stdout};
+use std::{
+    fmt::Display,
+    io::{stdout, Stdout},
+};
 
 use crossterm::{
     cursor::{MoveToColumn, MoveUp},
@@ -7,6 +10,8 @@ use crossterm::{
 };
 use std::fmt::Write as _;
 use unicode_segmentation::UnicodeSegmentation as _;
+
+use crate::ui;
 
 /// Represents an abstraction for drawing the actual lowfi window itself.
 ///
@@ -17,7 +22,7 @@ pub struct Window {
     borderless: bool,
 
     /// The top & bottom borders, which are here since they can be
-    /// prerendered, as they don't change from window to window.
+    /// prerendered, as they don't change every single draw.
     ///
     /// If the option to not include borders is set, these will just be empty [String]s.
     pub(crate) borders: [String; 2],
@@ -51,6 +56,12 @@ impl Window {
         }
     }
 
+    /// Adds text to the top of the window.
+    pub fn display(&mut self, display: impl Display, len: usize) {
+        let new = format!("┌─ {} {}─┐", display, "─".repeat(self.width - len - 2));
+        self.borders[0] = new;
+    }
+
     /// Renders the window itself, but doesn't actually draw it.
     ///
     /// `testing` just determines whether to add special features
@@ -63,7 +74,7 @@ impl Window {
         content: Vec<String>,
         space: bool,
         testing: bool,
-    ) -> super::Result<(String, u16)> {
+    ) -> ui::Result<(String, u16)> {
         let linefeed = if testing { "\n" } else { "\r\n" };
         let len: u16 = content.len().try_into()?;
 
@@ -101,7 +112,7 @@ impl Window {
     }
 
     /// Actually draws the window, with each element in `content` being on a new line.
-    pub fn draw(&mut self, content: Vec<String>, space: bool) -> super::Result<()> {
+    pub fn draw(&mut self, content: Vec<String>, space: bool) -> ui::Result<()> {
         let (rendered, height) = self.render(content, space, false)?;
 
         crossterm::execute!(

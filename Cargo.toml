@@ -42,6 +42,7 @@ arc-swap = "1.7.1"
 
 # Data
 reqwest = { version = "0.12.9", features = ["stream", "http2", "default-tls"], default-features = false }
+chrono = { version = "0.4.42", features = ["clock"], default-features = false }
 bytes = "1.9.0"
 
 # I/O
@@ -78,3 +79,4 @@ must_use_candidate = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
 cast_possible_truncation = "allow"
+struct_excessive_bools = "allow"

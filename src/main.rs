@@ -35,9 +35,13 @@ pub struct Args {
     #[clap(long, short)]
     minimalist: bool,
 
-    /// Exclude borders in UI.
+    /// Exclude window borders.
     #[clap(long, short)]
     borderless: bool,
+
+    /// Include a clock.
+    #[clap(long, short)]
+    clock: bool,
 
     /// Start lowfi paused.
     #[clap(long, short)]

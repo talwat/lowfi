@@ -35,11 +35,11 @@ pub struct Args {
     #[clap(long, short)]
     minimalist: bool,
 
-    /// Exclude borders in UI.
+    /// Exclude window borders.
     #[clap(long, short)]
     borderless: bool,
 
-    /// Include a small clock in the UI.
+    /// Include a clock.
     #[clap(long, short)]
     clock: bool,
 

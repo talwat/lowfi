@@ -11,6 +11,8 @@ use crossterm::{
 use std::fmt::Write as _;
 use unicode_segmentation::UnicodeSegmentation as _;
 
+use crate::ui;
+
 /// Represents an abstraction for drawing the actual lowfi window itself.
 ///
 /// The main purpose of this struct is just to add the fancy border,
@@ -72,7 +74,7 @@ impl Window {
         content: Vec<String>,
         space: bool,
         testing: bool,
-    ) -> super::Result<(String, u16)> {
+    ) -> ui::Result<(String, u16)> {
         let linefeed = if testing { "\n" } else { "\r\n" };
         let len: u16 = content.len().try_into()?;
 
@@ -110,7 +112,7 @@ impl Window {
     }
 
     /// Actually draws the window, with each element in `content` being on a new line.
-    pub fn draw(&mut self, content: Vec<String>, space: bool) -> super::Result<()> {
+    pub fn draw(&mut self, content: Vec<String>, space: bool) -> ui::Result<()> {
         let (rendered, height) = self.render(content, space, false)?;
 
         crossterm::execute!(

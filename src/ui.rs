@@ -1,21 +1,16 @@
 use std::sync::Arc;
 
-use crate::{
-    player::Current,
-    ui::{self, interface::Clock, window::Window},
-    Args,
-};
+use crate::{player::Current, ui, Args};
 use tokio::{
     sync::{broadcast, mpsc::Sender},
     task::JoinHandle,
     time::Instant,
 };
-pub mod components;
+
 pub mod environment;
 pub use environment::Environment;
 pub mod input;
 pub mod interface;
-pub mod window;
 
 #[cfg(feature = "mpris")]
 pub mod mpris;
@@ -169,8 +164,8 @@ impl Handle {
         params: interface::Params,
     ) -> Result<()> {
         let mut interval = tokio::time::interval(params.delta);
-        let mut window = Window::new(state.width, params.borderless);
-        let mut clock = params.clock.then(|| Clock::new(&mut window));
+        let mut window = interface::Window::new(state.width, params.borderless);
+        let mut clock = params.clock.then(|| interface::Clock::new(&mut window));
 
         loop {
             if let Ok(message) = rx.try_recv() {
@@ -182,9 +177,7 @@ impl Handle {
                 }
             }
 
-            if let Some(x) = clock.as_mut() {
-                x.update(&mut window)
-            }
+            clock.as_mut().map(|x| x.update(&mut window));
             interface::draw(&mut state, &mut window, params)?;
             interval.tick().await;
         }

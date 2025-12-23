@@ -1,9 +1,9 @@
 # lowfi
 
-Lowfi est une petite application écrite en Rust qui sert un objectif unique : écouter de la lofi.
+lowfi est une petite application écrite en Rust qui sert un objectif unique : écouter de la lofi.
 Elle le fait de la manière la plus simple possible : pas d’albums, pas de pubs, juste de la lofi.
 
-![exemple image](../../media/example1.png)
+![exemple image](../media/example1.png)
 
 ## Attention
 

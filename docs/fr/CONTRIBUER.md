@@ -1,4 +1,4 @@
-# Contribuer à Lowfi
+# Contribuer à lowfi
 
 Il y a quelque directives listées ici qui vont augmenter les chances pour votre PR d'être acceptée.
 Seules les moins évidentes seront listées, si vous avez besoin de demander la réponse est probablement non.
@@ -15,9 +15,9 @@ Les PR générées par IA n'aident pas les développeurs, elles sont juste embê
 Faites en sorte que chaque PR ne contienne qu'une fonctionnalité distincte. Ajouter plusieurs fonctionnalités dans une seule PR est généralement une mauvaise idée.
 Cela permet aussi que des fonctionnalités spécifiques soit approuvées ou refusées au cas par cas, plutot qu'un seul bloc de code important.
 
-## 3. Keep Lowfi simple
+## 3. Keep lowfi simple
 
-Lowfi est censé être un programme simple. Pour l'instant aucune modification de l'interface initiale ne sera acceptée.
-L'interface de Lowfi pendant la lecture est restée la même depuis les premières versions, la compliquer irait à l'encontre de son but initial.
+lowfi est censé être un programme simple. Pour l'instant aucune modification de l'interface initiale ne sera acceptée.
+L'interface de lowfi pendant la lecture est restée la même depuis les premières versions, la compliquer irait à l'encontre de son but initial.
 
 Des fonctionnalités plus complexes, comme des couleurs fantaisistes ou des pochettes d'albums, ne seront jamais acceptées. L'implémentation de fonctionnalitées acceptables doit être simple et discrète, si une fonctionnalité est simple mais que sa mise en oeuvre est très complexe elle ne sera pas acceptée.

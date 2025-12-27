@@ -48,39 +48,6 @@ pub struct Downloader {
 }
 
 impl Downloader {
-    /// Initializes the downloader with a track list.
-    ///
-    /// `tx` specifies the [`Sender`] to be notified with [`crate::Message::Loaded`].
-    pub fn init(
-        size: usize,
-        timeout: u64,
-        tracks: tracks::List,
-        tx: Sender<crate::Message>,
-    ) -> crate::Result<Handle> {
-        let client = Client::builder()
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION")
-            ))
-            .timeout(Duration::from_secs(timeout))
-            .build()?;
-
-        let (qtx, qrx) = mpsc::channel(size - 1);
-        let downloader = Self {
-            queue: qtx,
-            tx,
-            tracks,
-            client,
-            rng: fastrand::Rng::new(),
-        };
-
-        Ok(Handle {
-            queue: qrx,
-            task: crate::Tasks([tokio::spawn(downloader.run())]),
-        })
-    }
-
     /// Actually runs the downloader, consuming it and beginning
     /// the cycle of downloading tracks and reporting to the
     /// rest of the program.
@@ -118,9 +85,6 @@ pub struct Handle {
     /// The queue receiver, which can be used to actually
     /// fetch a track from the queue.
     queue: Receiver<tracks::Queued>,
-
-    /// The downloader task, which can be aborted.
-    task: crate::Tasks<crate::Error, 1>,
 }
 
 /// The output when a track is requested from the downloader.
@@ -146,10 +110,37 @@ impl Handle {
             }, Output::Queued,
         )
     }
+}
 
-    /// Shuts down the downloader task, returning any errors.
-    pub async fn close(self) -> crate::Result<()> {
-        let [result] = self.task.shutdown().await;
-        result
+impl crate::Tasks {
+    /// Initializes the downloader with a track list.
+    ///
+    /// `tx` specifies the [`Sender`] to be notified with [`crate::Message::Loaded`].
+    pub fn downloader(
+        &mut self,
+        size: usize,
+        timeout: u64,
+        tracks: tracks::List,
+    ) -> crate::Result<Handle> {
+        let client = Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .timeout(Duration::from_secs(timeout))
+            .build()?;
+
+        let (qtx, qrx) = mpsc::channel(size - 1);
+        let downloader = Downloader {
+            queue: qtx,
+            tx: self.tx(),
+            tracks,
+            client,
+            rng: fastrand::Rng::new(),
+        };
+
+        self.spawn(downloader.run());
+        Ok(Handle { queue: qrx })
     }
 }

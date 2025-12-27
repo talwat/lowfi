@@ -1,4 +1,6 @@
-# The State of Lowfi's Music
+# The State of lowfi's Music
+
+[[version française](../fr/MUSIQUE.md)]
 
 > [!WARNING]
 > This document will be a bit long and has almost nothing to do with the actual
@@ -12,7 +14,7 @@ I always hated apps that required extensive configuration just to be usable.
 Sometimes it's justified, but often, it's just pointless when most will end up
 with the same set of "defaults" that aren't really defaults.
 
-Lowfi is so nice and simple because of the "plug and play" aspect,
+lowfi is so nice and simple because of the "plug and play" aspect,
 but it's become a lot harder to continue it as of late.
 
 ## The Lofi Girl List

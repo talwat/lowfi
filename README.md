@@ -1,15 +1,17 @@
 # lowfi
 
+[[version française](./docs/fr/README.md)]
+
 lowfi is a tiny rust app that serves a single purpose: play lofi.
 It'll do this as simply as it can: no albums, no ads, just lofi.
 
-![example image](media/example1.png)
+![example image](docs/media/example1.png)
 
 ## Disclaimer
 
 As of the 1.7.0 version of lowfi, **all** of the audio files embedded
 by default are from [chillhop](https://chillhop.com/). Read
-[MUSIC.md](MUSIC.md) for more information.
+[MUSIC.md](./docs/en/MUSIC.md) for more information.
 
 ## Why?
 

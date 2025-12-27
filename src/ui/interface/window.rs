@@ -62,7 +62,7 @@ impl Window {
     /// This returns both the final rendered window and also the full
     /// height of the rendered window.
     pub(crate) fn render(&self, content: Vec<String>) -> ui::Result<(String, u16)> {
-        const NEWLINE: &str = "\r\n";
+        let newline: &str = if self.fancy { "\r\n" } else { "\n" };
         let len: u16 = content.len().try_into()?;
 
         // Note that this will have a trailing newline, which we use later.
@@ -76,7 +76,7 @@ impl Window {
             };
 
             let center = if self.fancy { x.reset().to_string() } else { x };
-            write!(output, "{padding} {center}{space} {padding}{NEWLINE}").unwrap();
+            write!(output, "{padding} {center}{space} {padding}{newline}").unwrap();
 
             output
         });
@@ -91,7 +91,7 @@ impl Window {
         // There's no need for another newline after the main menu content, because it already has one.
         Ok((
             format!(
-                "{}{NEWLINE}{menu}{}{suffix}",
+                "{}{newline}{menu}{}{suffix}",
                 self.titlebar.content, self.statusbar,
             ),
             height,

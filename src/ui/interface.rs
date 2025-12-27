@@ -2,7 +2,7 @@ use crate::{
     ui::{self, State},
     Args,
 };
-use std::{env, time::Duration};
+use std::{env, io::stdout, time::Duration};
 
 pub mod clock;
 pub mod components;
@@ -96,21 +96,21 @@ pub struct Interface {
 impl Default for Interface {
     #[inline]
     fn default() -> Self {
-        Self::new(Params::default())
+        Self::new(Params::default()).unwrap()
     }
 }
 
 impl Interface {
     /// Creates a new interface.
-    pub fn new(params: Params) -> Self {
-        let mut window = Window::new(params.width, params.borderless);
+    pub fn new(params: Params) -> ui::Result<Self> {
+        let mut window = Window::new(params.width, params.borderless, false, true);
 
-        Self {
+        Ok(Self {
             clock: params.clock.then(|| Clock::new(&mut window)),
             interval: tokio::time::interval(params.delta),
             window,
             params,
-        }
+        })
     }
 
     /// Creates a full "menu" from the [`ui::State`], which can be
@@ -118,20 +118,16 @@ impl Interface {
     ///
     /// The menu really is just a [`Vec`] of the different components,
     /// with padding already added.
-    pub(crate) fn menu(&self, state: &mut State) -> Vec<String> {
+    pub(crate) fn menu(&self, state: &State) -> Vec<String> {
         let action = components::action(state, self.params.width);
 
-        let middle = match state.volume_timer {
-            Some(timer) => {
-                let volume = state.sink.volume();
-                let percentage = format!("{}%", (volume * 100.0).round().abs());
-                if timer.elapsed() > Duration::from_secs(1) {
-                    state.volume_timer = None;
-                }
+        let middle = if state.volume_timer.is_some() {
+            let volume = state.sink.volume();
+            let percentage = format!("{}%", (volume * 100.0).round().abs());
 
-                components::audio_bar(self.params.width - 17, volume, &percentage)
-            }
-            None => components::progress_bar(state, self.params.width - 16),
+            components::audio_bar(self.params.width - 17, volume, &percentage)
+        } else {
+            components::progress_bar(state, self.params.width - 16)
         };
 
         let controls = components::controls(self.params.width);
@@ -144,9 +140,11 @@ impl Interface {
 
     /// Draws the terminal. This will also wait for the specified
     /// delta to pass before completing.
-    pub async fn draw(&mut self, state: &mut State) -> super::Result<()> {
+    pub async fn draw(&mut self, state: &State) -> super::Result<()> {
         self.clock.as_mut().map(|x| x.update(&mut self.window));
-        self.window.draw(self.menu(state), false)?;
+
+        let menu = self.menu(state);
+        self.window.draw(stdout().lock(), menu)?;
         self.interval.tick().await;
 
         Ok(())

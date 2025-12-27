@@ -1,5 +1,3 @@
-use std::io::{stdout, Stdout};
-
 use crate::ui::{self, interface::TitleBar};
 use crossterm::{
     cursor::{MoveToColumn, MoveUp},
@@ -26,8 +24,11 @@ pub struct Window {
     /// The inner width of the window.
     width: usize,
 
-    /// The output, currently just an [`Stdout`].
-    out: Stdout,
+    /// Whether content items should be automatically padded (spaced).
+    spaced: bool,
+
+    /// Whether to cautiously handle ANSI sequences by adding [`style::Attribute::Reset`] generously.
+    fancy: bool,
 }
 
 impl Window {
@@ -35,7 +36,7 @@ impl Window {
     ///
     /// * `width` - Inner width of the window.
     /// * `borderless` - Whether to include borders in the window, or not.
-    pub fn new(width: usize, borderless: bool) -> Self {
+    pub fn new(width: usize, borderless: bool, spaced: bool, fancy: bool) -> Self {
         let statusbar = if borderless {
             String::new()
         } else {
@@ -44,11 +45,12 @@ impl Window {
         };
 
         Self {
+            spaced,
             statusbar,
             borderless,
             width,
+            fancy,
             titlebar: TitleBar::new(width, borderless),
-            out: stdout(),
         }
     }
 
@@ -59,27 +61,22 @@ impl Window {
     ///
     /// This returns both the final rendered window and also the full
     /// height of the rendered window.
-    pub(crate) fn render(
-        &self,
-        content: Vec<String>,
-        space: bool,
-        testing: bool,
-    ) -> ui::Result<(String, u16)> {
-        let linefeed = if testing { "\n" } else { "\r\n" };
+    pub(crate) fn render(&self, content: Vec<String>) -> ui::Result<(String, u16)> {
+        const NEWLINE: &str = "\r\n";
         let len: u16 = content.len().try_into()?;
 
         // Note that this will have a trailing newline, which we use later.
         let menu: String = content.into_iter().fold(String::new(), |mut output, x| {
             // Horizontal Padding & Border
             let padding = if self.borderless { " " } else { "│" };
-            let space = if space {
+            let space = if self.spaced {
                 " ".repeat(self.width.saturating_sub(x.graphemes(true).count()))
             } else {
                 String::new()
             };
 
-            let center = if testing { x } else { x.reset().to_string() };
-            write!(output, "{padding} {center}{space} {padding}{linefeed}").unwrap();
+            let center = if self.fancy { x.reset().to_string() } else { x };
+            write!(output, "{padding} {center}{space} {padding}{NEWLINE}").unwrap();
 
             output
         });
@@ -94,7 +91,7 @@ impl Window {
         // There's no need for another newline after the main menu content, because it already has one.
         Ok((
             format!(
-                "{}{linefeed}{menu}{}{suffix}",
+                "{}{NEWLINE}{menu}{}{suffix}",
                 self.titlebar.content, self.statusbar,
             ),
             height,
@@ -102,11 +99,15 @@ impl Window {
     }
 
     /// Actually draws the window, with each element in `content` being on a new line.
-    pub fn draw(&mut self, content: Vec<String>, space: bool) -> ui::Result<()> {
-        let (rendered, height) = self.render(content, space, false)?;
+    pub fn draw(
+        &mut self,
+        mut writer: impl std::io::Write,
+        content: Vec<String>,
+    ) -> ui::Result<()> {
+        let (rendered, height) = self.render(content)?;
 
         crossterm::execute!(
-            self.out,
+            writer,
             Clear(ClearType::FromCursorDown),
             MoveToColumn(0),
             Print(rendered),

@@ -3,13 +3,9 @@ use std::{
     time::Duration,
 };
 
-use reqwest::Client;
-use tokio::{
-    sync::mpsc::{self, Receiver, Sender},
-    task::JoinHandle,
-};
-
 use crate::tracks;
+use reqwest::Client;
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 /// Flag indicating whether the downloader is actively fetching a track.
 ///
@@ -81,7 +77,7 @@ impl Downloader {
 
         Ok(Handle {
             queue: qrx,
-            task: tokio::spawn(downloader.run()),
+            task: crate::Tasks([tokio::spawn(downloader.run())]),
         })
     }
 
@@ -96,6 +92,7 @@ impl Downloader {
                 .tracks
                 .random(&self.client, &PROGRESS, &mut self.rng)
                 .await;
+
             match result {
                 Ok(track) => {
                     self.queue.send(track).await?;
@@ -123,7 +120,7 @@ pub struct Handle {
     queue: Receiver<tracks::Queued>,
 
     /// The downloader task, which can be aborted.
-    task: JoinHandle<crate::Result<()>>,
+    task: crate::Tasks<crate::Error, 1>,
 }
 
 /// The output when a track is requested from the downloader.
@@ -149,10 +146,10 @@ impl Handle {
             }, Output::Queued,
         )
     }
-}
 
-impl Drop for Handle {
-    fn drop(&mut self) {
-        self.task.abort();
+    /// Shuts down the downloader task, returning any errors.
+    pub async fn close(self) -> crate::Result<()> {
+        let [result] = self.task.shutdown().await;
+        result
     }
 }

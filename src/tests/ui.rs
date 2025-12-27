@@ -64,11 +64,11 @@ mod window {
 
     #[test]
     fn new_border_strings() {
-        let w = Window::new(10, false);
+        let w = Window::new(10, false, false, false);
         assert!(w.titlebar.content.starts_with('┌'));
         assert!(w.statusbar.starts_with('└'));
 
-        let w2 = Window::new(5, true);
+        let w2 = Window::new(5, true, false, false);
         assert!(w2.titlebar.content.is_empty());
         assert!(w2.statusbar.is_empty());
     }
@@ -79,8 +79,8 @@ mod window {
 
     #[test]
     fn simple() {
-        let w = Window::new(3, false);
-        let (render, height) = w.render(vec![String::from("abc")], false, true).unwrap();
+        let w = Window::new(3, false, false, false);
+        let (render, height) = w.render(vec![String::from("abc")]).unwrap();
 
         const MIDDLE: &str = "─────";
         assert_eq!(format!("┌{MIDDLE}┐\n{}\n└{MIDDLE}┘", sided("abc")), render);
@@ -89,13 +89,13 @@ mod window {
 
     #[test]
     fn spaced() {
-        let w = Window::new(3, false);
+        let w = Window::new(3, false, true, false);
         let (render, height) = w
-            .render(
-                vec![String::from("abc"), String::from(" b"), String::from("c")],
-                true,
-                true,
-            )
+            .render(vec![
+                String::from("abc"),
+                String::from(" b"),
+                String::from("c"),
+            ])
             .unwrap();
 
         const MIDDLE: &str = "─────";
@@ -113,7 +113,7 @@ mod window {
 
     #[test]
     fn zero_width_window() {
-        let w = Window::new(0, false);
+        let w = Window::new(0, false, false, false);
         assert!(!w.titlebar.content.is_empty());
     }
 }
@@ -222,27 +222,5 @@ mod interface {
                 "[q]".bold()
             )
         );
-    }
-}
-
-#[cfg(test)]
-mod environment {
-    use crate::ui::Environment;
-
-    #[test]
-    fn ready_and_cleanup_no_panic() {
-        // Try to create the environment but don't fail the test if the
-        // terminal isn't available. We just assert the API exists.
-        if let Ok(env) = Environment::ready(false) {
-            // cleanup should succeed
-            let _ = env.cleanup(true);
-        }
-    }
-
-    #[test]
-    fn ready_with_alternate_screen() {
-        if let Ok(env) = Environment::ready(true) {
-            let _ = env.cleanup(false);
-        }
     }
 }

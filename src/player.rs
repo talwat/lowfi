@@ -73,19 +73,7 @@ pub struct Player {
     waiter: waiter::Handle,
 }
 
-impl Drop for Player {
-    fn drop(&mut self) {
-        // Ensure playback is stopped when the player is dropped.
-        self.sink.stop();
-    }
-}
-
 impl Player {
-    /// Returns the `Environment` currently used by the UI.
-    pub const fn environment(&self) -> ui::Environment {
-        self.ui.environment
-    }
-
     /// Sets the in-memory current state and notifies the UI about the change.
     ///
     /// If the new state is a `Track`, this will also update the bookmarked flag
@@ -115,11 +103,7 @@ impl Player {
     /// This sets up the audio sink, UI, downloader, bookmarks and persistent
     /// volume state. The function returns a fully constructed `Player` ready
     /// to be driven via `run`.
-    pub async fn init(
-        args: crate::Args,
-        environment: ui::Environment,
-        mixer: &rodio::mixer::Mixer,
-    ) -> crate::Result<Self> {
+    pub async fn init(args: crate::Args, mixer: &rodio::mixer::Mixer) -> crate::Result<Self> {
         let (tx, rx) = mpsc::channel(8);
         if args.paused {
             tx.send(Message::Pause).await?;
@@ -137,7 +121,7 @@ impl Player {
         sink.set_volume(volume.float());
 
         Ok(Self {
-            ui: ui::Handle::init(tx.clone(), environment, urx, state, &args).await?,
+            ui: ui::Handle::init(tx.clone(), urx, state, &args).await?,
             downloader: Downloader::init(
                 args.buffer_size as usize,
                 args.timeout,
@@ -153,10 +137,23 @@ impl Player {
         })
     }
 
-    /// Persist state that should survive a run (bookmarks and volume).
-    pub async fn close(&self) -> crate::Result<()> {
-        self.bookmarks.save().await?;
-        PersistentVolume::save(self.sink.volume()).await?;
+    /// Close any outlying processes, as well as persist state that
+    /// should survive such as bookmarks and volume.
+    pub async fn close(self) -> crate::Result<()> {
+        // We should prioritize reporting UI/Downloader errors,
+        // but still save persistent state before so that if either one fails,
+        // state is saved.
+        let saves = (
+            self.bookmarks.save().await,
+            PersistentVolume::save(self.sink.volume()).await,
+        );
+
+        self.ui.close().await?;
+        self.downloader.close().await?;
+        self.sink.stop();
+
+        saves.0?;
+        saves.1?;
 
         Ok(())
     }
@@ -176,7 +173,7 @@ impl Player {
     ///
     /// This will return when a `Message::Quit` is received. It handles commands
     /// coming from the frontend and updates playback/UI state accordingly.
-    pub async fn run(mut self) -> crate::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         while let Some(message) = self.rx.recv().await {
             match message {
                 Message::Next | Message::Init | Message::Loaded => {
@@ -229,7 +226,6 @@ impl Player {
             self.ui.mpris.handle(&message).await?;
         }
 
-        self.close().await?;
         Ok(())
     }
 }

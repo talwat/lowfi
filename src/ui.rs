@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::{player::Current, ui, Args};
 use tokio::{
     sync::{broadcast, mpsc::Sender},
-    task::JoinHandle,
     time::Instant,
 };
 
@@ -82,6 +81,14 @@ impl State {
             volume_timer: None,
         }
     }
+
+    /// Takes care of small updates, like resetting the volume timer.
+    pub fn tick(&mut self) {
+        let expired = |timer: Instant| timer.elapsed() > std::time::Duration::from_secs(1);
+        if self.volume_timer.is_some_and(expired) {
+            self.volume_timer = None;
+        }
+    }
 }
 
 /// A UI update sent out by the main player thread, which may
@@ -98,54 +105,43 @@ pub enum Update {
     Quit,
 }
 
-/// Just a simple wrapper for the two primary tasks that the UI
-/// requires to function.
-#[derive(Debug)]
-struct Tasks {
-    /// The renderer, responsible for sending output to `stdout`.
-    render: JoinHandle<Result<()>>,
-
-    /// The input, which receives data from `stdin` via [`crossterm`].
-    input: JoinHandle<Result<()>>,
-}
-
-impl Tasks {
-    /// Actually takes care of spawning the tasks for the [`ui`].
-    pub fn spawn(
-        tx: Sender<crate::Message>,
-        updater: broadcast::Receiver<ui::Update>,
-        state: State,
-        params: interface::Params,
-    ) -> Self {
-        Self {
-            render: tokio::spawn(Handle::ui(updater, state, params)),
-            input: tokio::spawn(input::listen(tx)),
-        }
-    }
-}
-
-impl Drop for Tasks {
-    fn drop(&mut self) {
-        self.input.abort();
-        self.render.abort();
-    }
-}
-
 /// The UI handle for controlling the state of the UI, as well as
 /// updating MPRIS information and other small interfacing tasks.
 pub struct Handle {
-    /// The terminal environment, which can be used for cleanup.
-    pub(crate) environment: Environment,
-
     /// The MPRIS server, which is more or less a handle to the actual MPRIS thread.
     #[cfg(feature = "mpris")]
     pub mpris: mpris::Server,
 
     /// The UI's running tasks.
-    _tasks: Option<Tasks>,
+    tasks: Option<crate::Tasks<ui::Error, 2>>,
 }
 
 impl Handle {
+    /// Actually takes care of spawning the tasks for the UI.
+    fn spawn(
+        tx: Sender<crate::Message>,
+        updater: broadcast::Receiver<ui::Update>,
+        state: State,
+        params: interface::Params,
+    ) -> crate::Tasks<Error, 2> {
+        crate::Tasks([
+            tokio::spawn(Handle::ui(updater, state, params)),
+            tokio::spawn(input::listen(tx)),
+        ])
+    }
+
+    /// Shuts down the UI tasks, returning any encountered errors.
+    pub async fn close(self) -> crate::Result<()> {
+        let Some(tasks) = self.tasks else {
+            return Ok(());
+        };
+        for result in tasks.shutdown().await {
+            result?
+        }
+
+        Ok(())
+    }
+
     /// The main UI process, which will both render the UI to the terminal
     /// and also update state.
     ///
@@ -159,7 +155,7 @@ impl Handle {
         mut state: State,
         params: interface::Params,
     ) -> Result<()> {
-        let mut interface = Interface::new(params);
+        let mut interface = Interface::new(params)?;
 
         loop {
             if let Ok(message) = updater.try_recv() {
@@ -171,7 +167,8 @@ impl Handle {
                 }
             }
 
-            interface.draw(&mut state).await?;
+            interface.draw(&state).await?;
+            state.tick();
         }
 
         Ok(())
@@ -181,7 +178,6 @@ impl Handle {
     #[allow(clippy::unused_async)]
     pub async fn init(
         tx: Sender<crate::Message>,
-        environment: Environment,
         updater: broadcast::Receiver<ui::Update>,
         state: State,
         args: &Args,
@@ -191,10 +187,9 @@ impl Handle {
         Ok(Self {
             #[cfg(feature = "mpris")]
             mpris: mpris::Server::new(state.clone(), tx.clone(), updater.resubscribe()).await?,
-            environment,
-            _tasks: params
+            tasks: params
                 .enabled
-                .then(|| Tasks::spawn(tx, updater, state, params)),
+                .then(|| Self::spawn(tx, updater, state, params)),
         })
     }
 }

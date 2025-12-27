@@ -1,7 +1,6 @@
 //! An extremely simple lofi player.
 use crate::player::Player;
 use clap::{Parser, Subcommand};
-use futures_util::TryFutureExt;
 use std::path::PathBuf;
 
 pub mod audio;
@@ -12,6 +11,7 @@ pub mod message;
 pub mod player;
 #[cfg(feature = "scrape")]
 mod scrapers;
+pub mod tasks;
 mod tests;
 pub mod tracks;
 pub mod ui;
@@ -21,6 +21,7 @@ pub mod volume;
 use crate::scrapers::Source;
 pub use error::{Error, Result};
 pub use message::Message;
+pub use tasks::Tasks;
 
 /// An extremely simple lofi player.
 #[derive(Parser, Clone)]
@@ -121,10 +122,13 @@ async fn main() -> eyre::Result<()> {
 
     let stream = audio::stream()?;
     let environment = ui::Environment::ready(args.alternate)?;
-    let result = Player::init(args, environment, stream.mixer())
-        .and_then(Player::run)
-        .await;
+    let mut player = Player::init(args, stream.mixer())
+        .await
+        .inspect_err(|_| environment.cleanup(false).unwrap())?;
 
+    let result = player.run().await;
     environment.cleanup(result.is_ok())?;
+    player.close().await?;
+
     Ok(result?)
 }

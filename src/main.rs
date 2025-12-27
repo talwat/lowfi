@@ -111,13 +111,13 @@ async fn main() -> eyre::Result<()> {
 
     #[cfg(feature = "scrape")]
     if let Some(command) = &args.command {
-        match command {
+        return match command {
             Commands::Scrape { source } => match source {
-                Source::Archive => scrapers::archive::scrape().await?,
-                Source::Lofigirl => scrapers::lofigirl::scrape().await?,
-                Source::Chillhop => scrapers::chillhop::scrape().await?,
+                Source::Archive => scrapers::archive::scrape().await,
+                Source::Lofigirl => scrapers::lofigirl::scrape().await,
+                Source::Chillhop => scrapers::chillhop::scrape().await,
             },
-        }
+        };
     }
 
     let stream = audio::stream()?;

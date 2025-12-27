@@ -10,7 +10,7 @@ Vous pouvez utiliser l'IA pour chercher, ou s'il y a quelque chose de mineur et 
 Cela dit, si l'usage d'IA est visible, c'est déjà trop.
 Les PR générées par IA n'aident pas les développeurs, elles sont juste embêtantes et leur font perdre leur temps.
 
-## 2. petit = mieux
+## 2. Petit = mieux
 
 Faites en sorte que chaque PR ne contienne qu'une fonctionnalité distincte. Ajouter plusieurs fonctionnalités dans une seule PR est généralement une mauvaise idée.
 Cela permet aussi que des fonctionnalités spécifiques soit approuvées ou refusées au cas par cas, plutot qu'un seul bloc de code important.

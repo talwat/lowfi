@@ -1,6 +1,6 @@
 # The State of lowfi's Music
 
-[[version française](../fr/MUSIQUE.md)]
+[[Version française](./fr/MUSIQUE.md)]
 
 > [!WARNING]
 > This document will be a bit long and has almost nothing to do with the actual

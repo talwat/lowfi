@@ -1,6 +1,6 @@
 # Environment Variables
 
-[[version française](../fr/ENVIRONMENT_VARS.md)]
+[[Version française](./fr/ENVIRONMENT_VARS.md)]
 
 lowfi has some more specific options, usually as a result of minor feature requests, which are only documented here.
 If you have some behavior you'd like to change, which is quite specific, then see if one of these options suits you.

@@ -1,6 +1,6 @@
 # Contributing to lowfi
 
-[[version française](./docs/fr/CONTRIBUER.md)]
+[[Version française](./docs/fr/CONTRIBUER.md)]
 
 There are a few guidelines outlined here that will make it more likely for your PR to be accepted.
 Only ones that are less obvious are going to be listed. If you need to ask, it's probably a no.

@@ -1,17 +1,17 @@
 # lowfi
 
-[[version française](./docs/fr/README.md)]
+[[Version française](./docs/fr/README.md)]
 
 lowfi is a tiny rust app that serves a single purpose: play lofi.
 It'll do this as simply as it can: no albums, no ads, just lofi.
 
-![example image](docs/media/example1.png)
+![example image](./docs/media/example1.png)
 
 ## Disclaimer
 
 As of the 1.7.0 version of lowfi, **all** of the audio files embedded
 by default are from [chillhop](https://chillhop.com/). Read
-[MUSIC.md](./docs/en/MUSIC.md) for more information.
+[MUSIC](./docs/MUSIC.md) for more information.
 
 ## Why?
 
@@ -147,7 +147,7 @@ and as such are also stored in the same directory.
 ### Extra Flags
 
 If you have something you'd like to tweak about lowfi, you use additional flags which
-slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lowfi --help`.
+slightly tweak the UI or behavior of the menu. The flags can be viewed with `lowfi --help`.
 
 | Flag                                | Function                                            |
 | ----------------------------------- | --------------------------------------------------- |
@@ -161,6 +161,8 @@ slightly tweak the UI or behaviour of the menu. The flags can be viewed with `lo
 | `-w`, `--width <WIDTH>`             | Width of the player, from 0 to 32 [default: 3]      |
 | `-t`, `--track-list <TRACK_LIST>`   | Use a [custom track list](#custom-track-lists)      |
 | `-s`, `--buffer-size <BUFFER_SIZE>` | Internal song buffer size [default: 5]              |
+
+If you need something even more specific, see [ENVIRONMENT_VARS](./docs/ENVIRONMENT_VARS.md).
 
 ### Extra Features
 

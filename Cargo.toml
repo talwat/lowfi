@@ -18,7 +18,7 @@ homepage = "https://github.com/talwat/lowfi"
 repository = "https://github.com/talwat/lowfi"
 
 [features]
-mpris = ["dep:mpris-server"]
+mpris = ["dep:mpris-server", "dep:arc-swap"]
 extra-audio-formats = ["rodio/default"]
 scrape = [
     "dep:serde",
@@ -38,7 +38,7 @@ thiserror = "2.0.12"
 # Async
 tokio = { version = "1.41.1", features = ["macros", "rt", "fs", "io-util", "sync", "time"], default-features = false }
 futures-util = { version = "0.3.31", default-features = false }
-arc-swap = "1.7.1"
+arc-swap = { version = "1.7.1", optional = true }
 
 # Data
 reqwest = { version = "0.12.9", features = ["stream", "http2", "default-tls"], default-features = false }

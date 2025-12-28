@@ -1,47 +1,64 @@
-use std::{future::Future, mem::MaybeUninit};
+//! Task management.
+//!
+//! This file aims to abstract a lot of annoying Rust async logic, which may be subject to change.
+//! For those who are not intimately familiar with async rust, this will be very confusing.
 
-trait AsyncArrayMap<T, const N: usize> {
-    async fn async_map<U, F, Fut>(self, f: F) -> [U; N]
-    where
-        F: FnMut(T) -> Fut,
-        Fut: Future<Output = U>;
+use futures_util::TryFutureExt;
+use std::future::Future;
+use tokio::{select, sync::mpsc, task::JoinSet};
+
+/// Handles all of the processes within lowfi.
+/// This entails initializing/closing tasks, and handling any potential errors that arise.
+pub struct Tasks {
+    /// The [`JoinSet`], which contains all of the task handles.
+    pub set: JoinSet<crate::Result<()>>,
+
+    /// A sender, which is kept for convenience to be used when
+    /// initializing various other tasks.
+    tx: mpsc::Sender<crate::Message>,
 }
 
-impl<T, const N: usize> AsyncArrayMap<T, N> for [T; N] {
-    async fn async_map<U, F, Fut>(self, mut f: F) -> [U; N]
-    where
-        F: FnMut(T) -> Fut,
-        Fut: Future<Output = U>,
-    {
-        let mut out: [MaybeUninit<U>; N] = unsafe { MaybeUninit::uninit().assume_init() };
-
-        for (i, v) in self.into_iter().enumerate() {
-            out[i].write(f(v).await);
+impl Tasks {
+    /// Creates a new task manager.
+    pub fn new(tx: mpsc::Sender<crate::Message>) -> Self {
+        Self {
+            tx,
+            set: JoinSet::new(),
         }
-
-        unsafe { std::mem::transmute_copy(&out) }
     }
-}
 
-/// Wrapper around an array of JoinHandles to provide better error reporting & shutdown.
-pub struct Tasks<E, const S: usize>(pub [tokio::task::JoinHandle<Result<(), E>>; S]);
+    /// Processes a task, and adds it to the internal [`JoinSet`].
+    pub fn spawn<E: Into<crate::Error> + Send + Sync + 'static>(
+        &mut self,
+        future: impl Future<Output = Result<(), E>> + Send + 'static,
+    ) {
+        self.set.spawn(future.map_err(Into::into));
+    }
 
-impl<T: Send + 'static + Into<crate::Error>, const S: usize> Tasks<T, S> {
-    /// Abort tasks, and report either errors thrown from within each task
-    /// or from tokio about joining the task.
-    pub async fn shutdown(self) -> [crate::Result<()>; S] {
-        self.0
-            .async_map(async |handle| {
-                if !handle.is_finished() {
-                    handle.abort();
-                }
+    /// Gets a copy of the internal [`mpsc::Sender`].
+    pub fn tx(&self) -> mpsc::Sender<crate::Message> {
+        self.tx.clone()
+    }
 
-                match handle.await {
-                    Ok(Err(error)) => Err(error.into()),
-                    Err(error) if !error.is_cancelled() => Err(crate::Error::JoinError(error)),
-                    Ok(Ok(())) | Err(_) => Ok(()),
-                }
-            })
-            .await
+    /// Actively polls all of the handles previously added.
+    ///
+    /// An additional `runner` is for the main player future, which
+    /// can't be added as a "task" because it shares data with the
+    /// main thread.
+    ///
+    /// This either returns when the runner completes, or if an error occurs
+    /// in any of the internally held tasks.
+    pub async fn wait(
+        &mut self,
+        runner: impl Future<Output = Result<(), crate::Error>> + std::marker::Send,
+    ) -> crate::Result<()> {
+        select! {
+            result = runner => result,
+            Some(result) = self.set.join_next() => match result {
+                Ok(res) => res,
+                Err(e) if !e.is_cancelled() => Err(crate::Error::JoinError(e)),
+                Err(_) => Ok(()),
+            }
+        }
     }
 }

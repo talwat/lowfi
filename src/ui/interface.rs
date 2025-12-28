@@ -141,7 +141,9 @@ impl Interface {
     /// Draws the terminal. This will also wait for the specified
     /// delta to pass before completing.
     pub async fn draw(&mut self, state: &State) -> super::Result<()> {
-        self.clock.as_mut().map(|x| x.update(&mut self.window));
+        if let Some(x) = self.clock.as_mut() {
+            x.update(&mut self.window);
+        }
 
         let menu = self.menu(state);
         self.window.draw(stdout().lock(), menu)?;

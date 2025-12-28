@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
-use crate::{player::Current, ui, Args};
-use tokio::{
-    sync::{broadcast, mpsc::Sender},
-    time::Instant,
-};
+use crate::player::Current;
+use tokio::{sync::broadcast, time::Instant};
 
 pub mod environment;
+pub mod task;
 pub use environment::Environment;
 pub mod input;
 pub mod interface;
@@ -108,88 +106,50 @@ pub enum Update {
 /// The UI handle for controlling the state of the UI, as well as
 /// updating MPRIS information and other small interfacing tasks.
 pub struct Handle {
+    /// Broadcast channel used to send UI updates.
+    updater: broadcast::Sender<Update>,
+
     /// The MPRIS server, which is more or less a handle to the actual MPRIS thread.
     #[cfg(feature = "mpris")]
     pub mpris: mpris::Server,
-
-    /// The UI's running tasks.
-    tasks: Option<crate::Tasks<ui::Error, 2>>,
 }
 
 impl Handle {
-    /// Actually takes care of spawning the tasks for the UI.
-    fn spawn(
-        tx: Sender<crate::Message>,
-        updater: broadcast::Receiver<ui::Update>,
-        state: State,
-        params: interface::Params,
-    ) -> crate::Tasks<Error, 2> {
-        crate::Tasks([
-            tokio::spawn(Handle::ui(updater, state, params)),
-            tokio::spawn(input::listen(tx)),
-        ])
-    }
-
-    /// Shuts down the UI tasks, returning any encountered errors.
-    pub async fn close(self) -> crate::Result<()> {
-        let Some(tasks) = self.tasks else {
-            return Ok(());
-        };
-        for result in tasks.shutdown().await {
-            result?
-        }
-
+    /// Sends a `ui::Update` to the broadcast channel.
+    pub fn update(&mut self, update: Update) -> crate::Result<()> {
+        self.updater.send(update)?;
         Ok(())
     }
+}
 
-    /// The main UI process, which will both render the UI to the terminal
-    /// and also update state.
-    ///
-    /// It does both of these things at a fixed interval, due to things
-    /// like the track duration changing too frequently.
-    ///
-    /// `rx` is the receiver for state updates, `state` the initial state,
-    /// and `params` specifies aesthetic options that are specified by the user.
-    async fn ui(
-        mut updater: broadcast::Receiver<Update>,
-        mut state: State,
-        params: interface::Params,
-    ) -> Result<()> {
-        let mut interface = Interface::new(params)?;
+/// The main UI process, which will both render the UI to the terminal
+/// and also update state.
+///
+/// It does both of these things at a fixed interval, due to things
+/// like the track duration changing too frequently.
+///
+/// `rx` is the receiver for state updates, `state` the initial state,
+/// and `params` specifies aesthetic options that are specified by the user.
+pub async fn run(
+    mut updater: broadcast::Receiver<Update>,
+    mut state: State,
+    params: interface::Params,
+) -> Result<()> {
+    let mut interface = Interface::new(params)?;
 
-        loop {
-            if let Ok(message) = updater.try_recv() {
-                match message {
-                    Update::Track(track) => state.current = track,
-                    Update::Bookmarked(bookmarked) => state.bookmarked = bookmarked,
-                    Update::Volume => state.volume_timer = Some(Instant::now()),
-                    Update::Quit => break,
-                }
+    loop {
+        if let Ok(message) = updater.try_recv() {
+            match message {
+                Update::Track(track) => state.current = track,
+                Update::Bookmarked(bookmarked) => state.bookmarked = bookmarked,
+                Update::Volume => state.volume_timer = Some(Instant::now()),
+                Update::Quit => break,
             }
-
-            interface.draw(&state).await?;
-            state.tick();
         }
 
-        Ok(())
+        interface.draw(&state).await?;
+        state.tick();
     }
 
-    /// Initializes the UI itself, along with all of the tasks that are related to it.
-    #[allow(clippy::unused_async)]
-    pub async fn init(
-        tx: Sender<crate::Message>,
-        updater: broadcast::Receiver<ui::Update>,
-        state: State,
-        args: &Args,
-    ) -> Result<Self> {
-        let params = interface::Params::try_from(args)?;
-
-        Ok(Self {
-            #[cfg(feature = "mpris")]
-            mpris: mpris::Server::new(state.clone(), tx.clone(), updater.resubscribe()).await?,
-            tasks: params
-                .enabled
-                .then(|| Self::spawn(tx, updater, state, params)),
-        })
-    }
+    Ok(())
 }

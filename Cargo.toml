@@ -37,6 +37,7 @@ thiserror = "2.0.12"
 
 # Async
 tokio = { version = "1.41.1", features = ["macros", "rt", "fs", "io-util", "sync", "time"], default-features = false }
+tokio-util = { version = "0.7.17", features = ["rt"] }
 futures-util = { version = "0.3.31", default-features = false }
 arc-swap = "1.7.1"
 

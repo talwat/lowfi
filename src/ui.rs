@@ -4,6 +4,7 @@ use crate::player::Current;
 use tokio::{sync::broadcast, time::Instant};
 
 pub mod environment;
+pub mod task;
 pub use environment::Environment;
 pub mod input;
 pub mod interface;
@@ -151,27 +152,4 @@ pub async fn run(
     }
 
     Ok(())
-}
-
-impl crate::Tasks {
-    /// Initializes the UI itself, along with all of the tasks that are related to it.
-    #[allow(clippy::unused_async)]
-    pub async fn ui(&mut self, state: State, args: &crate::Args) -> crate::Result<Handle> {
-        let (utx, urx) = broadcast::channel(8);
-
-        #[cfg(feature = "mpris")]
-        let mpris = mpris::Server::new(state.clone(), self.tx(), urx.resubscribe()).await?;
-
-        let params = interface::Params::try_from(args)?;
-        if params.enabled {
-            self.spawn(run(urx, state, params));
-            self.spawn(input::listen(self.tx()));
-        }
-
-        Ok(Handle {
-            updater: utx,
-            #[cfg(feature = "mpris")]
-            mpris,
-        })
-    }
 }

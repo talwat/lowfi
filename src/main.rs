@@ -122,11 +122,11 @@ async fn main() -> eyre::Result<()> {
 
     let stream = audio::stream()?;
     let environment = ui::Environment::ready(args.alternate)?;
-    let (mut player, tasks) = Player::init(args, stream.mixer())
+    let (mut player, mut tasks) = Player::init(args, stream.mixer())
         .await
         .inspect_err(|_| environment.cleanup(false).unwrap())?;
 
-    let result = tasks.select(player.run()).await;
+    let result = tasks.wait(player.run()).await;
     environment.cleanup(result.is_ok())?;
     player.close().await?;
 

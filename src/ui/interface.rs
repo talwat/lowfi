@@ -142,7 +142,7 @@ impl Interface {
     /// delta to pass before completing.
     pub async fn draw(&mut self, state: &State) -> super::Result<()> {
         if let Some(x) = self.clock.as_mut() {
-            x.update(&mut self.window)
+            x.update(&mut self.window);
         }
 
         let menu = self.menu(state);

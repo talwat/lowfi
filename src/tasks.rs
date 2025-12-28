@@ -11,7 +11,7 @@ use tokio::{select, sync::mpsc, task::JoinSet};
 /// This entails initializing/closing tasks, and handling any potential errors that arise.
 pub struct Tasks {
     /// The [`JoinSet`], which contains all of the task handles.
-    set: JoinSet<crate::Result<()>>,
+    pub set: JoinSet<crate::Result<()>>,
 
     /// A sender, which is kept for convenience to be used when
     /// initializing various other tasks.
@@ -28,11 +28,11 @@ impl Tasks {
     }
 
     /// Processes a task, and adds it to the internal [`JoinSet`].
-    pub fn spawn<E: Into<crate::Error> + Send + Sync>(
+    pub fn spawn<E: Into<crate::Error> + Send + Sync + 'static>(
         &mut self,
         future: impl Future<Output = Result<(), E>> + Send + 'static,
     ) {
-        self.set.spawn(future.map_err(|x| x.into()));
+        self.set.spawn(future.map_err(Into::into));
     }
 
     /// Gets a copy of the internal [`mpsc::Sender`].
@@ -45,8 +45,11 @@ impl Tasks {
     /// An additional `runner` is for the main player future, which
     /// can't be added as a "task" because it shares data with the
     /// main thread.
-    pub async fn select(
-        mut self,
+    ///
+    /// This either returns when the runner completes, or if an error occurs
+    /// in any of the internally held tasks.
+    pub async fn wait(
+        &mut self,
         runner: impl Future<Output = Result<(), crate::Error>> + std::marker::Send,
     ) -> crate::Result<()> {
         select! {

@@ -5,7 +5,7 @@ use std::{
 
 use crate::tracks;
 use reqwest::Client;
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::mpsc;
 
 /// Flag indicating whether the downloader is actively fetching a track.
 ///
@@ -28,14 +28,14 @@ pub struct Downloader {
     /// The track queue itself, which in this case is actually
     /// just an asynchronous sender.
     ///
-    /// It is a [`Sender`] because the tracks will have to be
+    /// It is a [`mpsc::Sender`] because the tracks will have to be
     /// received by a completely different thread, so this avoids
     /// the need to use an explicit [`tokio::sync::Mutex`].
-    queue: Sender<tracks::Queued>,
+    queue: mpsc::Sender<tracks::Queued>,
 
-    /// The [`Sender`] which is used to inform the
+    /// The [`mpsc::Sender`] which is used to inform the
     /// [`crate::Player`] with [`crate::Message::Loaded`].
-    tx: Sender<crate::Message>,
+    tx: mpsc::Sender<crate::Message>,
 
     /// The list of tracks to download from.
     tracks: tracks::List,
@@ -84,7 +84,7 @@ impl Downloader {
 pub struct Handle {
     /// The queue receiver, which can be used to actually
     /// fetch a track from the queue.
-    queue: Receiver<tracks::Queued>,
+    queue: mpsc::Receiver<tracks::Queued>,
 }
 
 /// The output when a track is requested from the downloader.

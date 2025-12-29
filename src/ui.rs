@@ -4,7 +4,7 @@ use crate::player::Current;
 use tokio::{sync::broadcast, time::Instant};
 
 pub mod environment;
-pub mod task;
+pub mod init;
 pub use environment::Environment;
 pub mod input;
 pub mod interface;

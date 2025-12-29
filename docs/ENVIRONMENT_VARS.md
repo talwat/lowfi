@@ -6,4 +6,4 @@ lowfi has some more specific options, usually as a result of minor feature reque
 If you have some behavior you'd like to change, which is quite specific, then see if one of these options suits you.
 
 * `LOWFI_FIXED_MPRIS_NAME` - Limits the number of lowfi instances to one, but ensures the player name is always `lowfi`.
-* `LOWFI_DISABLE_UI` - Disables the UI.
+* `LOWFI_DISABLE_UI` - Disables the UI. This requires MPRIS, so that you can still actually control lowfi.

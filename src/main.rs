@@ -89,6 +89,10 @@ enum Commands {
     },
 }
 
+pub fn env(name: &str) -> bool {
+    std::env::var(name).is_ok_and(|x| x == "1")
+}
+
 /// Returns the application data directory used for persistency.
 ///
 /// The function returns the platform-specific user data directory with
@@ -121,7 +125,7 @@ async fn main() -> eyre::Result<()> {
     }
 
     let stream = audio::stream()?;
-    let environment = ui::Environment::ready(args.alternate)?;
+    let environment = ui::Environment::ready(&args)?;
     let (mut player, mut tasks) = Player::init(args, stream.mixer())
         .await
         .inspect_err(|_| environment.cleanup(false).unwrap())?;

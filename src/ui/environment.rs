@@ -15,16 +15,29 @@ pub struct Environment {
 
     /// Whether the terminal is in an alternate screen or not.
     alternate: bool,
+
+    /// Whether the UI is actually enabled at all.
+    /// This will effectively make the environment just do nothing.
+    enabled: bool,
 }
 
 impl Environment {
     /// This prepares the terminal, returning an [Environment] helpful
     /// for cleaning up afterwards.
-    pub fn ready(alternate: bool) -> super::Result<Self> {
+    pub fn ready(args: &crate::Args) -> super::Result<Self> {
+        let enabled = !crate::env("LOWFI_DISABLE_UI");
+        if !enabled {
+            return Ok(Environment {
+                enhancement: false,
+                alternate: args.alternate,
+                enabled,
+            });
+        }
+
         let mut lock = stdout().lock();
 
         crossterm::execute!(lock, Hide)?;
-        if alternate {
+        if args.alternate {
             crossterm::execute!(lock, EnterAlternateScreen, MoveTo(0, 0))?;
         }
 
@@ -39,8 +52,9 @@ impl Environment {
         }
 
         let environment = Self {
+            enabled,
             enhancement,
-            alternate,
+            alternate: args.alternate,
         };
 
         panic::set_hook(Box::new(move |info| {
@@ -54,6 +68,10 @@ impl Environment {
     /// Uses the information collected from initialization to safely close down
     /// the terminal & restore it to it's previous state.
     pub fn cleanup(&self, elegant: bool) -> super::Result<()> {
+        if !self.enabled {
+            return Ok(());
+        };
+
         let mut lock = stdout().lock();
 
         if self.alternate {

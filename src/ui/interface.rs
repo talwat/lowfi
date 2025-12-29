@@ -2,7 +2,7 @@ use crate::{
     ui::{self, State},
     Args,
 };
-use std::{env, io::stdout, time::Duration};
+use std::{io::stdout, time::Duration};
 
 pub mod clock;
 pub mod components;
@@ -59,7 +59,7 @@ impl TryFrom<&Args> for Params {
         let delta = 1.0 / f32::from(args.fps);
         let delta = Duration::from_secs_f32(delta);
 
-        let disabled = env::var("LOWFI_DISABLE_UI").is_ok_and(|x| x == "1");
+        let disabled = crate::env("LOWFI_DISABLE_UI");
         if disabled && !cfg!(feature = "mpris") {
             return Err(ui::Error::RejectedDisable);
         }

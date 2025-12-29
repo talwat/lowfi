@@ -1,7 +1,6 @@
 //! Contains the code for the MPRIS server & other helper functions.
 
 use std::{
-    env,
     hash::{DefaultHasher, Hash, Hasher},
     process,
     sync::Arc,
@@ -328,7 +327,7 @@ impl Server {
         sender: mpsc::Sender<Message>,
         receiver: broadcast::Receiver<Update>,
     ) -> ui::Result<Server> {
-        let suffix = if env::var("LOWFI_FIXED_MPRIS_NAME").is_ok_and(|x| x == "1") {
+        let suffix = if crate::env("LOWFI_FIXED_MPRIS_NAME") {
             String::from("lowfi")
         } else {
             format!("lowfi.{}.instance{}", state.tracklist, process::id())

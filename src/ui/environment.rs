@@ -27,7 +27,7 @@ impl Environment {
     pub fn ready(args: &crate::Args) -> super::Result<Self> {
         let enabled = !crate::env("LOWFI_DISABLE_UI");
         if !enabled {
-            return Ok(Environment {
+            return Ok(Self {
                 enhancement: false,
                 alternate: args.alternate,
                 enabled,
@@ -70,7 +70,7 @@ impl Environment {
     pub fn cleanup(&self, elegant: bool) -> super::Result<()> {
         if !self.enabled {
             return Ok(());
-        };
+        }
 
         let mut lock = stdout().lock();
 

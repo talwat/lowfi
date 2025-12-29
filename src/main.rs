@@ -89,6 +89,8 @@ enum Commands {
     },
 }
 
+/// Shorthand to get a boolean environment variable.
+#[inline]
 pub fn env(name: &str) -> bool {
     std::env::var(name).is_ok_and(|x| x == "1")
 }
@@ -98,6 +100,7 @@ pub fn env(name: &str) -> bool {
 /// The function returns the platform-specific user data directory with
 /// a `lowfi` subfolder. Callers may use this path to store config,
 /// bookmarks, and other persistent files.
+#[inline]
 pub fn data_dir() -> crate::Result<PathBuf> {
     let dir = dirs::data_dir().unwrap().join("lowfi");
 

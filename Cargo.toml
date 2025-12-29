@@ -1,6 +1,6 @@
 [package]
 name = "lowfi"
-version = "2.0.1-dev"
+version = "2.0.2-dev"
 rust-version = "1.83.0"
 edition = "2021"
 description = "An extremely simple lofi player."

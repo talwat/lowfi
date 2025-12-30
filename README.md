@@ -1,5 +1,5 @@
 
-![lowfi logo](./docs/media/logo.svg)
+![lowfi logo](./docs/media/header.svg)
 
 ---
 

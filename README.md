@@ -1,4 +1,7 @@
-# lowfi
+
+![lowfi logo](./docs/media/header.svg)
+
+---
 
 [[Version française](./docs/fr/README.md)]
 

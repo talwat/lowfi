@@ -108,7 +108,7 @@ mod decoded {
 
 #[cfg(test)]
 mod list {
-    use crate::{download::PROGRESS, tracks::List};
+    use crate::{downloader::Progress, tracks::List};
     use reqwest::Client;
 
     #[test]
@@ -172,7 +172,7 @@ mod list {
 
         let client = Client::new();
         let track = list
-            .random(&client, &PROGRESS, &mut fastrand::Rng::new())
+            .random(&client, Progress::new(), &mut fastrand::Rng::new())
             .await
             .unwrap();
         assert_eq!(track.display, "Apple Juice");

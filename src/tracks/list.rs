@@ -1,10 +1,7 @@
 //! The module containing all of the logic behind track lists,
 //! as well as obtaining track names & downloading the raw audio data
 
-use std::{
-    cmp::min,
-    sync::atomic::{AtomicU8, Ordering},
-};
+use std::cmp::min;
 
 use bytes::{BufMut as _, Bytes, BytesMut};
 use futures_util::StreamExt as _;
@@ -13,6 +10,7 @@ use tokio::fs;
 
 use crate::{
     data_dir,
+    downloader::Progress,
     tracks::{
         self,
         error::{self, WithTrackContext as _},
@@ -70,7 +68,7 @@ impl List {
         &self,
         track: &str,
         client: &Client,
-        progress: Option<&AtomicU8>,
+        progress: Option<Progress>,
     ) -> tracks::Result<(Bytes, String)> {
         // If the track has a protocol, then we should ignore the base for it.
         let path = if track.contains("://") {
@@ -114,8 +112,7 @@ impl List {
             while let Some(item) = stream.next().await {
                 let chunk = item.track(track)?;
                 downloaded = min(downloaded + (chunk.len() as u64), total);
-                let rounded = ((downloaded as f64) / (total as f64) * 100.0).round() as u8;
-                progress.store(rounded, Ordering::Relaxed);
+                progress.set(downloaded as f32 / total as f32);
 
                 bytes.put(chunk);
             }
@@ -133,7 +130,7 @@ impl List {
     pub async fn random(
         &self,
         client: &Client,
-        progress: &AtomicU8,
+        progress: Progress,
         rng: &mut fastrand::Rng,
     ) -> tracks::Result<Queued> {
         let (path, display) = self.random_path(rng);

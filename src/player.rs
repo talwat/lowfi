@@ -1,11 +1,12 @@
-use std::sync::Arc;
+//! The player, which contains all of the core logic behind the music player.
 
+use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver};
 
 use crate::{
     audio::waiter,
     bookmark::Bookmarks,
-    download,
+    downloader,
     tracks::{self, List},
     ui,
     volume::PersistentVolume,
@@ -20,7 +21,7 @@ use crate::{
 pub enum Current {
     /// Waiting for a track to arrive. The optional `Progress` is used to
     /// indicate global download progress when present.
-    Loading(Option<download::Progress>),
+    Loading(Option<downloader::Progress>),
 
     /// A decoded track that can be played; contains the track `Info`.
     Track(tracks::Info),
@@ -52,7 +53,7 @@ pub struct Player {
     current: Current,
 
     /// Background downloader that fills the internal queue.
-    downloader: download::Handle,
+    downloader: downloader::Handle,
 
     /// Receiver for incoming `Message` commands.
     rx: Receiver<crate::Message>,
@@ -158,10 +159,10 @@ impl Player {
 
                     self.sink.stop();
                     match self.downloader.track() {
-                        download::Output::Loading(progress) => {
+                        downloader::Output::Loading(progress) => {
                             self.set_current(Current::Loading(progress))?;
                         }
-                        download::Output::Queued(queued) => self.play(queued)?,
+                        downloader::Output::Queued(queued) => self.play(queued)?,
                     }
                 }
                 Message::Play => {

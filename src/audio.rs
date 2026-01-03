@@ -1,3 +1,5 @@
+//! Some simple audio related utilities.
+
 pub mod waiter;
 
 /// This gets the output stream while also shutting up alsa with [libc].

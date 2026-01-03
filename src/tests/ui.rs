@@ -125,7 +125,7 @@ mod interface {
     use tokio::time::Instant;
 
     use crate::{
-        download::PROGRESS,
+        downloader::Progress,
         player::Current,
         tracks,
         ui::{Interface, State},
@@ -175,9 +175,9 @@ mod interface {
     #[tokio::test]
     async fn progress() {
         let sink = Arc::new(rodio::Sink::new().0);
-        PROGRESS.store(50, std::sync::atomic::Ordering::Relaxed);
+        Progress::new().set(0.5);
         let mut state = State::initial(sink, String::from("test"));
-        state.current = Current::Loading(Some(&PROGRESS));
+        state.current = Current::Loading(Some(Progress::new()));
 
         let menu = Interface::default().menu(&mut state);
 

@@ -1,3 +1,5 @@
+//! Responsible for the actual graphical interface of lowfi.
+
 use crate::{
     ui::{self, State},
     Args,

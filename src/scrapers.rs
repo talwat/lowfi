@@ -1,3 +1,4 @@
+//! Built in web scraping, which isn't guaranteed to have a unified UI.
 #![allow(clippy::all)]
 
 use std::path::{Path, PathBuf};

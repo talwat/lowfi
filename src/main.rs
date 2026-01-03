@@ -1,11 +1,12 @@
 //! An extremely simple lofi player.
+
 use crate::player::Player;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 pub mod audio;
 pub mod bookmark;
-pub mod download;
+pub mod downloader;
 pub mod error;
 pub mod message;
 pub mod player;

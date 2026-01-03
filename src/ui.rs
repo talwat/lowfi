@@ -1,3 +1,5 @@
+//! Everything which has to do with the user interface, including both input and output.
+
 use std::sync::Arc;
 
 use crate::player::Current;

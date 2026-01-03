@@ -1,7 +1,7 @@
 //! Task management.
 //!
-//! This file aims to abstract a lot of annoying Rust async logic, which may be subject to change.
-//! For those who are not intimately familiar with async rust, this will be very confusing.
+//! This file aims to abstract a lot of potentially annoying Rust async logic, which may be
+//! subject to change.
 
 use futures_util::TryFutureExt;
 use std::future::Future;

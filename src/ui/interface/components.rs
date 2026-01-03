@@ -111,7 +111,7 @@ impl ActionBar {
 pub fn action(state: &ui::State, width: usize) -> String {
     let action = match state.current.clone() {
         Current::Loading(progress) => {
-            ActionBar::Loading(progress.map(|x| x.load(std::sync::atomic::Ordering::Relaxed)))
+            ActionBar::Loading(progress.map(|x| (x.get() * 100.0).round() as u8))
         }
         Current::Track(info) => {
             if state.sink.volume() < 0.01 {

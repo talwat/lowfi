@@ -1,3 +1,5 @@
+//! Contains the initialization and other handling of the terminal environment.
+
 use std::{io::stdout, panic};
 
 use crossterm::{

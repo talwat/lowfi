@@ -1,3 +1,5 @@
+//! All of the logic and state relating to the downloader.
+
 use std::{
     sync::atomic::{self, AtomicBool, AtomicU8},
     time::Duration,
@@ -13,14 +15,40 @@ use tokio::sync::mpsc;
 /// indicate to the UI that a download is in progress.
 static LOADING: AtomicBool = AtomicBool::new(false);
 
-/// Global download progress in the range 0..=100 updated atomically.
+/// Global download progress as an integer updated atomically.
 ///
-/// The UI can read this `AtomicU8` to render a global progress indicator
-/// when there isn't an immediately queued track available.
-pub(crate) static PROGRESS: AtomicU8 = AtomicU8::new(0);
+/// This is just a [`AtomicU8`] from 0 to 255, really representing
+/// a progress percentage as just a simple integer. For instance,
+/// 0.5 would be represented here as 127.
+static PROGRESS: AtomicU8 = AtomicU8::new(0);
 
-/// A convenient alias for the progress `AtomicU8` pointer type.
-pub type Progress = &'static AtomicU8;
+/// A convenient wrapper for the global progress. This is updated by the downloader,
+/// and then accessed by the UI to display progress when there isn't an available
+/// queued track.
+#[derive(Clone, Copy, Debug)]
+pub struct Progress(&'static AtomicU8);
+
+impl Progress {
+    /// Creates a new handle to the global progress.
+    pub fn new() -> Self {
+        Self(&PROGRESS)
+    }
+
+    /// Sets the global progress.
+    ///
+    /// `value` must be between 0 and 1.
+    pub fn set(&self, value: f32) {
+        self.0.store(
+            (value * f32::from(u8::MAX)).round() as u8,
+            atomic::Ordering::Relaxed,
+        );
+    }
+
+    /// Returns the global progress as a [`f32`] between 0 and 1.
+    pub fn get(&self) -> f32 {
+        f32::from(self.0.load(atomic::Ordering::Relaxed)) / f32::from(u8::MAX)
+    }
+}
 
 /// The downloader, which has all of the state necessary
 /// to download tracks and add them to the queue.
@@ -57,7 +85,7 @@ impl Downloader {
         loop {
             let result = self
                 .tracks
-                .random(&self.client, &PROGRESS, &mut self.rng)
+                .random(&self.client, Progress::new(), &mut self.rng)
                 .await;
 
             match result {
@@ -106,7 +134,7 @@ impl Handle {
     pub fn track(&mut self) -> Output {
         self.queue.try_recv().map_or_else(|_| {
                 LOADING.store(true, atomic::Ordering::Relaxed);
-                Output::Loading(Some(&PROGRESS))
+                Output::Loading(Some(Progress::new()))
             }, Output::Queued,
         )
     }

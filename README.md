@@ -72,7 +72,7 @@ yay -S lowfi
 zypper install lowfi
 ```
 
-### Debian
+### Debian and Ubuntu
 
 > [!NOTE]
 > This uses an unofficial Debian repository maintained by [Dario Griffo](https://github.com/dariogriffo).

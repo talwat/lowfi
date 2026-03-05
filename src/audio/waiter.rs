@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use rodio::Sink;
 use tokio::{
     sync::{mpsc, Notify},
     time,
@@ -9,7 +8,7 @@ use tokio::{
 /// Background loop that waits for the sink to drain and then attempts
 /// to send a `Message::Next` to the provided channel.
 async fn waiter(
-    sink: Arc<Sink>,
+    sink: Arc<rodio::Player>,
     tx: mpsc::Sender<crate::Message>,
     notify: Arc<Notify>,
 ) -> crate::Result<()> {
@@ -44,7 +43,7 @@ impl Handle {
 impl crate::Tasks {
     /// Create a new `Handle` which watches the provided `sink` and sends
     /// `Message::Next` down `tx` when the sink becomes empty.
-    pub fn waiter(&mut self, sink: Arc<Sink>) -> Handle {
+    pub fn waiter(&mut self, sink: Arc<rodio::Player>) -> Handle {
         let notify = Arc::new(Notify::new());
         self.spawn(waiter(sink, self.tx(), notify.clone()));
 

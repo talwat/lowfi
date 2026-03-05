@@ -12,7 +12,6 @@ use mpris_server::{
     LoopStatus, Metadata, PlaybackRate, PlaybackStatus, PlayerInterface, Property, RootInterface,
     Time, TrackId, Volume,
 };
-use rodio::Sink;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::{player::Current, ui::Update};
@@ -52,7 +51,7 @@ impl Into<fdo::Error> for crate::Error {
 
 /// The actual MPRIS player.
 pub struct Player {
-    sink: Arc<Sink>,
+    sink: Arc<rodio::Player>,
     current: ArcSwap<Current>,
     list: String,
     sender: Sender,

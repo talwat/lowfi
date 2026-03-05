@@ -26,8 +26,8 @@ pub enum Error {
     #[error("C string null error")]
     FfiNull(#[from] std::ffi::NulError),
 
-    #[error("audio playing error")]
-    Rodio(#[from] rodio::StreamError),
+    #[error("error interfacing with audio")]
+    Rodio(#[from] rodio::DeviceSinkError),
 
     #[error("couldn't send internal message")]
     Send(#[from] mpsc::error::SendError<crate::Message>),

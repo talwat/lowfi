@@ -59,7 +59,7 @@ pub struct Player {
     rx: Receiver<crate::Message>,
 
     /// Shared audio sink used for playback.
-    sink: Arc<rodio::Sink>,
+    sink: Arc<rodio::Player>,
 
     /// UI handle for rendering and input.
     ui: ui::Handle,
@@ -105,7 +105,7 @@ impl Player {
         tx.send(Message::Init).await?;
         let list = List::load(args.track_list.as_ref()).await?;
 
-        let sink = Arc::new(rodio::Sink::connect_new(mixer));
+        let sink = Arc::new(rodio::Player::connect_new(mixer));
         let state = ui::State::initial(Arc::clone(&sink), list.name.clone());
 
         let volume = PersistentVolume::load().await?;

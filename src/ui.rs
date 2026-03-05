@@ -54,7 +54,7 @@ pub enum Error {
 #[derive(Clone)]
 pub struct State {
     /// The audio sink.
-    pub sink: Arc<rodio::Sink>,
+    pub sink: Arc<rodio::Player>,
 
     /// The current track, which is updated by way of an [`Update`].
     pub current: Current,
@@ -72,7 +72,7 @@ pub struct State {
 
 impl State {
     /// Creates an initial UI state.
-    pub fn initial(sink: Arc<rodio::Sink>, list: String) -> Self {
+    pub fn initial(sink: Arc<rodio::Player>, list: String) -> Self {
         Self {
             sink,
             tracklist: list,

@@ -5,9 +5,9 @@ pub mod waiter;
 /// This gets the output stream while also shutting up alsa with [libc].
 /// Uses raw libc calls, and therefore is functional only on Linux.
 #[cfg(target_os = "linux")]
-fn silent_get_output_stream() -> crate::Result<rodio::OutputStream> {
+fn silent_get_output_stream() -> crate::Result<rodio::MixerDeviceSink> {
     use libc::freopen;
-    use rodio::OutputStreamBuilder;
+    use rodio::DeviceSinkBuilder;
     use std::ffi::CString;
 
     // Get the file descriptor to stderr from libc.
@@ -29,8 +29,8 @@ fn silent_get_output_stream() -> crate::Result<rodio::OutputStream> {
         freopen(null.as_ptr(), mode.as_ptr(), stderr);
     };
 
-    // Make the OutputStream while stderr is still redirected to /dev/null.
-    let stream = OutputStreamBuilder::open_default_stream()?;
+    // Make the MixerDeviceSink while stderr is still redirected to /dev/null.
+    let stream = DeviceSinkBuilder::open_default_sink()?;
 
     // Redirect back to the current terminal, so that other output isn't silenced.
     let tty = CString::new("/dev/tty")?;
@@ -44,11 +44,11 @@ fn silent_get_output_stream() -> crate::Result<rodio::OutputStream> {
 }
 
 /// Creates an audio stream, doing so silently on Linux.
-pub fn stream() -> crate::Result<rodio::OutputStream> {
+pub fn stream() -> crate::Result<rodio::MixerDeviceSink> {
     #[cfg(target_os = "linux")]
     let mut stream = silent_get_output_stream()?;
     #[cfg(not(target_os = "linux"))]
-    let mut stream = rodio::OutputStreamBuilder::open_default_stream()?;
+    let mut stream = rodio::DeviceSinkBuilder::open_default_stream()?;
     stream.log_on_drop(false);
 
     Ok(stream)

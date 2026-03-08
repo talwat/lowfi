@@ -185,4 +185,46 @@ impl List {
 
         Ok(Self::new(name, raw, path.to_str()))
     }
+
+    /// Loads all track lists from the data directory. And prepares to show user track options.
+    pub async fn load_all() -> tracks::Result<Vec<Self>> {
+        let mut full_list: Vec<Self> = Vec::new();
+        full_list.push(Self::new(
+            "chillhop",
+            include_str!("../../data/chillhop.txt"),
+            None,
+        ));
+
+        let dir = data_dir().map_err(|_| error::Kind::InvalidPath)?;
+        let mut entries = fs::read_dir(dir).await?;
+
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+
+            // filter for .txt
+            if path.extension().and_then(|x| x.to_str()) != Some("txt") {
+                continue;
+            }
+
+            // get filename as str.
+            if let Some(track_name) = path.file_name().and_then(|n| n.to_str()) {
+                if track_name == "volume.txt" || track_name == "bookmarks.txt" {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+
+            let raw = fs::read_to_string(path.clone()).await?;
+
+            let name = path
+                .file_stem()
+                .and_then(|x| x.to_str())
+                .ok_or(tracks::error::Kind::InvalidName)
+                .track("track list")?;
+
+            full_list.push(Self::new(name, raw.as_ref(), path.to_str()));
+        }
+        Ok(full_list)
+    }
 }

@@ -69,6 +69,10 @@ pub struct Args {
     #[clap(long, short, alias = "list", alias = "tracks", short_alias = 'l', default_value_t = String::from("chillhop"))]
     track_list: String,
 
+    /// List Track options
+    #[clap(long, short, alias = "options", short_alias = 'o')]
+    options: bool,
+
     /// Internal song buffer size.
     #[clap(long, short = 's', alias = "buffer", default_value_t = 5, value_parser = clap::value_parser!(u32).range(2..))]
     buffer_size: u32,
@@ -116,6 +120,14 @@ pub fn data_dir() -> crate::Result<PathBuf> {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> eyre::Result<()> {
     let args = Args::parse();
+
+    if args.options {
+        let option_list = tracks::List::load_all().await?;
+        for list in option_list {
+            println!("{}", list.name);
+        }
+        return Ok(());
+    }
 
     #[cfg(feature = "scrape")]
     if let Some(command) = &args.command {

@@ -268,6 +268,11 @@ pub struct Server {
 impl Server {
     /// Handles a player message to update the state of the MPRIS player.
     pub async fn handle(&mut self, message: &crate::Message) -> ui::Result<()> {
+        while let Ok(update) = self.receiver.try_recv() {
+            if let Update::Track(current) = update {
+                self.player().current.swap(Arc::new(current));
+            }
+        }
         match message {
             Message::ChangeVolume(_) | Message::SetVolume(_) => self.update_volume().await,
             Message::Play | Message::Pause | Message::PlayPause => self.update_playback().await,
@@ -281,12 +286,6 @@ impl Server {
         &mut self,
         properties: impl IntoIterator<Item = mpris_server::Property> + Send + Sync,
     ) -> ui::Result<()> {
-        while let Ok(update) = self.receiver.try_recv() {
-            if let Update::Track(current) = update {
-                self.player().current.swap(Arc::new(current));
-            }
-        }
-
         self.inner.properties_changed(properties).await?;
         Ok(())
     }
@@ -310,7 +309,12 @@ impl Server {
     /// Updates the current track data with the current information.
     async fn update_metadata(&mut self) -> ui::Result<()> {
         let metadata = self.player().metadata().await?;
-        self.changed(vec![Property::Metadata(metadata)]).await?;
+        let status = self.player().playback_status().await?;
+        self.changed(vec![
+            Property::Metadata(metadata),
+            Property::PlaybackStatus(status),
+        ])
+        .await?;
 
         Ok(())
     }

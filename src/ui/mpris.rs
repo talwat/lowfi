@@ -273,6 +273,7 @@ impl Server {
                 self.player().current.swap(Arc::new(current));
             }
         }
+
         match message {
             Message::ChangeVolume(_) | Message::SetVolume(_) => self.update_volume().await,
             Message::Play | Message::Pause | Message::PlayPause => self.update_playback().await,

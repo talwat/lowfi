@@ -65,6 +65,8 @@ Also see [Extra Features](#extra-features) for extended functionality.
 If you're struggling or unwilling to use cargo, you can just download the
 precompiled binaries from the [latest release](https://github.com/talwat/lowfi/releases/latest).
 
+[![Packaging status](https://repology.org/badge/vertical-allrepos/lowfi.svg)](https://repology.org/project/lowfi/versions)
+
 ### AUR
 
 ```sh

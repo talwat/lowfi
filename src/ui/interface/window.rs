@@ -98,15 +98,25 @@ impl Window {
         ))
     }
 
+    pub fn clear(&mut self) {}
+
     /// Actually draws the window, with each element in `content` being on a new line.
+    ///
+    /// If `log` is [`Some`], then it will also print it after clearing, but before the lowfi window.
     pub fn draw(
         &mut self,
         mut writer: impl std::io::Write,
+        log: Option<String>,
         content: Vec<String>,
     ) -> ui::Result<()> {
         let (rendered, height) = self.render(content)?;
+        crossterm::queue!(writer, Clear(ClearType::FromCursorDown), MoveToColumn(0))?;
 
-        crossterm::execute!(
+        if let Some(log) = log {
+            crossterm::queue!(writer, Print(log), Print("\n"), MoveToColumn(0))?;
+        }
+
+        crossterm::queue!(
             writer,
             Clear(ClearType::FromCursorDown),
             MoveToColumn(0),
@@ -115,6 +125,7 @@ impl Window {
             MoveUp(height - 1),
         )?;
 
+        writer.flush()?;
         Ok(())
     }
 }

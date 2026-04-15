@@ -113,12 +113,7 @@ impl Player {
 
         let ui = tasks.ui(state, &args).await?;
         let player = Self {
-            downloader: tasks.downloader(
-                args.buffer_size as usize,
-                args.timeout,
-                ui.logger(),
-                list,
-            )?,
+            downloader: tasks.downloader(&args, ui.logger(), list)?,
             ui,
             waiter: tasks.waiter(Arc::clone(&sink)),
             bookmarks: Bookmarks::load().await?,

@@ -68,6 +68,9 @@ pub struct Downloader {
     /// The list of tracks to download from.
     tracks: tracks::List,
 
+    /// Whether to log more debug information.
+    debug: bool,
+
     /// The [`reqwest`] client to use for downloads.
     client: Client,
 
@@ -86,15 +89,26 @@ impl Downloader {
         const ERROR_TIMEOUT: Duration = Duration::from_secs(1);
 
         PROGRESS.store(0, atomic::Ordering::Relaxed);
-        if let tracks::error::Kind::Request(reqwest_error) = &error.kind {
-            if let Some(status) = reqwest_error.status() {
-                let message = format!(
-                    "track list error code: {} on track: {}",
-                    status.as_u16(),
-                    error.track.clone().unwrap()
-                );
+
+        let track_suffix = if let Some(x) = error.track.as_ref() {
+            format!(" track: {x}")
+        } else {
+            String::new()
+        };
+
+        match &error.kind {
+            tracks::error::Kind::Request(x) => {
+                if let Some(status) = x.status() {
+                    let message =
+                        format!("track list error code: {}{track_suffix}", status.as_u16());
+                    self.logger.info(message).await?;
+                }
+            }
+            error if self.debug => {
+                let message = format!("debug: error: {}{track_suffix}", error);
                 self.logger.info(message).await?;
             }
+            _ => {}
         }
 
         if !error.timeout() {
@@ -116,6 +130,12 @@ impl Downloader {
 
             match result {
                 Ok(track) => {
+                    if self.debug {
+                        self.logger
+                            .info(format!("debug: adding {} to queue", track.display))
+                            .await?;
+                    }
+
                     self.queue.send(track).await?;
                     if LOADING.load(atomic::Ordering::Relaxed) {
                         self.tx.send(crate::Message::Loaded).await?;
@@ -167,8 +187,7 @@ impl crate::Tasks {
     /// `tx` specifies the [`Sender`] to be notified with [`crate::Message::Loaded`].
     pub fn downloader(
         &mut self,
-        size: usize,
-        timeout: u64,
+        args: &crate::Args,
         logger: Logger,
         tracks: tracks::List,
     ) -> crate::Result<Handle> {
@@ -178,11 +197,12 @@ impl crate::Tasks {
                 "/",
                 env!("CARGO_PKG_VERSION")
             ))
-            .timeout(Duration::from_secs(timeout))
+            .timeout(Duration::from_secs(args.timeout))
             .build()?;
 
-        let (qtx, qrx) = mpsc::channel(size - 1);
+        let (qtx, qrx) = mpsc::channel(args.buffer_size as usize - 1);
         let downloader = Downloader {
+            debug: args.debug,
             logger,
             queue: qtx,
             tx: self.tx(),

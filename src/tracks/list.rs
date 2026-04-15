@@ -28,8 +28,8 @@ pub struct List {
     #[allow(dead_code)]
     pub name: String,
 
-    /// Just the raw file, but seperated by `/n` (newlines).
-    /// `lines[0]` is the base/heaeder, with the rest being tracks.
+    /// Just the raw file, but separated by `/n` (newlines).
+    /// `lines[0]` is the base/header, with the rest being tracks.
     pub lines: Vec<String>,
 
     /// The file path which the list was read from.
@@ -95,7 +95,13 @@ impl List {
             let result = tokio::fs::read(path.clone()).await.track(x)?;
             result.into()
         } else {
-            let response = client.get(path.clone()).send().await.track(track)?;
+            let response = client
+                .get(path.clone())
+                .send()
+                .await?
+                .error_for_status()
+                .track(track)?;
+
             let Some(progress) = progress else {
                 let bytes = response.bytes().await.track(track)?;
                 return Ok((bytes, path));

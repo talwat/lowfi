@@ -13,7 +13,18 @@ pub mod window;
 
 pub use clock::Clock;
 pub use titlebar::TitleBar;
+use tokio::sync::mpsc;
 pub use window::Window;
+
+#[derive(Clone)]
+pub struct Logger(mpsc::Sender<String>);
+
+impl Logger {
+    pub async fn info(&self, message: String) -> ui::Result<()> {
+        self.0.send(message).await?;
+        Ok(())
+    }
+}
 
 /// UI-specific parameters and options.
 #[derive(Copy, Clone, Debug)]
@@ -93,6 +104,13 @@ pub struct Interface {
     /// The interface parameters that control smaller
     /// aesthetic features and options.
     params: Params,
+
+    /// Receiver for any truly import live time logs about tracks.
+    pub logs: mpsc::Receiver<String>,
+
+    /// An instance of the logger which can be cloned to give tasks
+    /// access to logging.
+    pub(super) logger: Logger,
 }
 
 impl Default for Interface {
@@ -106,10 +124,13 @@ impl Interface {
     /// Creates a new interface.
     pub fn new(params: Params) -> ui::Result<Self> {
         let mut window = Window::new(params.width, params.borderless, false, true);
+        let (sender, logs) = mpsc::channel(8);
 
         Ok(Self {
             clock: params.clock.then(|| Clock::new(&mut window)),
             interval: tokio::time::interval(params.delta),
+            logger: Logger(sender),
+            logs,
             window,
             params,
         })
@@ -143,6 +164,10 @@ impl Interface {
     /// Draws the terminal. This will also wait for the specified
     /// delta to pass before completing.
     pub async fn draw(&mut self, state: &State) -> super::Result<()> {
+        if let Ok(log) = self.logs.try_recv() {
+            println!("{}", log)
+        }
+
         if let Some(x) = self.clock.as_mut() {
             x.update(&mut self.window);
         }

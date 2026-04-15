@@ -13,13 +13,17 @@ impl crate::Tasks {
         let mpris = ui::mpris::Server::new(state.clone(), self.tx(), urx.resubscribe()).await?;
 
         let params = interface::Params::try_from(args)?;
+        let interface = interface::Interface::new(params)?;
+        let logger = interface.logger.clone();
+
         if params.enabled {
-            self.spawn(ui::run(urx, state, params));
+            self.spawn(ui::run(urx, interface, state));
             self.spawn(input::listen(self.tx()));
         }
 
         Ok(ui::Handle {
             updater: utx,
+            logger,
             #[cfg(feature = "mpris")]
             mpris,
         })

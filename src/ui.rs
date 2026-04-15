@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::player::Current;
+use crate::{player::Current, ui::interface::Logger};
 use tokio::{sync::broadcast, time::Instant};
 
 pub mod environment;
@@ -33,6 +33,9 @@ pub enum Error {
 
     #[error("sharing state between backend and frontend failed: {0}")]
     StateSend(#[from] tokio::sync::broadcast::error::SendError<Update>),
+
+    #[error("error sending a log: {0}")]
+    LogSend(#[from] tokio::sync::mpsc::error::SendError<String>),
 
     #[error("you can't disable the UI without MPRIS!")]
     RejectedDisable,
@@ -114,6 +117,9 @@ pub struct Handle {
     /// The MPRIS server, which is more or less a handle to the actual MPRIS thread.
     #[cfg(feature = "mpris")]
     pub mpris: mpris::Server,
+
+    /// Logger which can be used to log important events.
+    logger: Logger,
 }
 
 impl Handle {
@@ -121,6 +127,11 @@ impl Handle {
     pub fn update(&mut self, update: Update) -> crate::Result<()> {
         self.updater.send(update)?;
         Ok(())
+    }
+
+    /// Creates a new handle to log events.
+    pub fn logger(&self) -> Logger {
+        self.logger.clone()
     }
 }
 
@@ -134,11 +145,9 @@ impl Handle {
 /// and `params` specifies aesthetic options that are specified by the user.
 pub async fn run(
     mut updater: broadcast::Receiver<Update>,
+    mut interface: Interface,
     mut state: State,
-    params: interface::Params,
 ) -> Result<()> {
-    let mut interface = Interface::new(params)?;
-
     loop {
         if let Ok(message) = updater.try_recv() {
             match message {

@@ -111,9 +111,15 @@ impl Player {
         let volume = PersistentVolume::load().await?;
         sink.set_volume(volume.float());
 
+        let ui = tasks.ui(state, &args).await?;
         let player = Self {
-            ui: tasks.ui(state, &args).await?,
-            downloader: tasks.downloader(args.buffer_size as usize, args.timeout, list)?,
+            downloader: tasks.downloader(
+                args.buffer_size as usize,
+                args.timeout,
+                ui.logger(),
+                list,
+            )?,
+            ui,
             waiter: tasks.waiter(Arc::clone(&sink)),
             bookmarks: Bookmarks::load().await?,
             current: Current::default(),

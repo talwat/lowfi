@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use crate::tracks;
+use crate::{tracks, ui::interface::Logger};
 use reqwest::Client;
 use tokio::sync::mpsc;
 
@@ -73,15 +73,41 @@ pub struct Downloader {
 
     /// The RNG generator to use.
     rng: fastrand::Rng,
+
+    /// Logger, to report any download errors to the UI.
+    logger: Logger,
 }
 
 impl Downloader {
+    /// Handles an error encountered by the downloader.
+    ///
+    /// If the error isn't a timeout, it will also stall for some arbitrary error timeout.
+    async fn handle_error(&mut self, error: tracks::Error) -> crate::Result<()> {
+        const ERROR_TIMEOUT: Duration = Duration::from_secs(1);
+
+        PROGRESS.store(0, atomic::Ordering::Relaxed);
+        if let tracks::error::Kind::Request(reqwest_error) = &error.kind {
+            if let Some(status) = reqwest_error.status() {
+                let message = format!(
+                    "track list error code: {} on track: {}",
+                    status.as_u16(),
+                    error.track.clone().unwrap()
+                );
+                self.logger.info(message).await?;
+            }
+        }
+
+        if !error.timeout() {
+            tokio::time::sleep(ERROR_TIMEOUT).await;
+        }
+
+        Ok(())
+    }
+
     /// Actually runs the downloader, consuming it and beginning
     /// the cycle of downloading tracks and reporting to the
     /// rest of the program.
     async fn run(mut self) -> crate::Result<()> {
-        const ERROR_TIMEOUT: Duration = Duration::from_secs(1);
-
         loop {
             let result = self
                 .tracks
@@ -96,12 +122,7 @@ impl Downloader {
                         LOADING.store(false, atomic::Ordering::Relaxed);
                     }
                 }
-                Err(error) => {
-                    PROGRESS.store(0, atomic::Ordering::Relaxed);
-                    if !error.timeout() {
-                        tokio::time::sleep(ERROR_TIMEOUT).await;
-                    }
-                }
+                Err(error) => self.handle_error(error).await?,
             }
         }
     }
@@ -148,6 +169,7 @@ impl crate::Tasks {
         &mut self,
         size: usize,
         timeout: u64,
+        logger: Logger,
         tracks: tracks::List,
     ) -> crate::Result<Handle> {
         let client = Client::builder()
@@ -161,6 +183,7 @@ impl crate::Tasks {
 
         let (qtx, qrx) = mpsc::channel(size - 1);
         let downloader = Downloader {
+            logger,
             queue: qtx,
             tx: self.tx(),
             tracks,

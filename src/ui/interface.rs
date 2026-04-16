@@ -16,10 +16,12 @@ pub use titlebar::TitleBar;
 use tokio::sync::mpsc;
 pub use window::Window;
 
+/// Wrapper around [`mpsc::Sender`] which provides a nice API for logging.
 #[derive(Clone)]
 pub struct Logger(mpsc::Sender<String>);
 
 impl Logger {
+    /// Send an informational log.
     pub async fn info(&self, message: String) -> ui::Result<()> {
         self.0.send(message).await?;
         Ok(())

@@ -98,8 +98,6 @@ impl Window {
         ))
     }
 
-    pub fn clear(&mut self) {}
-
     /// Actually draws the window, with each element in `content` being on a new line.
     ///
     /// If `log` is [`Some`], then it will also print it after clearing, but before the lowfi window.

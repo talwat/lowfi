@@ -20,7 +20,7 @@ by default are from [chillhop](https://chillhop.com/). Read
 
 ## Why?
 
-I really hate modern music platforms, and I wanted a small, simple  
+I really hate modern music platforms, and I wanted a small, simple
 app that would just play random ambient music without video and other fluff.
 
 Beyond that, it was also designed to be fairly resilient to inconsistent networks,
@@ -33,11 +33,21 @@ and as such it buffers 5 whole songs at a time instead of parts of the same song
 > If you're interested in maintaining a package for `lowfi`
 > on package managers such as homebrew and the like, open an issue.
 
-### Dependencies
+### Methods
 
-You'll need Rust 1.83.0+.
+- [Cargo](#cargo)
+- [Release Binaries](#release-binaries)
+- [AUR](#aur)
+- [openSUSE](#opensuse)
+- [Debian and Ubuntu](#debian-and-ubuntu)
+- [Fedora (COPR)](#fedora-copr)
+- [Manual](#manual)
 
-On MacOS & Windows, no extra dependencies are needed.
+### Cargo
+
+Installing with cargo is universal, but carries a few dependencies with it.
+
+Firstly, you'll need Rust 1.83.0+. On MacOS & Windows, no extra dependencies are needed.
 
 On Linux, you'll also need openssl & alsa, as well as their headers.
 
@@ -46,9 +56,7 @@ On Linux, you'll also need openssl & alsa, as well as their headers.
 
 Make sure to also install `pulseaudio-alsa` if you're using PulseAudio.
 
-### Cargo
-
-The recommended installation method is to use cargo:
+Then, simply run:
 
 ```sh
 cargo install lowfi
@@ -57,7 +65,7 @@ cargo install lowfi
 cargo install lowfi --features mpris
 ```
 
-and making sure `$HOME/.cargo/bin` is added to `$PATH`.
+And make sure `$HOME/.cargo/bin` is added to `$PATH`.
 Also see [Extra Features](#extra-features) for extended functionality.
 
 ### Release Binaries
@@ -161,10 +169,11 @@ slightly tweak the UI or behavior of the menu. The flags can be viewed with `low
 | `-a`, `--alternate`                 | Use an alternate terminal screen                    |
 | `-m`, `--minimalist`                | Hide the bottom control bar                         |
 | `-b`, `--borderless`                | Exclude borders in UI                               |
+| `-c`, `--clock`                     | Include a clock                                     |
 | `-p`, `--paused`                    | Start lowfi paused                                  |
 | `-f`, `--fps`                       | FPS of the UI [default: 12]                         |
 | `--timeout`                         | Timeout in seconds for music downloads [default: 3] |
-| `-d`, `--debug`                     | Include ALSA & other logs                           |
+| `-d`, `--debug`                     | Include ALSA & other logs meant for debugging       |
 | `-w`, `--width <WIDTH>`             | Width of the player, from 0 to 32 [default: 3]      |
 | `-t`, `--track-list <TRACK_LIST>`   | Use a [custom track list](#custom-track-lists)      |
 | `-s`, `--buffer-size <BUFFER_SIZE>` | Internal song buffer size [default: 5]              |
@@ -206,7 +215,7 @@ If you are dealing with the 1% using another audio format which is in
 > Feel free to contribute your own list with a PR.
 
 lowfi also supports custom track lists, although the default one from chillhop
-is embedded into the binary.
+is embedded into the binary by default.
 
 To use a custom list, use the `--track-list` flag. This can either be a path to some file,
 or it could also be the name of a file (without the `.txt` extension) in the data
@@ -233,7 +242,7 @@ Each track will be first appended to the header, and then use the combination to
 the track.
 
 > [!NOTE]
-> lowfi *will not* put a `/` between the base & track for added flexibility,
+> lowfi _will not_ put a `/` between the base & track for added flexibility,
 > so for most cases you should have a trailing `/` in your header.
 
 The exception to this is if the track name begins with a protocol like `https://`,

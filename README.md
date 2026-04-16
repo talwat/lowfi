@@ -33,6 +33,8 @@ and as such it buffers 5 whole songs at a time instead of parts of the same song
 > If you're interested in maintaining a package for `lowfi`
 > on package managers such as homebrew and the like, open an issue.
 
+[![Packaging status](https://repology.org/badge/vertical-allrepos/lowfi.svg)](https://repology.org/project/lowfi/versions)
+
 ### Methods
 
 - [Cargo](#cargo)
@@ -72,8 +74,6 @@ Also see [Extra Features](#extra-features) for extended functionality.
 
 If you're struggling or unwilling to use cargo, you can just download the
 precompiled binaries from the [latest release](https://github.com/talwat/lowfi/releases/latest).
-
-[![Packaging status](https://repology.org/badge/vertical-allrepos/lowfi.svg)](https://repology.org/project/lowfi/versions)
 
 ### AUR
 

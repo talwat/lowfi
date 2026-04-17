@@ -1,12 +1,6 @@
 //! Contains the code for macOS media controls via the Now Playing framework.
 
-use std::{
-    sync::{
-        mpsc::{self, SyncSender},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use core_foundation_sys::runloop::{kCFRunLoopDefaultMode, CFRunLoopRunInMode};
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
@@ -16,22 +10,7 @@ use crate::{player::Current, ui::Update, Message};
 
 use super::State;
 
-/// Internal update sent from the tokio runtime to the macOS media thread.
-enum MacosUpdate {
-    /// Update the Now Playing metadata with a new track title and duration.
-    Metadata {
-        /// The display name of the track.
-        title: String,
-        /// The duration of the track, if known.
-        duration: Option<Duration>,
-    },
-    /// Update the playback status (playing, paused, or stopped).
-    Playback(MediaPlayback),
-    /// Shut down the media controls thread.
-    Quit,
-}
-
-/// Handle to the macOS Now Playing / media controls background thread.
+/// Handle to the macOS Now Playing media controls.
 pub struct Server {
     /// Shared audio sink, used to read paused state.
     sink: Arc<rodio::Player>,
@@ -39,72 +18,41 @@ pub struct Server {
     /// The latest known track state.
     current: Current,
 
-    /// Channel to send updates to the background thread.
-    update_tx: SyncSender<MacosUpdate>,
+    /// The souvlaki media controls handle. `None` if initialisation failed.
+    controls: Option<MediaControls>,
 
     /// Broadcast receiver for track/state updates from the player.
     receiver: broadcast::Receiver<Update>,
 }
 
 impl Server {
-    /// Creates the macOS media controls server and spawns the background thread.
+    /// Creates the macOS media controls server.
     pub fn new(
         state: State,
         sender: tmpsc::Sender<Message>,
         receiver: broadcast::Receiver<Update>,
     ) -> Self {
-        let (update_tx, update_rx) = mpsc::sync_channel::<MacosUpdate>(8);
+        let config = PlatformConfig {
+            display_name: "lowfi",
+            dbus_name: "dev.talwat.lowfi",
+            hwnd: None,
+        };
 
-        std::thread::spawn(move || {
-            let config = PlatformConfig {
-                display_name: "lowfi",
-                dbus_name: "dev.talwat.lowfi",
-                hwnd: None,
-            };
-
-            let Ok(mut controls) = MediaControls::new(config) else {
-                return;
-            };
-
-            let _ = controls.attach(move |event: MediaControlEvent| {
-                let message = match event {
-                    MediaControlEvent::Play => Message::Play,
-                    MediaControlEvent::Pause => Message::Pause,
-                    MediaControlEvent::Toggle => Message::PlayPause,
-                    MediaControlEvent::Next => Message::Next,
-                    MediaControlEvent::Quit => Message::Quit,
-                    _ => return,
-                };
-                let _ = sender.try_send(message);
-            });
-
-            loop {
-                // Drain all pending updates from the tokio side without blocking.
-                loop {
-                    match update_rx.try_recv() {
-                        Ok(MacosUpdate::Metadata { title, duration }) => {
-                            let _ = controls.set_metadata(MediaMetadata {
-                                title: Some(title.as_str()),
-                                album: None,
-                                artist: None,
-                                cover_url: None,
-                                duration,
-                            });
-                        }
-                        Ok(MacosUpdate::Playback(status)) => {
-                            let _ = controls.set_playback(status);
-                        }
-                        Ok(MacosUpdate::Quit) | Err(mpsc::TryRecvError::Disconnected) => return,
-                        Err(mpsc::TryRecvError::Empty) => break,
-                    }
-                }
-
-                // Pump this thread's CFRunLoop briefly, in case souvlaki dispatches
-                // callbacks here rather than on the main queue.
-                unsafe {
-                    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, 0);
-                }
-            }
+        let controls = MediaControls::new(config).ok().and_then(|mut controls| {
+            controls
+                .attach(move |event: MediaControlEvent| {
+                    let message = match event {
+                        MediaControlEvent::Play => Message::Play,
+                        MediaControlEvent::Pause => Message::Pause,
+                        MediaControlEvent::Toggle => Message::PlayPause,
+                        MediaControlEvent::Next => Message::Next,
+                        MediaControlEvent::Quit => Message::Quit,
+                        _ => return,
+                    };
+                    let _ = sender.try_send(message);
+                })
+                .ok()?;
+            Some(controls)
         });
 
         // Pump the main CFRunLoop on a ~60 Hz interval so that MPRemoteCommandCenter
@@ -114,6 +62,7 @@ impl Server {
         // queue needs to be drained.
         tokio::spawn(async {
             let mut interval = tokio::time::interval(Duration::from_millis(16));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
                 unsafe {
@@ -125,25 +74,36 @@ impl Server {
         Self {
             sink: state.sink,
             current: state.current,
-            update_tx,
+            controls,
             receiver,
         }
     }
 
     /// Sends the current track metadata to the Now Playing widget.
-    fn update_metadata(&self) {
+    fn update_metadata(&mut self) {
         let Current::Track(track) = &self.current else {
             return;
         };
 
-        let _ = self.update_tx.send(MacosUpdate::Metadata {
-            title: track.display.clone(),
+        let Some(controls) = self.controls.as_mut() else {
+            return;
+        };
+
+        let _ = controls.set_metadata(MediaMetadata {
+            title: Some(track.display.as_str()),
+            album: None,
+            artist: None,
+            cover_url: None,
             duration: track.duration,
         });
     }
 
     /// Sends the current playback status to the Now Playing widget.
-    fn update_playback(&self) {
+    fn update_playback(&mut self) {
+        let Some(controls) = self.controls.as_mut() else {
+            return;
+        };
+
         let status = if self.current.loading() {
             MediaPlayback::Stopped
         } else if self.sink.is_paused() {
@@ -152,7 +112,7 @@ impl Server {
             MediaPlayback::Playing { progress: None }
         };
 
-        let _ = self.update_tx.send(MacosUpdate::Playback(status));
+        let _ = controls.set_playback(status);
     }
 
     /// Handles a player message, keeping macOS media controls in sync.
@@ -173,7 +133,9 @@ impl Server {
                 self.update_playback();
             }
             Message::Quit => {
-                let _ = self.update_tx.send(MacosUpdate::Quit);
+                if let Some(controls) = self.controls.as_mut() {
+                    let _ = controls.set_playback(MediaPlayback::Stopped);
+                }
             }
             _ => {}
         }

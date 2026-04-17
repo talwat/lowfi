@@ -200,6 +200,9 @@ impl Player {
 
             #[cfg(feature = "mpris")]
             self.ui.mpris.handle(&message).await?;
+
+            #[cfg(target_os = "macos")]
+            self.ui.macos.handle(&message).await?;
         }
 
         Ok(())

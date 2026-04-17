@@ -15,6 +15,9 @@ pub use interface::Interface;
 #[cfg(feature = "mpris")]
 pub mod mpris;
 
+#[cfg(target_os = "macos")]
+pub mod macos;
+
 /// Shorthand for a [`Result`] with a [`ui::Error`].
 type Result<T> = std::result::Result<T, Error>;
 
@@ -114,6 +117,10 @@ pub struct Handle {
     /// The MPRIS server, which is more or less a handle to the actual MPRIS thread.
     #[cfg(feature = "mpris")]
     pub mpris: mpris::Server,
+
+    /// The macOS Now Playing / media controls server.
+    #[cfg(target_os = "macos")]
+    pub macos: macos::Server,
 }
 
 impl Handle {

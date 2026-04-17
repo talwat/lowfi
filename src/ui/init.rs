@@ -12,6 +12,9 @@ impl crate::Tasks {
         #[cfg(feature = "mpris")]
         let mpris = ui::mpris::Server::new(state.clone(), self.tx(), urx.resubscribe()).await?;
 
+        #[cfg(target_os = "macos")]
+        let macos = ui::macos::Server::new(state.clone(), self.tx(), urx.resubscribe());
+
         let params = interface::Params::try_from(args)?;
         if params.enabled {
             self.spawn(ui::run(urx, state, params));
@@ -22,6 +25,8 @@ impl crate::Tasks {
             updater: utx,
             #[cfg(feature = "mpris")]
             mpris,
+            #[cfg(target_os = "macos")]
+            macos,
         })
     }
 }

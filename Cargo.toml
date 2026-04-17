@@ -67,6 +67,10 @@ indicatif = { version = "0.18.4", optional = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2.182"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+souvlaki = "0.8"
+core-foundation-sys = "0.8"
+
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }

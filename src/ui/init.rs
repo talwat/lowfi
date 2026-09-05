@@ -12,6 +12,10 @@ impl crate::Tasks {
         #[cfg(feature = "mpris")]
         let mpris = ui::mpris::Server::new(state.clone(), self.tx(), urx.resubscribe()).await?;
 
+        #[cfg(all(feature = "media-controls", windows))]
+        let media_controls =
+            ui::media_controls::Server::try_new(state.clone(), self.tx(), urx.resubscribe());
+
         let params = interface::Params::try_from(args)?;
         let interface = interface::Interface::new(params)?;
         let logger = interface.logger.clone();
@@ -26,6 +30,8 @@ impl crate::Tasks {
             logger,
             #[cfg(feature = "mpris")]
             mpris,
+            #[cfg(all(feature = "media-controls", windows))]
+            media_controls,
         })
     }
 }

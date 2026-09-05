@@ -21,6 +21,8 @@ repository = "https://github.com/talwat/lowfi"
 default = ["default-tracklist"]
 default-tracklist = []
 mpris = ["dep:mpris-server", "dep:arc-swap"]
+# Windows System Media Transport Controls (hardware media keys / overlay).
+media-controls = ["dep:souvlaki", "dep:windows"]
 extra-audio-formats = ["rodio/default"]
 scrape = [
     "dep:serde",
@@ -66,3 +68,12 @@ indicatif = { version = "0.18.4", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2.186"
+
+[target.'cfg(windows)'.dependencies]
+souvlaki = { version = "0.8.3", optional = true, default-features = false }
+windows = { version = "0.62", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }

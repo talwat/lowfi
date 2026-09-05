@@ -65,8 +65,11 @@ Then, simply run:
 ```sh
 cargo install lowfi
 
-# If you want MPRIS support.
+# If you want MPRIS support (Linux).
 cargo install lowfi --features mpris
+
+# If you want Windows hardware media keys / SMTC overlay.
+cargo install lowfi --features media-controls
 ```
 
 And make sure `$HOME/.cargo/bin` is added to `$PATH`.
@@ -154,6 +157,11 @@ Yeah, that's it.
 > MPRIS is currently an [optional feature](#extra-features) in cargo (enabled with `--features mpris`)
 > due to it being only for Linux, as well as the fact that the main point of
 > lowfi is it's unique & minimal interface.
+>
+> On **Windows**, terminal media keys (via crossterm) only work while the
+> terminal is focused. Build with `--features media-controls` to register
+> System Media Transport Controls (SMTC) so play/pause/next (and volume when
+> the OS exposes it) work globally, with track metadata in the Windows media overlay.
 
 ### Bookmarks
 
@@ -199,6 +207,19 @@ More information can be found by running `lowfi help scrape`.
 #### `mpris` - MPRIS
 
 Enables MPRIS. It's not rocket science.
+
+#### `media-controls` - Windows media keys (SMTC)
+
+Enables System Media Transport Controls on Windows via the `souvlaki` crate.
+Hardware play/pause/next keys work while another app is focused, and the current
+track can appear in the Windows media overlay. Soft-fails if SMTC cannot be
+registered so playback still works.
+
+```sh
+cargo run --features media-controls
+# or
+cargo build --release --features media-controls
+```
 
 #### `extra-audio-formats` - Extra Audio Formats
 

@@ -5,7 +5,7 @@
 
 ---
 
-[[Version franÃ§aise](./docs/fr/README.md)]
+[[Version française](./docs/fr/README.md)]
 
 lowfi is a tiny rust app that serves a single purpose: play lofi.
 It'll do this as simply as it can: no albums, no ads, just lofi.
@@ -143,10 +143,10 @@ Yeah, that's it.
 | ------------------ | --------------- |
 | `s`, `n`, `l`      | Skip Song       |
 | `p`, Space         | Play/Pause      |
-| `+`, `=`, `k`, `â†‘` | Volume Up 10%   |
-| `â†’`                | Volume Up 1%    |
-| `-`, `_`, `j`, `â†“` | Volume Down 10% |
-| `â†`                | Volume Down 1%  |
+| `+`, `=`, `k`, `↑` | Volume Up 10%   |
+| `→`                | Volume Up 1%    |
+| `-`, `_`, `j`, `↓` | Volume Down 10% |
+| `←`                | Volume Down 1%  |
 | `q`, CTRL+C        | Quit            |
 | `b`                | Bookmark        |
 
@@ -210,18 +210,16 @@ Enables MPRIS. It's not rocket science.
 
 #### `media-controls` - Windows media keys (SMTC)
 
-Enables [System Media Transport Controls](https://learn.microsoft.com/en-us/windows/uwp/audio-video-camera/system-media-transport-controls)
-on Windows via the `souvlaki` crate. Hardware play/pause/next keys work while
-another app is focused, and the current track can appear in the Windows media
-overlay. Soft-fails if SMTC cannot be registered so playback still works.
+Enables System Media Transport Controls on Windows via the `souvlaki` crate.
+Hardware play/pause/next keys work while another app is focused, and the current
+track can appear in the Windows media overlay. Soft-fails if SMTC cannot be
+registered so playback still works.
 
 ```sh
 cargo run --features media-controls
 # or
 cargo build --release --features media-controls
 ```
-
-This feature is a no-op on non-Windows targets (Linux already has `mpris`).
 
 #### `extra-audio-formats` - Extra Audio Formats
 

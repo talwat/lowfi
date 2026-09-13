@@ -15,6 +15,9 @@ pub use interface::Interface;
 #[cfg(feature = "mpris")]
 pub mod mpris;
 
+#[cfg(all(feature = "media-controls", windows))]
+pub mod media_controls;
+
 /// Shorthand for a [`Result`] with a [`ui::Error`].
 type Result<T> = std::result::Result<T, Error>;
 
@@ -47,6 +50,10 @@ pub enum Error {
     #[cfg(feature = "mpris")]
     #[error("mpris fdo (zbus interface) error: {0}")]
     Fdo(#[from] mpris_server::zbus::fdo::Error),
+
+    #[cfg(all(feature = "media-controls", windows))]
+    #[error("media controls error: {0}")]
+    MediaControls(String),
 }
 
 /// The UI state, which is all of the information that
@@ -117,6 +124,10 @@ pub struct Handle {
     /// The MPRIS server, which is more or less a handle to the actual MPRIS thread.
     #[cfg(feature = "mpris")]
     pub mpris: mpris::Server,
+
+    /// Windows SMTC handle; None if registration soft-failed.
+    #[cfg(all(feature = "media-controls", windows))]
+    pub media_controls: Option<media_controls::Server>,
 
     /// Logger which can be used to log important events.
     logger: Logger,

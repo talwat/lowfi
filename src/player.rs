@@ -201,6 +201,11 @@ impl Player {
 
             #[cfg(feature = "mpris")]
             self.ui.mpris.handle(&message).await?;
+
+            #[cfg(all(feature = "media-controls", windows))]
+            if let Some(controls) = self.ui.media_controls.as_mut() {
+                controls.handle(&message)?;
+            }
         }
 
         Ok(())

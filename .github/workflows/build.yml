@@ -19,6 +19,7 @@ jobs:
             bin: lowfi
             name: lowfi-linux-x86_64
             command: build
+            features: ""
 
           - release_for: Windows x86_64
             os: windows-latest
@@ -26,6 +27,7 @@ jobs:
             bin: lowfi.exe
             name: lowfi-windows-x86_64.exe
             command: build
+            features: "--features media-controls"
 
           - release_for: MacOS x86_64
             os: macos-latest
@@ -33,6 +35,7 @@ jobs:
             bin: lowfi
             name: lowfi-darwin-x86_64
             command: build
+            features: ""
 
           - release_for: MacOS aarch64
             os: macos-latest
@@ -40,6 +43,7 @@ jobs:
             bin: lowfi
             name: lowfi-darwin-aarch64
             command: build
+            features: ""
 
     runs-on: ${{ matrix.os }}
     env:
@@ -61,7 +65,7 @@ jobs:
         with:
           command: ${{ matrix.command }}
           target: ${{ matrix.target }}
-          args: "--locked --release"
+          args: --locked --release ${{ matrix.features }}
 
       - name: Rename binary
         run: |

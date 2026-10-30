@@ -30,8 +30,12 @@ pub fn progress_bar(state: &ui::State, width: usize) -> String {
         if let Some(x) = current.duration {
             duration = x;
 
-            let elapsed = elapsed.as_secs() as f32 / duration.as_secs() as f32;
-            filled = (elapsed * width as f32).round() as usize;
+            let elapsed = elapsed
+                .as_secs_f32()
+                .round()
+                .clamp(0.0, duration.as_secs_f32());
+            let ratio = (elapsed / duration.as_secs_f32()).clamp(0.0, 1.0);
+            filled = (ratio * width as f32).round() as usize;
         }
     }
 
